@@ -109,8 +109,11 @@ fun ImageViewer(
             .background(Color.Black)
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .pointerInput(currentIndex) {
-                // Video: let PlayerView own all touch handling (its controls).
-                // Images: pinch-zoom/pan + tap toggles the chrome.
+                // Tap toggles the chrome for both images and videos.
+                detectTapGestures { chromeVisible = !chromeVisible }
+            }
+            .pointerInput(currentIndex) {
+                // Pinch-zoom/pan applies to still/animated images only.
                 if (!isVideo) {
                     detectTransformGestures { _, pan, zoom, _ ->
                         scale = (scale * zoom).coerceIn(1f, 4f)
@@ -122,13 +125,15 @@ fun ImageViewer(
                             offsetY = 0f
                         }
                     }
-                    detectTapGestures { chromeVisible = !chromeVisible }
                 }
             }
     ) {
         // Main media: video player / animated image / static image
         when {
-            image.type.isVideo -> VideoPlayerView(uriString = image.uriString)
+            image.type.isVideo -> VideoPlayerView(
+                uriString = image.uriString,
+                chromeVisible = chromeVisible
+            )
             else -> SubcomposeAsyncImage(
                 model = image.uriString,
                 contentDescription = image.name,
@@ -234,47 +239,41 @@ fun ImageViewer(
             }
         }
 
-        // Bottom area — images: filename row + thumbnail strip;
-        // videos: thumbnail strip only (the custom player control bar owns
-        // the bottom of the frame, so no filename row/overlap here).
+        // Bottom area — filename row + thumbnail strip for BOTH images and
+        // videos (consistent browsing experience). The video control bar
+        // lives inside the frame, padded above this area.
         if (chromeVisible) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
                     .background(
-                        if (isVideo) {
-                            androidx.compose.ui.graphics.Brush.verticalGradient(
-                                listOf(Color.Black.copy(alpha = 0.0f), Color.Black.copy(alpha = 0.5f))
-                            )
-                        } else androidx.compose.ui.graphics.Brush.verticalGradient(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
                             listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))
                         )
                     )
-                    .padding(top = 12.dp, bottom = 20.dp)
+                    .padding(top = 32.dp, bottom = 20.dp)
             ) {
-                if (!isVideo) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = image.name,
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Text(
-                            text = stringResource(R.string.dimensions, resolvedWidth, resolvedHeight),
-                            color = Color.White.copy(alpha = 0.6f),
-                            fontSize = 12.sp
-                        )
-                    }
-                    Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = image.name,
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = stringResource(R.string.dimensions, resolvedWidth, resolvedHeight),
+                        color = Color.White.copy(alpha = 0.6f),
+                        fontSize = 12.sp
+                    )
                 }
+                Spacer(Modifier.height(12.dp))
                 LazyRow(
                     state = thumbListState,
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp),
@@ -326,7 +325,10 @@ fun ImageViewer(
 
 /** Custom video player — Media3 surface + our own controls (FR-10). */
 @Composable
-private fun VideoPlayerView(uriString: String) {
+private fun VideoPlayerView(
+    uriString: String,
+    chromeVisible: Boolean
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val exoPlayer = remember(uriString) {
         ExoPlayer.Builder(context).build().apply {
@@ -363,14 +365,7 @@ private fun VideoPlayerView(uriString: String) {
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .clickable {
-                // tap the frame to toggle play/pause (consistent with images)
-                if (isPlaying) exoPlayer.pause() else exoPlayer.play()
-            }
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
         // Video surface (no native controller — we draw our own).
         AndroidView(
             factory = { ctx ->
@@ -392,7 +387,7 @@ private fun VideoPlayerView(uriString: String) {
             )
         }
 
-        // Center play button when paused.
+        // Center play button when paused (independent of chrome).
         if (!isPlaying) {
             IconButton(
                 onClick = { exoPlayer.play() },
@@ -411,43 +406,45 @@ private fun VideoPlayerView(uriString: String) {
             }
         }
 
-        // Bottom control bar: play/pause + progress + time.
+        // Control bar: play/pause + progress + time — hidden with the chrome.
         // Padded up so it never overlaps the thumbnail strip below.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 110.dp)
-                .background(Color.Black.copy(alpha = 0.55f))
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = { if (isPlaying) exoPlayer.pause() else exoPlayer.play() },
-                modifier = Modifier.size(40.dp)
+        if (chromeVisible) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 150.dp)
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    contentDescription = if (isPlaying) stringResource(R.string.cd_pause) else stringResource(R.string.cd_play),
-                    tint = Color.White
+                IconButton(
+                    onClick = { if (isPlaying) exoPlayer.pause() else exoPlayer.play() },
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = if (isPlaying) stringResource(R.string.cd_pause) else stringResource(R.string.cd_play),
+                        tint = Color.White
+                    )
+                }
+                Text(
+                    text = formatTime(position),
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 11.sp
+                )
+                Slider(
+                    value = position.toFloat().coerceIn(0f, duration.coerceAtLeast(1L).toFloat()),
+                    onValueChange = { exoPlayer.seekTo(it.toLong()) },
+                    valueRange = 0f..duration.coerceAtLeast(1L).toFloat(),
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                )
+                Text(
+                    text = formatTime(duration),
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 11.sp
                 )
             }
-            Text(
-                text = formatTime(position),
-                color = Color.White.copy(alpha = 0.8f),
-                fontSize = 11.sp
-            )
-            Slider(
-                value = position.toFloat().coerceIn(0f, duration.coerceAtLeast(1L).toFloat()),
-                onValueChange = { exoPlayer.seekTo(it.toLong()) },
-                valueRange = 0f..duration.coerceAtLeast(1L).toFloat(),
-                modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
-            )
-            Text(
-                text = formatTime(duration),
-                color = Color.White.copy(alpha = 0.8f),
-                fontSize = 11.sp
-            )
         }
     }
 }
