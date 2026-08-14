@@ -30,6 +30,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -254,45 +255,66 @@ private fun FolderDropdown(
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.fillMaxWidth(0.92f)
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .clip(RoundedCornerShape(16.dp)),
+            containerColor = scheme.surface,
+            shape = RoundedCornerShape(16.dp),
+            tonalElevation = 8.dp
         ) {
             DropdownMenuItem(
-                text = { Text(stringResource(R.string.all)) },
-                leadingIcon = { Icon(Icons.Filled.GridView, contentDescription = null) },
-                onClick = { onSelectFolder(null); expanded = false }
+                text = { Text(stringResource(R.string.all), color = scheme.onSurface) },
+                leadingIcon = { Icon(Icons.Filled.GridView, contentDescription = null, tint = scheme.primary) },
+                onClick = { onSelectFolder(null); expanded = false },
+                colors = menuItemColors(scheme)
             )
             DropdownMenuItem(
-                text = { Text(stringResource(R.string.favorites)) },
+                text = { Text(stringResource(R.string.favorites), color = scheme.onSurface) },
                 leadingIcon = { Icon(Icons.Filled.Favorite, contentDescription = null, tint = Color(0xFFEF4444)) },
-                onClick = { onSelectFolder(HomeFilter.FAVORITES); expanded = false }
+                onClick = { onSelectFolder(HomeFilter.FAVORITES); expanded = false },
+                colors = menuItemColors(scheme)
             )
+            HorizontalDivider(color = scheme.outline.copy(alpha = 0.3f))
             folders.forEach { folder ->
                 DropdownMenuItem(
-                    text = { Text(folder.name) },
-                    leadingIcon = { Icon(Icons.Filled.Folder, contentDescription = null) },
-                    onClick = { onSelectFolder(folder.id); expanded = false }
+                    text = { Text(folder.name, color = scheme.onSurface) },
+                    leadingIcon = { Icon(Icons.Filled.Folder, contentDescription = null, tint = scheme.primary) },
+                    onClick = { onSelectFolder(folder.id); expanded = false },
+                    colors = menuItemColors(scheme)
                 )
                 // First-level subfolders, indented under their parent (FR-2.1)
                 folder.subFolders.forEach { sub ->
                     DropdownMenuItem(
                         text = {
                             Text(
-                                "    ↳ ${sub.name}",
+                                "↳ ${sub.name}",
                                 fontSize = 13.sp,
                                 color = scheme.onSurfaceVariant
                             )
                         },
-                        leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) },
+                        leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null, tint = scheme.primary.copy(alpha = 0.7f)) },
                         onClick = {
                             onSelectFolder(folder.id)
                             onSelectSubFolder(sub.id)
                             expanded = false
-                        }
+                        },
+                        colors = menuItemColors(scheme)
                     )
                 }
             }
         }
     }
+}
+
+@Composable
+private fun menuItemColors(scheme: androidx.compose.material3.ColorScheme)
+    : androidx.compose.material3.MenuItemColors {
+    return androidx.compose.material3.MenuDefaults.itemColors(
+        textColor = scheme.onSurface,
+        leadingIconColor = scheme.primary,
+        disabledTextColor = scheme.onSurfaceVariant,
+        disabledLeadingIconColor = scheme.onSurfaceVariant
+    )
 }
 
 @Composable

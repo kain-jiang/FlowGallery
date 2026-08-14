@@ -236,9 +236,10 @@ fun ImageViewer(
             }
         }
 
-        // Bottom info + thumbnail strip (thumbnail strip hidden for videos —
-        // PlayerView's own control bar occupies the bottom of the frame)
-        if (chromeVisible) {
+        // Bottom info + thumbnail strip — fully hidden for videos because the
+        // PlayerView control bar (with progress) occupies the bottom of the
+        // frame; showing our info row would overlap it.
+        if (chromeVisible && !isVideo) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

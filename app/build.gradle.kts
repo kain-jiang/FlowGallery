@@ -64,6 +64,8 @@ dependencies {
 
     // Coil for image loading (supports GIF/WebP animation decoding)
     implementation("io.coil-kt:coil-compose:2.7.0")
+    // Coil video frame decoder — renders video first frames as thumbnails
+    implementation("io.coil-kt:coil-video:2.7.0")
 
     // Media3 ExoPlayer for video playback
     implementation("androidx.media3:media3-exoplayer:1.4.1")
