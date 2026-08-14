@@ -27,7 +27,7 @@ class ImageRepository(private val context: Context) {
 
     fun loadFolders(): List<Folder> {
         val raw = prefs.getString(KEY_FOLDERS, null) ?: return emptyList()
-        return try {
+        val folders = try {
             val arr = JSONArray(raw)
             (0 until arr.length()).map { i ->
                 val o = arr.getJSONObject(i)
@@ -55,6 +55,37 @@ class ImageRepository(private val context: Context) {
         } catch (e: Exception) {
             emptyList()
         }
+        // Self-heal: drop entries whose tree is covered by another entry
+        // (e.g. a subfolder also added as a separate library item), which
+        // would otherwise duplicate media in the "All" view.
+        return pruneOverlaps(folders)
+    }
+
+    /**
+     * Remove folders that are already covered by a parent folder entry.
+     * Keeps the parent (higher in the tree), drops the redundant child.
+     */
+    private fun pruneOverlaps(folders: List<Folder>): List<Folder> {
+        if (folders.size < 2) return folders
+        val ids = folders.map { it.id to treeDocumentId(Uri.parse(it.uriString)) }
+        val result = mutableListOf<Folder>()
+        for (folder in folders) {
+            val fid = ids.firstOrNull { it.first == folder.id }?.second ?: continue
+            val coveredByParent = ids.any { (otherId, otherFid) ->
+                otherId != folder.id &&
+                    otherFid != null &&
+                    fid != null &&
+                    (fid.startsWith("$otherFid/") || fid == otherFid)
+            }
+            if (!coveredByParent) {
+                result.add(folder)
+            }
+        }
+        // Persist cleanup so the store stays tidy.
+        if (result.size != folders.size) {
+            saveFolders(result)
+        }
+        return result
     }
 
     fun saveFolders(folders: List<Folder>) {
