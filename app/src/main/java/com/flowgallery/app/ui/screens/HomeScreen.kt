@@ -18,13 +18,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -33,6 +37,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -92,63 +99,16 @@ fun HomeScreen(
                 }
             }
 
-            // Row 1: All → Favorites → root folders
-            LazyRow(
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                item {
-                    FolderTab(
-                        label = stringResource(R.string.all),
-                        count = state.images.size,
-                        isActive = state.currentFilter == null,
-                        onClick = { viewModel.selectFilter(null) }
-                    )
-                }
-                item {
-                    FolderTab(
-                        label = stringResource(R.string.favorites),
-                        count = favorites.size,
-                        isActive = state.currentFilter == HomeFilter.FAVORITES,
-                        isFavorite = true,
-                        onClick = { viewModel.selectFilter(HomeFilter.FAVORITES) }
-                    )
-                }
-                items(selectedFolders, key = { it.id }) { folder ->
-                    FolderTab(
-                        label = folder.name,
-                        count = folder.imageCount,
-                        isActive = state.currentFilter == folder.id && state.currentSubFolderId == null,
-                        onClick = { viewModel.selectFilter(folder.id) }
-                    )
-                }
-            }
-
-            // Row 2: drill-down subfolder tabs for the selected root folder (FR-2.1)
-            val activeFolder = selectedFolders.find { it.id == state.currentFilter }
-            if (activeFolder != null && activeFolder.subFolders.isNotEmpty()) {
-                LazyRow(
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    item {
-                        SubFolderTab(
-                            label = activeFolder.name,
-                            count = activeFolder.subFolders.sumOf { it.imageCount },
-                            isActive = state.currentSubFolderId == null,
-                            onClick = { viewModel.selectSubFolder(-1L) }
-                        )
-                    }
-                    items(activeFolder.subFolders, key = { it.id }) { sub ->
-                        SubFolderTab(
-                            label = sub.name,
-                            count = sub.imageCount,
-                            isActive = state.currentSubFolderId == sub.id,
-                            onClick = { viewModel.selectSubFolder(sub.id) }
-                        )
-                    }
-                }
-            }
+            // Folder selector: dropdown (All / Favorites / folders / subfolders)
+            FolderDropdown(
+                folders = selectedFolders,
+                currentFilter = state.currentFilter,
+                currentSubFolderId = state.currentSubFolderId,
+                favoritesCount = favorites.size,
+                totalCount = state.images.size,
+                onSelectFolder = viewModel::selectFilter,
+                onSelectSubFolder = viewModel::selectSubFolder
+            )
 
             Spacer(Modifier.height(8.dp))
 
@@ -197,91 +157,140 @@ fun HomeScreen(
     } // Box
 }
 
+/** Dropdown folder selector — All / Favorites / root folders / subfolders. */
 @Composable
-private fun FolderTab(
-    label: String,
-    count: Int,
-    isActive: Boolean,
-    onClick: () -> Unit,
-    isFavorite: Boolean = false
+private fun FolderDropdown(
+    folders: List<Folder>,
+    currentFilter: Long?,
+    currentSubFolderId: Long?,
+    favoritesCount: Int,
+    totalCount: Int,
+    onSelectFolder: (Long?) -> Unit,
+    onSelectSubFolder: (Long) -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(if (isActive) scheme.primaryContainer else scheme.surface)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (isFavorite) {
-            Icon(
-                Icons.Filled.Favorite,
-                contentDescription = null,
-                tint = if (isActive) scheme.primary else scheme.onSurfaceVariant,
-                modifier = Modifier.size(14.dp)
-            )
-            Spacer(Modifier.width(4.dp))
+    var expanded by remember { mutableStateOf(false) }
+
+    // Current selection label: "All" / "Favorites" / "Folder" / "Folder › Sub"
+    val currentLabel: String
+    val currentIcon: androidx.compose.ui.graphics.vector.ImageVector
+    val currentCount: Int
+    when {
+        currentFilter == null -> {
+            currentLabel = stringResource(R.string.all)
+            currentIcon = Icons.Filled.GridView
+            currentCount = totalCount
         }
-        Text(
-            text = label,
-            color = if (isActive) scheme.primary else scheme.onSurfaceVariant,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium
-        )
-        Spacer(Modifier.width(6.dp))
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
-                .background(if (isActive) scheme.primary else scheme.surfaceVariant)
-                .padding(horizontal = 6.dp, vertical = 2.dp)
-        ) {
-            Text(
-                text = "$count",
-                color = if (isActive) Color.White else scheme.outline,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium
-            )
+        currentFilter == HomeFilter.FAVORITES -> {
+            currentLabel = stringResource(R.string.favorites)
+            currentIcon = Icons.Filled.Favorite
+            currentCount = favoritesCount
+        }
+        else -> {
+            val folder = folders.find { it.id == currentFilter }
+            val sub = folder?.subFolders?.find { it.id == currentSubFolderId }
+            if (sub != null) {
+                currentLabel = "${folder!!.name} › ${sub.name}"
+                currentIcon = Icons.Filled.FolderOpen
+                currentCount = sub.imageCount
+            } else {
+                currentLabel = folder?.name ?: stringResource(R.string.all)
+                currentIcon = Icons.Filled.Folder
+                currentCount = folder?.imageCount ?: 0
+            }
         }
     }
-}
 
-/** Second-row drill-down tab for a first-level subfolder (FR-2.1). */
-@Composable
-private fun SubFolderTab(
-    label: String,
-    count: Int,
-    isActive: Boolean,
-    onClick: () -> Unit
-) {
-    val scheme = MaterialTheme.colorScheme
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (isActive) scheme.primaryContainer else scheme.surfaceVariant)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
+    Box(modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp)
     ) {
-        Text(
-            text = label,
-            color = if (isActive) scheme.primary else scheme.onSurfaceVariant,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
-        )
-        Spacer(Modifier.width(6.dp))
-        Box(
+        Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
-                .background(if (isActive) scheme.primary else scheme.surface)
-                .padding(horizontal = 5.dp, vertical = 1.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(scheme.surface)
+                .clickable { expanded = true }
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "$count",
-                color = if (isActive) Color.White else scheme.outline,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Medium
+            Icon(
+                currentIcon,
+                contentDescription = null,
+                tint = scheme.primary,
+                modifier = Modifier.size(18.dp)
             )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = currentLabel,
+                color = scheme.onSurface,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(scheme.primaryContainer)
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = "$currentCount",
+                    color = scheme.primary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Icon(
+                Icons.Filled.ArrowDropDown,
+                contentDescription = null,
+                tint = scheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.fillMaxWidth(0.92f)
+        ) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.all)) },
+                leadingIcon = { Icon(Icons.Filled.GridView, contentDescription = null) },
+                onClick = { onSelectFolder(null); expanded = false }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.favorites)) },
+                leadingIcon = { Icon(Icons.Filled.Favorite, contentDescription = null, tint = Color(0xFFEF4444)) },
+                onClick = { onSelectFolder(HomeFilter.FAVORITES); expanded = false }
+            )
+            folders.forEach { folder ->
+                DropdownMenuItem(
+                    text = { Text(folder.name) },
+                    leadingIcon = { Icon(Icons.Filled.Folder, contentDescription = null) },
+                    onClick = { onSelectFolder(folder.id); expanded = false }
+                )
+                // First-level subfolders, indented under their parent (FR-2.1)
+                folder.subFolders.forEach { sub ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                "    ↳ ${sub.name}",
+                                fontSize = 13.sp,
+                                color = scheme.onSurfaceVariant
+                            )
+                        },
+                        leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) },
+                        onClick = {
+                            onSelectFolder(folder.id)
+                            onSelectSubFolder(sub.id)
+                            expanded = false
+                        }
+                    )
+                }
+            }
         }
     }
 }

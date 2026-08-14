@@ -84,6 +84,13 @@ fun ImageViewer(
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
     var chromeVisible by remember { mutableStateOf(true) }
+    // Videos: chrome follows the player's own control bar visibility, so the
+    // video can go truly fullscreen (chrome auto-hides with the controls).
+    var videoControlsVisible by remember { mutableStateOf(true) }
+    androidx.compose.runtime.LaunchedEffect(currentIndex) { videoControlsVisible = true }
+    if (isVideo) {
+        chromeVisible = videoControlsVisible
+    }
     // Real dimensions resolved lazily from the loaded drawable (zero-IO scan).
     var resolvedWidth by remember(image.uriString) { mutableStateOf(image.width) }
     var resolvedHeight by remember(image.uriString) { mutableStateOf(image.height) }
@@ -120,7 +127,10 @@ fun ImageViewer(
     ) {
         // Main media: video player / animated image / static image
         when {
-            image.type.isVideo -> VideoPlayerView(image.uriString)
+            image.type.isVideo -> VideoPlayerView(
+                uriString = image.uriString,
+                onControlsVisibility = { visible -> videoControlsVisible = visible }
+            )
             else -> SubcomposeAsyncImage(
                 model = image.uriString,
                 contentDescription = image.name,
@@ -312,7 +322,10 @@ fun ImageViewer(
 
 /** Media3 ExoPlayer view for video items (FR-10). */
 @Composable
-private fun VideoPlayerView(uriString: String) {
+private fun VideoPlayerView(
+    uriString: String,
+    onControlsVisibility: (Boolean) -> Unit
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val exoPlayer = remember(uriString) {
         ExoPlayer.Builder(context).build().apply {
@@ -328,12 +341,19 @@ private fun VideoPlayerView(uriString: String) {
     }
 
     // PlayerView owns its controller (play/pause/seek/volume) — no custom
-    // overlay button, so nothing overlaps the native controls.
+    // overlay button, so nothing overlaps the native controls. The chrome
+    // (top bar / info) follows the controller's visibility so the video can
+    // go truly fullscreen.
     AndroidView(
         factory = { ctx ->
             PlayerView(ctx).apply {
                 useController = true
                 this.player = exoPlayer
+                setControllerVisibilityListener(
+                    androidx.media3.ui.PlayerView.ControllerVisibilityListener { visibility ->
+                        onControlsVisibility(visibility == PlayerView.VISIBLE)
+                    }
+                )
             }
         },
         modifier = Modifier.fillMaxSize()
