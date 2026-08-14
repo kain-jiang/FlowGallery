@@ -77,12 +77,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Force light status-bar icons so they stay visible on the dark background
-        // regardless of the system's light/dark appearance setting.
-        WindowCompat.getInsetsController(window, window.decorView).apply {
-            isAppearanceLightStatusBars = false
-            isAppearanceLightNavigationBars = false
-        }
         setContent {
             FlowGalleryTheme {
                 val vm: GalleryViewModel = viewModel()

@@ -177,16 +177,21 @@ fun SettingsScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Text(
-            text = stringResource(R.string.settings_title),
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-        )
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)
+    ) {
+        item {
+            Text(
+                text = stringResource(R.string.settings_title),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+            )
+        }
 
-        SettingsSectionTitle(stringResource(R.string.section_folders))
-        state.folders.forEach { folder ->
+        item { SettingsSectionTitle(stringResource(R.string.section_folders)) }
+        items(state.folders, key = { it.id }) { folder ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -244,55 +249,63 @@ fun SettingsScreen(
             }
         }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .clickable(onClick = onAddFolder)
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
+        item {
+            Row(
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .clickable(onClick = onAddFolder)
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    Icons.Filled.Visibility,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Filled.Visibility,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = stringResource(R.string.add_folder),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
-            Spacer(Modifier.width(12.dp))
-            Text(
-                text = stringResource(R.string.add_folder),
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.primary
-            )
         }
 
-        SettingsSectionTitle(stringResource(R.string.section_display))
-        SettingsItem(
-            icon = Icons.Filled.HighQuality,
-            name = stringResource(R.string.setting_quality),
-            desc = stringResource(R.string.setting_quality_desc)
-        )
-        SettingsItem(
-            icon = Icons.Filled.Storage,
-            name = stringResource(R.string.setting_cache),
-            desc = stringResource(R.string.setting_cache_desc)
-        )
-        SettingsItem(
-            icon = Icons.Filled.Info,
-            name = stringResource(R.string.setting_about),
-            desc = stringResource(R.string.setting_version)
-        )
+        item { SettingsSectionTitle(stringResource(R.string.section_display)) }
+        item {
+            SettingsItem(
+                icon = Icons.Filled.HighQuality,
+                name = stringResource(R.string.setting_quality),
+                desc = stringResource(R.string.setting_quality_desc)
+            )
+        }
+        item {
+            SettingsItem(
+                icon = Icons.Filled.Storage,
+                name = stringResource(R.string.setting_cache),
+                desc = stringResource(R.string.setting_cache_desc)
+            )
+        }
+        item {
+            SettingsItem(
+                icon = Icons.Filled.Info,
+                name = stringResource(R.string.setting_about),
+                desc = stringResource(R.string.setting_version)
+            )
+        }
     }
 }
 

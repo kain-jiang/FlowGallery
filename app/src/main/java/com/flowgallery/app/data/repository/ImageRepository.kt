@@ -134,7 +134,7 @@ class ImageRepository(private val context: Context) {
      * subfolder breakdown.
      */
     suspend fun scanFolder(folder: Folder): FolderScanResult = withContext(Dispatchers.IO) {
-        val rootUri = Uri.parse(folder.uriString) ?: return@withContext FolderScanResult(emptyList(), emptyList())
+        val rootUri = Uri.parse(folder.uriString) ?: return@withContext FolderScanResult(folder.id, emptyList(), emptyList())
         val allItems = mutableListOf<ImageItem>()
         var nextId = folder.id * 1_000_000L
 
@@ -218,22 +218,19 @@ class ImageRepository(private val context: Context) {
                 imageCount = items.size
             )
         }
-        FolderScanResult(allItems, subs)
+        FolderScanResult(folder.id, allItems, subs)
     }
 
     /** Scan every selected folder and merge results (used by the "All" view). */
-    suspend fun scanAll(folders: List<Folder>): List<ImageItem> = withContext(Dispatchers.IO) {
-        val merged = mutableListOf<ImageItem>()
-        for (folder in folders) {
-            merged += scanFolder(folder).items
-        }
-        merged
+    suspend fun scanAll(folders: List<Folder>): List<FolderScanResult> = withContext(Dispatchers.IO) {
+        folders.map { scanFolder(it) }
     }
 
     // ------------------------------------------------------------------ helpers
 
     /** Result of scanning one root folder: flat items + subfolder summaries. */
     data class FolderScanResult(
+        val folderId: Long,
         val items: List<ImageItem>,
         val subFolders: List<SubFolder>
     )

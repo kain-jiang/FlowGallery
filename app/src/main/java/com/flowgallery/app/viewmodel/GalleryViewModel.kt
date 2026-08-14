@@ -104,13 +104,12 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             _uiState.update { it.copy(isRefreshing = true, error = null) }
             val selected = _uiState.value.folders.filter { it.isSelected }
             val result = runCatching { repository.scanAll(selected) }
-            result.onSuccess { images ->
-                val counts = images.groupBy { it.folderId }.mapValues { it.value.size }
-                repository.updateFolderCounts(counts)
-                // Update subfolder breakdowns per root folder
-                for (folder in selected) {
-                    val subRes = repository.scanFolder(folder)
-                    repository.updateFolderSubFolders(folder.id, subRes.subFolders, subRes.items.size)
+            result.onSuccess { scanResults ->
+                // Merge all items (deduped by folderId groups)
+                val images = scanResults.flatMap { it.items }
+                // Update per-folder counts and subfolder breakdowns in one pass
+                for (res in scanResults) {
+                    repository.updateFolderSubFolders(res.folderId, res.subFolders, res.items.size)
                 }
                 val folders = repository.loadFolders()
                 _uiState.update {
