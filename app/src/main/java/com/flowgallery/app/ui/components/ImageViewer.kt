@@ -234,42 +234,47 @@ fun ImageViewer(
             }
         }
 
-        // Bottom info + thumbnail strip — shown for both images and videos.
-        // (Videos use our custom control bar inside the frame, so the strip
-        // below is free of overlap; it auto-scrolls to keep the current item
-        // visible.)
+        // Bottom area — images: filename row + thumbnail strip;
+        // videos: thumbnail strip only (the custom player control bar owns
+        // the bottom of the frame, so no filename row/overlap here).
         if (chromeVisible) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
                     .background(
-                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                        if (isVideo) {
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                listOf(Color.Black.copy(alpha = 0.0f), Color.Black.copy(alpha = 0.5f))
+                            )
+                        } else androidx.compose.ui.graphics.Brush.verticalGradient(
                             listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))
                         )
                     )
-                    .padding(top = 32.dp, bottom = 20.dp)
+                    .padding(top = 12.dp, bottom = 20.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = image.name,
-                        color = Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text(
-                        text = stringResource(R.string.dimensions, resolvedWidth, resolvedHeight),
-                        color = Color.White.copy(alpha = 0.6f),
-                        fontSize = 12.sp
-                    )
+                if (!isVideo) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = image.name,
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = stringResource(R.string.dimensions, resolvedWidth, resolvedHeight),
+                            color = Color.White.copy(alpha = 0.6f),
+                            fontSize = 12.sp
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
                 }
-                Spacer(Modifier.height(12.dp))
                 LazyRow(
                     state = thumbListState,
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp),
@@ -358,7 +363,14 @@ private fun VideoPlayerView(uriString: String) {
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable {
+                // tap the frame to toggle play/pause (consistent with images)
+                if (isPlaying) exoPlayer.pause() else exoPlayer.play()
+            }
+    ) {
         // Video surface (no native controller — we draw our own).
         AndroidView(
             factory = { ctx ->
@@ -369,6 +381,16 @@ private fun VideoPlayerView(uriString: String) {
             },
             modifier = Modifier.fillMaxSize()
         )
+
+        // First-frame cover while paused (renders a real preview image).
+        if (!isPlaying) {
+            SubcomposeAsyncImage(
+                model = uriString,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
         // Center play button when paused.
         if (!isPlaying) {
@@ -390,10 +412,12 @@ private fun VideoPlayerView(uriString: String) {
         }
 
         // Bottom control bar: play/pause + progress + time.
+        // Padded up so it never overlaps the thumbnail strip below.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
+                .padding(bottom = 110.dp)
                 .background(Color.Black.copy(alpha = 0.55f))
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
