@@ -1,7 +1,6 @@
 package com.flowgallery.app.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,7 +30,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -192,7 +190,7 @@ private fun FolderDropdown(
             val folder = folders.find { it.id == currentFilter }
             val sub = folder?.subFolders?.find { it.id == currentSubFolderId }
             if (sub != null) {
-                currentLabel = "${folder!!.name} › ${sub.name}"
+                currentLabel = "${folder!!.name} / ${sub.name}"
                 currentIcon = Icons.Filled.FolderOpen
                 currentCount = sub.imageCount
             } else {
@@ -210,46 +208,40 @@ private fun FolderDropdown(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(14.dp))
                 .background(scheme.surface)
                 .clickable { expanded = true }
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 currentIcon,
                 contentDescription = null,
                 tint = scheme.primary,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(20.dp)
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(12.dp))
             Text(
                 text = currentLabel,
                 color = scheme.onSurface,
-                fontSize = 14.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(scheme.primaryContainer)
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    text = "$currentCount",
-                    color = scheme.primary,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            Text(
+                text = "$currentCount",
+                color = scheme.primary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.width(4.dp))
             Icon(
                 Icons.Filled.ArrowDropDown,
                 contentDescription = null,
                 tint = scheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(22.dp)
             )
         }
 
@@ -258,45 +250,36 @@ private fun FolderDropdown(
             onDismissRequest = { expanded = false },
             modifier = Modifier
                 .fillMaxWidth(0.92f)
-                .clip(RoundedCornerShape(16.dp))
-                .border(1.dp, scheme.outline.copy(alpha = 0.4f), RoundedCornerShape(16.dp)),
+                .clip(RoundedCornerShape(20.dp)),
             containerColor = scheme.surface,
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(20.dp),
             tonalElevation = 0.dp,
             shadowElevation = 0.dp
         ) {
             DropdownMenuItem(
-                text = { Text(stringResource(R.string.all), color = scheme.onSurface) },
+                text = { Text(stringResource(R.string.all), color = scheme.onSurface, fontSize = 15.sp) },
                 leadingIcon = { Icon(Icons.Filled.GridView, contentDescription = null, tint = scheme.primary) },
                 onClick = { onSelectFolder(null); expanded = false },
                 colors = menuItemColors(scheme)
             )
             DropdownMenuItem(
-                text = { Text(stringResource(R.string.favorites), color = scheme.onSurface) },
+                text = { Text(stringResource(R.string.favorites), color = scheme.onSurface, fontSize = 15.sp) },
                 leadingIcon = { Icon(Icons.Filled.Favorite, contentDescription = null, tint = Color(0xFFEF4444)) },
                 onClick = { onSelectFolder(HomeFilter.FAVORITES); expanded = false },
                 colors = menuItemColors(scheme)
             )
-            HorizontalDivider(color = scheme.outline.copy(alpha = 0.3f))
             folders.forEach { folder ->
                 DropdownMenuItem(
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(folder.name, color = scheme.onSurface, modifier = Modifier.weight(1f, fill = false))
-                            Spacer(Modifier.width(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(scheme.surfaceVariant)
-                                    .padding(horizontal = 6.dp, vertical = 1.dp)
-                            ) {
-                                Text(
-                                    text = "${folder.imageCount}",
-                                    color = scheme.onSurfaceVariant,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
+                            Text(folder.name, color = scheme.onSurface, fontSize = 15.sp, modifier = Modifier.weight(1f, fill = false))
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                text = "${folder.imageCount}",
+                                color = scheme.onSurfaceVariant,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
                         }
                     },
                     leadingIcon = { Icon(Icons.Filled.Folder, contentDescription = null, tint = scheme.primary) },
@@ -309,30 +292,26 @@ private fun FolderDropdown(
                     .forEach { sub ->
                         DropdownMenuItem(
                             text = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(start = 20.dp)
+                                ) {
                                     Text(
-                                        "↳ ${sub.name}",
-                                        fontSize = 13.sp,
+                                        sub.name,
+                                        fontSize = 14.sp,
                                         color = scheme.onSurfaceVariant,
                                         modifier = Modifier.weight(1f, fill = false)
                                     )
-                                    Spacer(Modifier.width(8.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(scheme.surfaceVariant)
-                                            .padding(horizontal = 6.dp, vertical = 1.dp)
-                                    ) {
-                                        Text(
-                                            text = "${sub.imageCount}",
-                                            color = scheme.onSurfaceVariant,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(
+                                        text = "${sub.imageCount}",
+                                        color = scheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
                                 }
                             },
-                            leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null, tint = scheme.primary.copy(alpha = 0.7f)) },
+                            leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null, tint = scheme.primary.copy(alpha = 0.6f)) },
                             onClick = {
                                 onSelectFolder(folder.id)
                                 onSelectSubFolder(sub.id)
