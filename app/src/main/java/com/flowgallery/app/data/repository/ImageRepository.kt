@@ -149,29 +149,28 @@ class ImageRepository(private val context: Context) {
         ) {
             val children = resolver.getChildDocuments(dirUri) ?: return
             for ((childUri, childName, mime) in children) {
-                when {
-                    isImageName(childName) || isVideoName(childName) -> {
-                        // No content IO during scan — classify by extension only
-                        // (dimensions are filled in lazily by the UI via Coil).
-                        out.add(
-                            ImageItem(
-                                id = nextId++,
-                                folderId = folder.id,
-                                folderName = folder.name,
-                                subFolderId = subFolderId,
-                                subFolderName = subFolderName,
-                                name = childName,
-                                uriString = childUri.toString(),
-                                type = classify(childName),
-                                width = 0,
-                                height = 0
-                            )
+                if (isImageName(childName) || isVideoName(childName)) {
+                    // No content IO during scan — classify by extension only
+                    // (dimensions are filled in lazily by the UI via Coil).
+                    out.add(
+                        ImageItem(
+                            id = nextId++,
+                            folderId = folder.id,
+                            folderName = folder.name,
+                            subFolderId = subFolderId,
+                            subFolderName = subFolderName,
+                            name = childName,
+                            uriString = childUri.toString(),
+                            type = classify(childName),
+                            width = 0,
+                            height = 0
                         )
-                    }
-                    mime.startsWith("vnd.android.document/directory") -> {
-                        // nested directory: keep the same first-level tag
-                        collectRecursive(childUri, subFolderId, subFolderName, out)
-                    }
+                    )
+                } else {
+                    // Not a media file — attempt recursion; if it's a plain
+                    // file (not a directory) getChildDocuments returns null
+                    // and we simply skip it. MIME alone is unreliable here.
+                    collectRecursive(childUri, subFolderId, subFolderName, out)
                 }
             }
         }
@@ -180,26 +179,25 @@ class ImageRepository(private val context: Context) {
         val rootChildren = resolver.getChildDocuments(rootUri) ?: emptyList()
         val subGroups = LinkedHashMap<String, MutableList<ImageItem>>()
         for ((childUri, childName, mime) in rootChildren) {
-            when {
-                isImageName(childName) || isVideoName(childName) -> {
-                    allItems.add(
-                        ImageItem(
-                            id = nextId++,
-                            folderId = folder.id,
-                            folderName = folder.name,
-                            name = childName,
-                            uriString = childUri.toString(),
-                            type = classify(childName),
-                            width = 0,
-                            height = 0
-                        )
+            if (isImageName(childName) || isVideoName(childName)) {
+                allItems.add(
+                    ImageItem(
+                        id = nextId++,
+                        folderId = folder.id,
+                        folderName = folder.name,
+                        name = childName,
+                        uriString = childUri.toString(),
+                        type = classify(childName),
+                        width = 0,
+                        height = 0
                     )
-                }
-                mime.startsWith("vnd.android.document/directory") -> {
-                    // first-level subfolder: recursive collect with tag
-                    val subId = nextId++
-                    val subItems = mutableListOf<ImageItem>()
-                    collectRecursive(childUri, subId, childName, subItems)
+                )
+            } else {
+                // first-level subfolder: recursive collect with tag
+                val subId = nextId++
+                val subItems = mutableListOf<ImageItem>()
+                collectRecursive(childUri, subId, childName, subItems)
+                if (subItems.isNotEmpty() || resolver.isDirectory(childUri)) {
                     subGroups[childUri.toString()] = subItems
                     allItems.addAll(subItems)
                 }
@@ -236,8 +234,15 @@ class ImageRepository(private val context: Context) {
         parentUri: Uri
     ): List<Triple<Uri, String, String>>? {
         return try {
+            // Subfolders are document URIs, the root is a tree URI —
+            // getDocumentId works for both (getTreeDocumentId only for trees).
+            val docId = try {
+                android.provider.DocumentsContract.getDocumentId(parentUri)
+            } catch (e: IllegalArgumentException) {
+                android.provider.DocumentsContract.getTreeDocumentId(parentUri)
+            }
             val childrenUri = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(
-                parentUri, android.provider.DocumentsContract.getTreeDocumentId(parentUri)
+                parentUri, docId
             )
             val list = mutableListOf<Triple<Uri, String, String>>()
             resolver.query(
@@ -256,12 +261,12 @@ class ImageRepository(private val context: Context) {
                 val mimeCol = c.getColumnIndexOrThrow(
                     android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE)
                 while (c.moveToNext()) {
-                    val docId = c.getString(idCol)
+                    val docIdChild = c.getString(idCol)
                     val name = c.getString(nameCol) ?: "unknown"
                     val mime = c.getString(mimeCol) ?: ""
                     list.add(
                         Triple(
-                            android.provider.DocumentsContract.buildDocumentUriUsingTree(parentUri, docId),
+                            android.provider.DocumentsContract.buildDocumentUriUsingTree(parentUri, docIdChild),
                             name,
                             mime
                         )
@@ -271,6 +276,27 @@ class ImageRepository(private val context: Context) {
             list
         } catch (e: Exception) {
             null
+        }
+    }
+
+    private fun android.content.ContentResolver.isDirectory(uri: Uri): Boolean {
+        return try {
+            val docId = try {
+                android.provider.DocumentsContract.getDocumentId(uri)
+            } catch (e: IllegalArgumentException) {
+                android.provider.DocumentsContract.getTreeDocumentId(uri)
+            }
+            resolver.query(
+                android.provider.DocumentsContract.buildDocumentUriUsingTree(uri, docId),
+                arrayOf(android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE),
+                null, null, null
+            )?.use { c ->
+                if (c.moveToFirst()) {
+                    (c.getString(0) ?: "").startsWith("vnd.android.document/directory")
+                } else false
+            } ?: false
+        } catch (e: Exception) {
+            false
         }
     }
 
@@ -312,7 +338,10 @@ class ImageRepository(private val context: Context) {
     private fun isVideoName(name: String): Boolean {
         val n = name.lowercase()
         return n.endsWith(".mp4") || n.endsWith(".mkv") || n.endsWith(".webm") ||
-            n.endsWith(".mov") || n.endsWith(".avi") || n.endsWith(".3gp")
+            n.endsWith(".mov") || n.endsWith(".avi") || n.endsWith(".3gp") ||
+            n.endsWith(".flv") || n.endsWith(".ts") || n.endsWith(".m4v") ||
+            n.endsWith(".wmv") || n.endsWith(".rmvb") || n.endsWith(".mpg") ||
+            n.endsWith(".mpeg") || n.endsWith(".rm")
     }
 
     private companion object {
