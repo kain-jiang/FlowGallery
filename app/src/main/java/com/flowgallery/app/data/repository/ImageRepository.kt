@@ -87,10 +87,35 @@ class ImageRepository(private val context: Context) {
     fun addFolder(uri: Uri, displayName: String): Boolean {
         val folders = loadFolders().toMutableList()
         if (folders.any { it.uriString == uri.toString() }) return false
+
+        // Reject folders whose tree is already covered by an existing entry —
+        // e.g. adding a subfolder of an already-added folder (or vice versa)
+        // would duplicate its media in the "All" view (FR-2).
+        val newId = treeDocumentId(uri)
+        if (newId != null) {
+            val covered = folders.any { existing ->
+                val existingId = treeDocumentId(Uri.parse(existing.uriString))
+                existingId != null &&
+                    (newId == existingId ||
+                        newId.startsWith("$existingId/") ||
+                        existingId.startsWith("$newId/"))
+            }
+            if (covered) return false
+        }
+
         val nextId = (folders.maxOfOrNull { it.id } ?: 0L) + 1
         folders.add(Folder(id = nextId, name = displayName, uriString = uri.toString()))
         saveFolders(folders)
         return true
+    }
+
+    /** Extract the SAF tree document id (e.g. "primary:DCIM/Test") or null. */
+    private fun treeDocumentId(uri: Uri): String? {
+        return try {
+            android.provider.DocumentsContract.getTreeDocumentId(uri)
+        } catch (e: Exception) {
+            null
+        }
     }
 
     /**
