@@ -36,6 +36,8 @@
     <string name="cd_unfavorite">Unfavorite</string>
     <string name="cd_share">Share</string>
     <string name="cd_more">More</string>
+    <string name="cd_play">Play</string>
+    <string name="cd_pause">Pause</string>
     <string name="dimensions">%1$d × %2$d</string>
 
     <!-- Search -->

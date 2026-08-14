@@ -36,6 +36,8 @@
     <string name="cd_unfavorite">取消收藏</string>
     <string name="cd_share">分享</string>
     <string name="cd_more">更多</string>
+    <string name="cd_play">播放</string>
+    <string name="cd_pause">暂停</string>
     <string name="dimensions">%1$d × %2$d</string>
 
     <!-- Search -->

@@ -208,8 +208,10 @@ class ImageRepository(private val context: Context) {
             }
         }
 
-        // Build first-level subfolder summaries
-        val subs = subGroups.values.map { it.first }
+        // Build first-level subfolder summaries — skip empty subfolders (FR-2.1)
+        val subs = subGroups.values
+            .map { it.first }
+            .filter { it.imageCount > 0 }
         FolderScanResult(folder.id, allItems, subs)
     }
 

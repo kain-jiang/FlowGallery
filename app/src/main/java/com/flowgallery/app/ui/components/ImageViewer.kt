@@ -29,10 +29,12 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -84,16 +86,15 @@ fun ImageViewer(
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
     var chromeVisible by remember { mutableStateOf(true) }
-    // Videos: chrome follows the player's own control bar visibility, so the
-    // video can go truly fullscreen (chrome auto-hides with the controls).
-    var videoControlsVisible by remember { mutableStateOf(true) }
-    androidx.compose.runtime.LaunchedEffect(currentIndex) { videoControlsVisible = true }
-    if (isVideo) {
-        chromeVisible = videoControlsVisible
-    }
     // Real dimensions resolved lazily from the loaded drawable (zero-IO scan).
     var resolvedWidth by remember(image.uriString) { mutableStateOf(image.width) }
     var resolvedHeight by remember(image.uriString) { mutableStateOf(image.height) }
+    // Thumbnail strip scroll state — auto-centers the current item.
+    val thumbListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    LaunchedEffect(currentIndex) {
+        val target = (currentIndex - 2).coerceAtLeast(0)
+        thumbListState.animateScrollToItem(target)
+    }
 
     // Reset transform when switching images
     LaunchedEffect(currentIndex) {
@@ -127,10 +128,7 @@ fun ImageViewer(
     ) {
         // Main media: video player / animated image / static image
         when {
-            image.type.isVideo -> VideoPlayerView(
-                uriString = image.uriString,
-                onControlsVisibility = { visible -> videoControlsVisible = visible }
-            )
+            image.type.isVideo -> VideoPlayerView(uriString = image.uriString)
             else -> SubcomposeAsyncImage(
                 model = image.uriString,
                 contentDescription = image.name,
@@ -153,8 +151,8 @@ fun ImageViewer(
             )
         }
 
-        // Prev / Next arrows (hidden for videos — PlayerView controls would overlap)
-        if (chromeVisible && !isVideo && currentIndex > 0) {
+        // Prev / Next arrows (shown for both images and videos)
+        if (chromeVisible && currentIndex > 0) {
             IconButton(
                 onClick = { onNavigate(currentIndex - 1) },
                 modifier = Modifier
@@ -167,7 +165,7 @@ fun ImageViewer(
                 Icon(Icons.Filled.ChevronLeft, contentDescription = stringResource(R.string.cd_prev), tint = Color.White)
             }
         }
-        if (chromeVisible && !isVideo && currentIndex < images.lastIndex) {
+        if (chromeVisible && currentIndex < images.lastIndex) {
             IconButton(
                 onClick = { onNavigate(currentIndex + 1) },
                 modifier = Modifier
@@ -236,10 +234,11 @@ fun ImageViewer(
             }
         }
 
-        // Bottom info + thumbnail strip — fully hidden for videos because the
-        // PlayerView control bar (with progress) occupies the bottom of the
-        // frame; showing our info row would overlap it.
-        if (chromeVisible && !isVideo) {
+        // Bottom info + thumbnail strip — shown for both images and videos.
+        // (Videos use our custom control bar inside the frame, so the strip
+        // below is free of overlap; it auto-scrolls to keep the current item
+        // visible.)
+        if (chromeVisible) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -271,11 +270,11 @@ fun ImageViewer(
                     )
                 }
                 Spacer(Modifier.height(12.dp))
-                if (!isVideo) {
-                    LazyRow(
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                LazyRow(
+                    state = thumbListState,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     itemsIndexed(images) { idx, img ->
                         Box(
                             modifier = Modifier
@@ -315,48 +314,123 @@ fun ImageViewer(
                         }
                     }
                     } // LazyRow
-                } // if (!isVideo)
             }
         }
     }
 }
 
-/** Media3 ExoPlayer view for video items (FR-10). */
+/** Custom video player — Media3 surface + our own controls (FR-10). */
 @Composable
-private fun VideoPlayerView(
-    uriString: String,
-    onControlsVisibility: (Boolean) -> Unit
-) {
+private fun VideoPlayerView(uriString: String) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val exoPlayer = remember(uriString) {
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(MediaItem.fromUri(uriString))
             prepare()
-            // do not autoplay: show first frame, user taps play in the controls
             playWhenReady = false
         }
     }
+    var isPlaying by remember { mutableStateOf(false) }
+    var position by remember { mutableStateOf(0L) }
+    var duration by remember { mutableStateOf(0L) }
 
     DisposableEffect(exoPlayer) {
-        onDispose { exoPlayer.release() }
+        val listener = object : androidx.media3.common.Player.Listener {
+            override fun onIsPlayingChanged(playing: Boolean) {
+                isPlaying = playing
+            }
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                duration = exoPlayer.duration.coerceAtLeast(0L)
+            }
+        }
+        exoPlayer.addListener(listener)
+        onDispose {
+            exoPlayer.removeListener(listener)
+            exoPlayer.release()
+        }
     }
 
-    // PlayerView owns its controller (play/pause/seek/volume) — no custom
-    // overlay button, so nothing overlaps the native controls. The chrome
-    // (top bar / info) follows the controller's visibility so the video can
-    // go truly fullscreen.
-    AndroidView(
-        factory = { ctx ->
-            PlayerView(ctx).apply {
-                useController = true
-                this.player = exoPlayer
-                setControllerVisibilityListener(
-                    androidx.media3.ui.PlayerView.ControllerVisibilityListener { visibility ->
-                        onControlsVisibility(visibility == PlayerView.VISIBLE)
-                    }
+    // Poll position while playing so the progress bar stays live.
+    LaunchedEffect(isPlaying) {
+        while (isPlaying) {
+            position = exoPlayer.currentPosition
+            kotlinx.coroutines.delay(250)
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Video surface (no native controller — we draw our own).
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    useController = false
+                    this.player = exoPlayer
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        // Center play button when paused.
+        if (!isPlaying) {
+            IconButton(
+                onClick = { exoPlayer.play() },
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(72.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.55f))
+            ) {
+                Icon(
+                    Icons.Filled.PlayArrow,
+                    contentDescription = stringResource(R.string.cd_play),
+                    tint = Color.White,
+                    modifier = Modifier.size(40.dp)
                 )
             }
-        },
-        modifier = Modifier.fillMaxSize()
-    )
+        }
+
+        // Bottom control bar: play/pause + progress + time.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .background(Color.Black.copy(alpha = 0.55f))
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = { if (isPlaying) exoPlayer.pause() else exoPlayer.play() },
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    contentDescription = if (isPlaying) stringResource(R.string.cd_pause) else stringResource(R.string.cd_play),
+                    tint = Color.White
+                )
+            }
+            Text(
+                text = formatTime(position),
+                color = Color.White.copy(alpha = 0.8f),
+                fontSize = 11.sp
+            )
+            Slider(
+                value = position.toFloat().coerceIn(0f, duration.coerceAtLeast(1L).toFloat()),
+                onValueChange = { exoPlayer.seekTo(it.toLong()) },
+                valueRange = 0f..duration.coerceAtLeast(1L).toFloat(),
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+            )
+            Text(
+                text = formatTime(duration),
+                color = Color.White.copy(alpha = 0.8f),
+                fontSize = 11.sp
+            )
+        }
+    }
+}
+
+private fun formatTime(ms: Long): String {
+    val totalSec = ms / 1000
+    val m = totalSec / 60
+    val s = totalSec % 60
+    return "%d:%02d".format(m, s)
 }
