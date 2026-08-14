@@ -9,6 +9,7 @@
 
     <!-- Home -->
     <string name="all">全部</string>
+    <string name="favorites">收藏</string>
     <string name="stat_images">图片</string>
     <string name="stat_folders">文件夹</string>
     <string name="stat_hd">高清</string>
@@ -55,4 +56,11 @@
     <string name="setting_cache_desc">释放缩略图缓存</string>
     <string name="setting_about">瀑布画廊</string>
     <string name="setting_version">版本 1.0.0</string>
+
+    <!-- Remove folder -->
+    <string name="remove_folder_title">移出文件夹</string>
+    <string name="remove_folder_msg">将 "%1$s"（%2$d 张图片）移出图库？不会删除文件。</string>
+    <string name="remove_folder_confirm">移出</string>
+    <string name="remove_folder_cancel">取消</string>
+    <string name="cd_remove_folder">移出文件夹</string>
 </resources>

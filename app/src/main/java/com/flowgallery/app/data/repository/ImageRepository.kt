@@ -1,21 +1,23 @@
 package com.flowgallery.app.data.repository
 
-import android.content.ContentUris
 import android.content.Context
 import android.content.SharedPreferences
+import android.media.MediaMetadataRetriever
 import android.net.Uri
-import android.provider.MediaStore
 import com.flowgallery.app.data.model.Folder
 import com.flowgallery.app.data.model.ImageItem
+import com.flowgallery.app.data.model.MediaType
+import com.flowgallery.app.data.model.SubFolder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Persists the user's selected folders (via SAF URIs) and scans them for images.
+ * Persists the user's selected folders (via SAF URIs), scans them recursively
+ * for images/videos, and releases permissions on removal (FR-2 / FR-2.1 / FR-10).
  */
-class ImageRepository(context: Context) {
+class ImageRepository(private val context: Context) {
 
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences("flowgallery", Context.MODE_PRIVATE)
@@ -30,12 +32,25 @@ class ImageRepository(context: Context) {
             val arr = JSONArray(raw)
             (0 until arr.length()).map { i ->
                 val o = arr.getJSONObject(i)
+                val subs = o.optJSONArray("subs")
+                val subList = if (subs == null) emptyList() else {
+                    (0 until subs.length()).map { j ->
+                        val s = subs.getJSONObject(j)
+                        SubFolder(
+                            id = s.getLong("id"),
+                            name = s.getString("name"),
+                            uriString = s.getString("uri"),
+                            imageCount = s.optInt("count", 0)
+                        )
+                    }
+                }
                 Folder(
                     id = o.getLong("id"),
                     name = o.getString("name"),
                     uriString = o.getString("uri"),
                     imageCount = o.optInt("count", 0),
-                    isSelected = o.optBoolean("selected", true)
+                    isSelected = o.optBoolean("selected", true),
+                    subFolders = subList
                 )
             }
         } catch (e: Exception) {
@@ -46,6 +61,16 @@ class ImageRepository(context: Context) {
     fun saveFolders(folders: List<Folder>) {
         val arr = JSONArray()
         folders.forEach { f ->
+            val subs = JSONArray()
+            f.subFolders.forEach { s ->
+                subs.put(
+                    JSONObject()
+                        .put("id", s.id)
+                        .put("name", s.name)
+                        .put("uri", s.uriString)
+                        .put("count", s.imageCount)
+                )
+            }
             arr.put(
                 JSONObject()
                     .put("id", f.id)
@@ -53,6 +78,7 @@ class ImageRepository(context: Context) {
                     .put("uri", f.uriString)
                     .put("count", f.imageCount)
                     .put("selected", f.isSelected)
+                    .put("subs", subs)
             )
         }
         prefs.edit().putString(KEY_FOLDERS, arr.toString()).apply()
@@ -68,6 +94,24 @@ class ImageRepository(context: Context) {
         return true
     }
 
+    /**
+     * Remove a folder from the library AND release its SAF persistable
+     * permission (FR-2). Returns the removed folder.
+     */
+    fun removeFolder(id: Long): Folder? {
+        val folders = loadFolders().toMutableList()
+        val removed = folders.find { it.id == id } ?: return null
+        folders.removeIf { it.id == id }
+        saveFolders(folders)
+        runCatching {
+            val uri = Uri.parse(removed.uriString)
+            resolver.releasePersistableUriPermission(
+                uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        }
+        return removed
+    }
+
     fun updateFolderCounts(counts: Map<Long, Int>) {
         val folders = loadFolders().map { f ->
             counts[f.id]?.let { f.copy(imageCount = it) } ?: f
@@ -75,65 +119,133 @@ class ImageRepository(context: Context) {
         saveFolders(folders)
     }
 
-    // ------------------------------------------------------------------ images
+    fun updateFolderSubFolders(id: Long, subs: List<SubFolder>, totalCount: Int) {
+        val folders = loadFolders().map { f ->
+            if (f.id == id) f.copy(subFolders = subs, imageCount = totalCount) else f
+        }
+        saveFolders(folders)
+    }
+
+    // ------------------------------------------------------------------ scanning
 
     /**
-     * Scan the documents tree referenced by a folder's SAF uri.
-     * Only reads image MIME documents, one level deep (typical "图包" layout).
+     * Recursively scan a folder tree (FR-2.1): collects all images/videos
+     * from the root and every nested level, and returns the first-level
+     * subfolder breakdown.
      */
-    suspend fun scanFolder(folder: Folder): List<ImageItem> = withContext(Dispatchers.IO) {
-        val rootUri = Uri.parse(folder.uriString) ?: return@withContext emptyList()
-        val docs = mutableListOf<Pair<Uri, String>>() // uri to display name
-
-        val treeChildren = resolver.getChildDocuments(rootUri) ?: emptyList()
-        for ((childUri, childName) in treeChildren) {
-            if (isImageName(childName)) {
-                docs.add(childUri to childName)
-            }
-        }
-        // recurse one level for nested image packs
-        for ((childUri, childName) in treeChildren) {
-            if (isImageName(childName)) continue
-            val nested = resolver.getChildDocuments(childUri) ?: continue
-            for ((grandUri, grandName) in nested) {
-                if (isImageName(grandName)) docs.add(grandUri to grandName)
-            }
-        }
-
+    suspend fun scanFolder(folder: Folder): FolderScanResult = withContext(Dispatchers.IO) {
+        val rootUri = Uri.parse(folder.uriString) ?: return@withContext FolderScanResult(emptyList(), emptyList())
+        val allItems = mutableListOf<ImageItem>()
         var nextId = folder.id * 1_000_000L
-        docs.map { (uri, name) ->
-            val (w, h) = resolver.queryDimensions(uri)
-            ImageItem(
+
+        /**
+         * Recursively collect media under [dirUri]. Items get tagged with the
+         * first-level subfolder they live under (null when directly in root).
+         */
+        fun collectRecursive(
+            dirUri: Uri,
+            subFolderId: Long?,
+            subFolderName: String?,
+            out: MutableList<ImageItem>
+        ) {
+            val children = resolver.getChildDocuments(dirUri) ?: return
+            for ((childUri, childName, mime) in children) {
+                when {
+                    isImageName(childName) || isVideoName(childName) -> {
+                        val (w, h, dur, type) = resolver.analyzeMedia(childUri, childName)
+                        out.add(
+                            ImageItem(
+                                id = nextId++,
+                                folderId = folder.id,
+                                folderName = folder.name,
+                                subFolderId = subFolderId,
+                                subFolderName = subFolderName,
+                                name = childName,
+                                uriString = childUri.toString(),
+                                type = type,
+                                width = w,
+                                height = h,
+                                durationMs = dur
+                            )
+                        )
+                    }
+                    mime.startsWith("vnd.android.document/directory") -> {
+                        // nested directory: keep the same first-level tag
+                        collectRecursive(childUri, subFolderId, subFolderName, out)
+                    }
+                }
+            }
+        }
+
+        // Root pass: direct files + first-level subfolders
+        val rootChildren = resolver.getChildDocuments(rootUri) ?: emptyList()
+        val subGroups = LinkedHashMap<String, MutableList<ImageItem>>()
+        for ((childUri, childName, mime) in rootChildren) {
+            when {
+                isImageName(childName) || isVideoName(childName) -> {
+                    val (w, h, dur, type) = resolver.analyzeMedia(childUri, childName)
+                    allItems.add(
+                        ImageItem(
+                            id = nextId++,
+                            folderId = folder.id,
+                            folderName = folder.name,
+                            name = childName,
+                            uriString = childUri.toString(),
+                            type = type,
+                            width = w,
+                            height = h,
+                            durationMs = dur
+                        )
+                    )
+                }
+                mime.startsWith("vnd.android.document/directory") -> {
+                    // first-level subfolder: recursive collect with tag
+                    val subId = nextId++
+                    val subItems = mutableListOf<ImageItem>()
+                    collectRecursive(childUri, subId, childName, subItems)
+                    subGroups[childUri.toString()] = subItems
+                    allItems.addAll(subItems)
+                }
+            }
+        }
+
+        // Build first-level subfolder summaries
+        val subs = subGroups.map { (uriStr, items) ->
+            SubFolder(
                 id = nextId++,
-                folderId = folder.id,
-                folderName = folder.name,
-                name = name,
-                uriString = uri.toString(),
-                width = w,
-                height = h
+                name = resolver.displayNameOf(Uri.parse(uriStr)) ?: "sub",
+                uriString = uriStr,
+                imageCount = items.size
             )
         }
+        FolderScanResult(allItems, subs)
     }
 
     /** Scan every selected folder and merge results (used by the "All" view). */
     suspend fun scanAll(folders: List<Folder>): List<ImageItem> = withContext(Dispatchers.IO) {
         val merged = mutableListOf<ImageItem>()
         for (folder in folders) {
-            merged += scanFolder(folder)
+            merged += scanFolder(folder).items
         }
         merged
     }
 
     // ------------------------------------------------------------------ helpers
 
+    /** Result of scanning one root folder: flat items + subfolder summaries. */
+    data class FolderScanResult(
+        val items: List<ImageItem>,
+        val subFolders: List<SubFolder>
+    )
+
     private fun android.content.ContentResolver.getChildDocuments(
         parentUri: Uri
-    ): List<Pair<Uri, String>>? {
+    ): List<Triple<Uri, String, String>>? {
         return try {
             val childrenUri = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(
                 parentUri, android.provider.DocumentsContract.getTreeDocumentId(parentUri)
             )
-            val list = mutableListOf<Pair<Uri, String>>()
+            val list = mutableListOf<Triple<Uri, String, String>>()
             resolver.query(
                 childrenUri,
                 arrayOf(
@@ -153,10 +265,13 @@ class ImageRepository(context: Context) {
                     val docId = c.getString(idCol)
                     val name = c.getString(nameCol) ?: "unknown"
                     val mime = c.getString(mimeCol) ?: ""
-                    if (mime.startsWith("image/") || isImageName(name)) {
-                        list.add(android.provider.DocumentsContract.buildDocumentUriUsingTree(
-                            parentUri, docId) to name)
-                    }
+                    list.add(
+                        Triple(
+                            android.provider.DocumentsContract.buildDocumentUriUsingTree(parentUri, docId),
+                            name,
+                            mime
+                        )
+                    )
                 }
             }
             list
@@ -165,28 +280,91 @@ class ImageRepository(context: Context) {
         }
     }
 
-    private fun android.content.ContentResolver.queryDimensions(uri: Uri): Pair<Int, Int> {
-        // MediaStore WIDTH/HEIGHT columns don't work for SAF document URIs,
-        // so decode the image header instead (fast, reads only the bounds).
+    private fun android.content.ContentResolver.displayNameOf(uri: Uri): String? {
         return try {
-            val opts = android.graphics.BitmapFactory.Options()
-            opts.inJustDecodeBounds = true
-            resolver.openInputStream(uri)?.use { input ->
-                android.graphics.BitmapFactory.decodeStream(input, null, opts)
-                if (opts.outWidth > 0 && opts.outHeight > 0) {
-                    opts.outWidth to opts.outHeight
-                } else 0 to 0
-            } ?: (0 to 0)
+            resolver.query(
+                uri,
+                arrayOf(android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+                null, null, null
+            )?.use { c ->
+                if (c.moveToFirst()) c.getString(0) else null
+            }
         } catch (e: Exception) {
-            (0 to 0)
+            null
         }
     }
+
+    /**
+     * Analyze a media document: dimensions, video duration, media type.
+     * (FR-10: static / animated GIF / animated WebP / video)
+     */
+    private fun android.content.ContentResolver.analyzeMedia(
+        uri: Uri,
+        name: String
+    ): MediaInfo {
+        val lower = name.lowercase()
+        return try {
+            if (isVideoName(name)) {
+                // video: use MediaMetadataRetriever for resolution + duration
+                val mmr = MediaMetadataRetriever()
+                try {
+                    mmr.setDataSource(context, uri)
+                    val w = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+                        ?.toIntOrNull() ?: 0
+                    val h = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+                        ?.toIntOrNull() ?: 0
+                    val dur = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                        ?.toLongOrNull()
+                    MediaInfo(w, h, dur, MediaType.VIDEO)
+                } finally {
+                    runCatching { mmr.release() }
+                }
+            } else {
+                // image: BitmapFactory bounds + detect animation
+                val opts = android.graphics.BitmapFactory.Options()
+                opts.inJustDecodeBounds = true
+                resolver.openInputStream(uri)?.use { input ->
+                    android.graphics.BitmapFactory.decodeStream(input, null, opts)
+                }
+                val w = opts.outWidth
+                val h = opts.outHeight
+                val type = when {
+                    lower.endsWith(".gif") -> MediaType.ANIMATED_GIF
+                    lower.endsWith(".webp") -> MediaType.ANIMATED_WEBP
+                    else -> MediaType.STATIC_IMAGE
+                }
+                MediaInfo(w, h, null, type)
+            }
+        } catch (e: Exception) {
+            // fallback: classify by extension only
+            val type = when {
+                isVideoName(name) -> MediaType.VIDEO
+                lower.endsWith(".gif") -> MediaType.ANIMATED_GIF
+                lower.endsWith(".webp") -> MediaType.ANIMATED_WEBP
+                else -> MediaType.STATIC_IMAGE
+            }
+            MediaInfo(0, 0, null, type)
+        }
+    }
+
+    private data class MediaInfo(
+        val width: Int,
+        val height: Int,
+        val durationMs: Long?,
+        val type: MediaType
+    )
 
     private fun isImageName(name: String): Boolean {
         val n = name.lowercase()
         return n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png") ||
             n.endsWith(".webp") || n.endsWith(".gif") || n.endsWith(".bmp") ||
             n.endsWith(".heic") || n.endsWith(".avif")
+    }
+
+    private fun isVideoName(name: String): Boolean {
+        val n = name.lowercase()
+        return n.endsWith(".mp4") || n.endsWith(".mkv") || n.endsWith(".webm") ||
+            n.endsWith(".mov") || n.endsWith(".avi") || n.endsWith(".3gp")
     }
 
     private companion object {

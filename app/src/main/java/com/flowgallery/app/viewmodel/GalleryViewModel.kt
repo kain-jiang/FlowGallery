@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.flowgallery.app.data.model.Folder
 import com.flowgallery.app.data.model.GalleryTab
+import com.flowgallery.app.data.model.HomeFilter
 import com.flowgallery.app.data.model.ImageItem
 import com.flowgallery.app.data.model.ViewerState
 import com.flowgallery.app.data.repository.ImageRepository
@@ -20,10 +21,16 @@ data class GalleryUiState(
     val folders: List<Folder> = emptyList(),
     val images: List<ImageItem> = emptyList(),
     val currentTab: GalleryTab = GalleryTab.Home,
-    val currentFolderId: Long? = null,          // null = "All"
+    /** null = All, HomeFilter.FAVORITES = favorites, else folder id or subfolder id */
+    val currentFilter: Long? = null,
+    val isSubFolderFilter: Boolean = false,
     val viewer: ViewerState = ViewerState(),
     val isRefreshing: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    /** true = 3 columns, false = 2 columns (FR-1 decision #3) */
+    val threeColumns: Boolean = false,
+    /** type filter for search: null = all, else MediaType name */
+    val mediaTypeFilter: String? = null
 )
 
 class GalleryViewModel(app: Application) : AndroidViewModel(app) {
@@ -33,9 +40,15 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     private val _uiState = MutableStateFlow(GalleryUiState())
     val uiState: StateFlow<GalleryUiState> = _uiState.asStateFlow()
 
+    private val _favorites = MutableStateFlow<Set<Long>>(loadFavorites())
+    val favorites: StateFlow<Set<Long>> = _favorites.asStateFlow()
+
     init {
+        _uiState.update { it.copy(threeColumns = prefs.getBoolean(KEY_THREE_COLUMNS, false)) }
         refreshFolders()
     }
+
+    // ------------------------------------------------------------------ folders
 
     /** Reload persisted folders and rescan their images. */
     fun refreshFolders() {
@@ -66,15 +79,24 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Remove a folder from the library entirely. */
+    /**
+     * Remove a folder from the library entirely (FR-2): releases SAF
+     * permission and clears the current filter if it pointed at this folder.
+     */
     fun removeFolder(id: Long) {
         viewModelScope.launch {
-            val folders = _uiState.value.folders.filterNot { it.id == id }
-            repository.saveFolders(folders)
-            _uiState.update { it.copy(folders = folders) }
+            repository.removeFolder(id)
+            val folders = repository.loadFolders()
+            val st = _uiState.value
+            val filterReset = if (!st.isSubFolderFilter && st.currentFilter == id) null else st.currentFilter
+            _uiState.update {
+                it.copy(folders = folders, currentFilter = filterReset)
+            }
             rescan()
         }
     }
+
+    // ------------------------------------------------------------------ scanning
 
     /** Rescan all selected folders (pull-to-refresh / after folder changes). */
     fun rescan() {
@@ -85,6 +107,11 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             result.onSuccess { images ->
                 val counts = images.groupBy { it.folderId }.mapValues { it.value.size }
                 repository.updateFolderCounts(counts)
+                // Update subfolder breakdowns per root folder
+                for (folder in selected) {
+                    val subRes = repository.scanFolder(folder)
+                    repository.updateFolderSubFolders(folder.id, subRes.subFolders, subRes.items.size)
+                }
                 val folders = repository.loadFolders()
                 _uiState.update {
                     it.copy(
@@ -99,9 +126,26 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ------------------------------------------------------------------ navigation / filters
+
     fun selectTab(tab: GalleryTab) = _uiState.update { it.copy(currentTab = tab) }
 
-    fun selectFolder(id: Long?) = _uiState.update { it.copy(currentFolderId = id) }
+    /** Select a home filter: null = All, HomeFilter.FAVORITES, folder id, or (id, true) for subfolder. */
+    fun selectFilter(id: Long?, isSubFolder: Boolean = false) =
+        _uiState.update { it.copy(currentFilter = id, isSubFolderFilter = isSubFolder) }
+
+    /** Toggle grid density 2<->3 columns (FR-1 decision #3), persisted. */
+    fun toggleColumns() {
+        val newVal = !_uiState.value.threeColumns
+        prefs.edit().putBoolean(KEY_THREE_COLUMNS, newVal).apply()
+        _uiState.update { it.copy(threeColumns = newVal) }
+    }
+
+    /** Set search media-type filter (null = all). */
+    fun setMediaTypeFilter(type: String?) =
+        _uiState.update { it.copy(mediaTypeFilter = type) }
+
+    // ------------------------------------------------------------------ viewer
 
     fun openViewer(index: Int) = _uiState.update { it.copy(viewer = ViewerState(isOpen = true, index = index)) }
 
@@ -116,21 +160,44 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Images visible under the current tab + folder filter. */
+    // ------------------------------------------------------------------ favorites
+
+    fun toggleFavorite(imageId: Long) {
+        val newSet = _favorites.value.let { favs ->
+            if (imageId in favs) favs - imageId else favs + imageId
+        }
+        _favorites.value = newSet
+        saveFavorites(newSet)
+    }
+
+    private fun loadFavorites(): Set<Long> =
+        prefs.getStringSet(KEY_FAVORITES, emptySet())?.mapNotNull { it.toLongOrNull() }?.toSet() ?: emptySet()
+
+    private fun saveFavorites(set: Set<Long>) {
+        prefs.edit().putStringSet(KEY_FAVORITES, set.map { it.toString() }.toSet()).apply()
+    }
+
+    // ------------------------------------------------------------------ derived
+
+    /** Images visible under the current tab + filter. */
     fun visibleImages(state: GalleryUiState = _uiState.value): List<ImageItem> {
         var list = state.images
-        state.currentFolderId?.let { fid ->
-            list = list.filter { it.folderId == fid }
+        when (state.currentFilter) {
+            null -> {} // All
+            HomeFilter.FAVORITES -> list = list.filter { it.id in _favorites.value }
+            else -> list = if (state.isSubFolderFilter) {
+                list.filter { it.subFolderId == state.currentFilter }
+            } else {
+                list.filter { it.folderId == state.currentFilter }
+            }
         }
         return list
     }
 
-    private val _favorites = MutableStateFlow<Set<Long>>(emptySet())
-    val favorites: StateFlow<Set<Long>> = _favorites.asStateFlow()
+    private val prefs get() = getApplication<Application>().getSharedPreferences("flowgallery", android.content.Context.MODE_PRIVATE)
 
-    fun toggleFavorite(imageId: Long) {
-        _favorites.update { favs ->
-            if (imageId in favs) favs - imageId else favs + imageId
-        }
+    private companion object {
+        const val KEY_FAVORITES = "favorites"
+        const val KEY_THREE_COLUMNS = "three_columns"
     }
 }

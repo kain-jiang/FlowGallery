@@ -18,8 +18,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
@@ -35,23 +37,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.ui.res.stringResource
 import com.flowgallery.app.R
 import com.flowgallery.app.data.model.Folder
 import com.flowgallery.app.data.model.GalleryTab
+import com.flowgallery.app.data.model.HomeFilter
 import com.flowgallery.app.data.model.ImageItem
+import com.flowgallery.app.data.model.MediaType
 import com.flowgallery.app.ui.components.WaterfallGrid
-import com.flowgallery.app.ui.theme.Accent
-import com.flowgallery.app.ui.theme.AccentMuted
-import com.flowgallery.app.ui.theme.Border
-import com.flowgallery.app.ui.theme.FgSecondary
-import com.flowgallery.app.ui.theme.Muted
-import com.flowgallery.app.ui.theme.Surface
-import com.flowgallery.app.ui.theme.Surface2
 import com.flowgallery.app.viewmodel.GalleryViewModel
 
 /** Main gallery screen: tab strip + stats bar + waterfall grid + FAB. */
@@ -59,7 +56,8 @@ import com.flowgallery.app.viewmodel.GalleryViewModel
 fun HomeScreen(
     viewModel: GalleryViewModel,
     onOpenFolderModal: () -> Unit,
-    onImageClick: (ImageItem) -> Unit
+    onImageClick: (ImageItem) -> Unit,
+    onRemoveFolder: (Folder) -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
     val favorites by viewModel.favorites.collectAsState()
@@ -69,79 +67,104 @@ fun HomeScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-        // Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.weight(1f)
+            // Header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = {}) {
+                    Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.cd_search), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                // Grid density toggle 2<->3 columns (FR-1 decision #3)
+                IconButton(onClick = viewModel::toggleColumns) {
+                    Icon(
+                        Icons.Filled.GridView,
+                        contentDescription = stringResource(R.string.cd_grid_toggle),
+                        tint = if (state.threeColumns) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // Folder tab strip: All → Favorites → root folders → subfolders
+            LazyRow(
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    FolderTab(
+                        label = stringResource(R.string.all),
+                        count = state.images.size,
+                        isActive = state.currentFilter == null,
+                        onClick = { viewModel.selectFilter(null) }
+                    )
+                }
+                item {
+                    FolderTab(
+                        label = stringResource(R.string.favorites),
+                        count = favorites.size,
+                        isActive = state.currentFilter == HomeFilter.FAVORITES,
+                        isFavorite = true,
+                        onClick = { viewModel.selectFilter(HomeFilter.FAVORITES) }
+                    )
+                }
+                items(selectedFolders, key = { it.id }) { folder ->
+                    FolderTab(
+                        label = folder.name,
+                        count = folder.imageCount,
+                        isActive = !state.isSubFolderFilter && state.currentFilter == folder.id,
+                        onClick = { viewModel.selectFilter(folder.id) }
+                    )
+                    // First-level subfolder tabs (FR-2.1)
+                    folder.subFolders.forEach { sub ->
+                        FolderTab(
+                            label = "${folder.name}/${sub.name}",
+                            count = sub.imageCount,
+                            isActive = state.isSubFolderFilter && state.currentFilter == sub.id,
+                            onClick = { viewModel.selectFilter(sub.id, isSubFolder = true) },
+                            isSub = true
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Stats bar
+            StatsBar(
+                imageCount = visible.size,
+                folderCount = selectedFolders.size,
+                hdCount = visible.count { it.isHd }
             )
-            IconButton(onClick = {}) {
-                Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.cd_search), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            IconButton(onClick = {}) {
-                Icon(Icons.Filled.GridView, contentDescription = stringResource(R.string.cd_grid_toggle), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
 
-        // Folder tab strip
-        LazyRow(
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            item {
-                FolderTab(
-                    label = stringResource(R.string.all),
-                    count = visible.size,
-                    isActive = state.currentFolderId == null,
-                    onClick = { viewModel.selectFolder(null) }
-                )
+            // Waterfall grid or empty state
+            Box(modifier = Modifier.weight(1f)) {
+                if (state.isRefreshing && visible.isEmpty()) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else if (visible.isEmpty()) {
+                    EmptyState(
+                        onAddFolder = onOpenFolderModal,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                } else {
+                    WaterfallGrid(
+                        images = visible,
+                        favoriteIds = favorites,
+                        onImageClick = onImageClick,
+                        onToggleFavorite = viewModel::toggleFavorite,
+                        columnCount = if (state.threeColumns) 3 else 2
+                    )
+                }
             }
-            items(selectedFolders, key = { it.id }) { folder ->
-                FolderTab(
-                    label = folder.name,
-                    count = folder.imageCount,
-                    isActive = state.currentFolderId == folder.id,
-                    onClick = { viewModel.selectFolder(folder.id) }
-                )
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        // Stats bar
-        StatsBar(
-            imageCount = visible.size,
-            folderCount = selectedFolders.size,
-            hdCount = visible.count { it.isHd }
-        )
-
-        // Waterfall grid or empty state
-        Box(modifier = Modifier.weight(1f)) {
-            if (state.isRefreshing && visible.isEmpty()) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center),
-                    color = MaterialTheme.colorScheme.primary
-                )
-            } else if (visible.isEmpty()) {
-                EmptyState(
-                    onAddFolder = onOpenFolderModal,
-                    modifier = Modifier.align(Alignment.Center)
-                )
-            } else {
-                WaterfallGrid(
-                    images = visible,
-                    favoriteIds = favorites,
-                    onImageClick = onImageClick,
-                    onToggleFavorite = viewModel::toggleFavorite
-                )
-            }
-        }
         } // Column
 
         // FAB for adding folders
@@ -159,20 +182,42 @@ fun HomeScreen(
 }
 
 @Composable
-private fun FolderTab(label: String, count: Int, isActive: Boolean, onClick: () -> Unit) {
+private fun FolderTab(
+    label: String,
+    count: Int,
+    isActive: Boolean,
+    onClick: () -> Unit,
+    isFavorite: Boolean = false,
+    isSub: Boolean = false
+) {
     val scheme = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
-            .background(if (isActive) scheme.primaryContainer else scheme.surface)
+            .background(
+                when {
+                    isActive -> scheme.primaryContainer
+                    isSub -> scheme.surfaceVariant
+                    else -> scheme.surface
+                }
+            )
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (isFavorite) {
+            Icon(
+                Icons.Filled.Favorite,
+                contentDescription = null,
+                tint = if (isActive) scheme.primary else scheme.onSurfaceVariant,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(Modifier.width(4.dp))
+        }
         Text(
             text = label,
             color = if (isActive) scheme.primary else scheme.onSurfaceVariant,
-            fontSize = 14.sp,
+            fontSize = if (isSub) 12.sp else 14.sp,
             fontWeight = FontWeight.Medium
         )
         Spacer(Modifier.width(6.dp))
@@ -206,7 +251,7 @@ private fun StatsBar(imageCount: Int, folderCount: Int, hdCount: Int) {
     ) {
         StatItem(Icons.Filled.Image, "$imageCount", stringResource(R.string.stat_images))
         StatItem(Icons.Filled.Folder, "$folderCount", stringResource(R.string.stat_folders))
-        StatItem(Icons.Filled.Image, "$hdCount", stringResource(R.string.stat_hd))
+        StatItem(Icons.Filled.HighQuality, "$hdCount", stringResource(R.string.stat_hd))
     }
 }
 

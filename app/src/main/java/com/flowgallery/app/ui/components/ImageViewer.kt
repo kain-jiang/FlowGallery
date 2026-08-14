@@ -29,11 +29,14 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -50,14 +53,19 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.flowgallery.app.R
 import com.flowgallery.app.data.model.ImageItem
+import com.flowgallery.app.data.model.MediaType
 import com.flowgallery.app.ui.theme.Surface2
 
 /**
- * Full-screen viewer: pinch-to-zoom (1x–4x), pan when zoomed, tap to toggle
- * chrome, swipe left/right to navigate, bottom thumbnail strip.
+ * Full-screen viewer: static image zoom/pan, animated GIF/WebP autoplay,
+ * video playback via Media3 (FR-3 / FR-10), swipe navigation, thumbnail strip.
  */
 @Composable
 fun ImageViewer(
@@ -77,7 +85,7 @@ fun ImageViewer(
     var chromeVisible by remember { mutableStateOf(true) }
 
     // Reset transform when switching images
-    androidx.compose.runtime.LaunchedEffect(currentIndex) {
+    LaunchedEffect(currentIndex) {
         scale = 1f
         offsetX = 0f
         offsetY = 0f
@@ -104,20 +112,36 @@ fun ImageViewer(
                 detectTapGestures { chromeVisible = !chromeVisible }
             }
     ) {
-        // Main image
-        AsyncImage(
-            model = image.uriString,
-            contentDescription = image.name,
-            contentScale = ContentScale.Fit,
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    translationX = offsetX
-                    translationY = offsetY
-                }
-        )
+        // Main media: video player / animated image / static image
+        when {
+            image.type.isVideo -> VideoPlayerView(image.uriString)
+            image.type.isAnimated -> AsyncImage(
+                model = image.uriString,
+                contentDescription = image.name,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = offsetX
+                        translationY = offsetY
+                    }
+            )
+            else -> AsyncImage(
+                model = image.uriString,
+                contentDescription = image.name,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = offsetX
+                        translationY = offsetY
+                    }
+            )
+        }
 
         // Prev / Next arrows
         if (chromeVisible && currentIndex > 0) {
@@ -251,13 +275,7 @@ fun ImageViewer(
                                 model = img.uriString,
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .then(
-                                        if (idx == currentIndex) {
-                                            Modifier
-                                        } else Modifier
-                                    )
+                                modifier = Modifier.fillMaxSize()
                             )
                             if (idx == currentIndex) {
                                 Box(
@@ -266,10 +284,74 @@ fun ImageViewer(
                                         .background(Color.White.copy(alpha = 0.25f))
                                 )
                             }
+                            if (img.type.isVideo) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.Black.copy(alpha = 0.35f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Filled.PlayArrow,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+/** Media3 ExoPlayer view for video items (FR-10). */
+@Composable
+private fun VideoPlayerView(uriString: String) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val exoPlayer = remember(uriString) {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(uriString))
+            prepare()
+            // do not autoplay: show first frame + play button
+            playWhenReady = false
+        }
+    }
+    var isPlaying by remember { mutableStateOf(false) }
+
+    DisposableEffect(exoPlayer) {
+        onDispose { exoPlayer.release() }
+    }
+
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    useController = true
+                    this.player = exoPlayer
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+        // Tap to toggle play
+        IconButton(
+            onClick = {
+                if (isPlaying) exoPlayer.pause() else exoPlayer.play()
+                isPlaying = !isPlaying
+            },
+            modifier = Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.5f))
+        ) {
+            Icon(
+                Icons.Filled.PlayArrow,
+                contentDescription = if (isPlaying) "Pause" else "Play",
+                tint = Color.White,
+                modifier = Modifier.size(40.dp)
+            )
         }
     }
 }

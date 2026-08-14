@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.HighQuality
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -48,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.flowgallery.app.R
+import com.flowgallery.app.data.model.Folder
 import com.flowgallery.app.data.model.ImageItem
 import com.flowgallery.app.ui.components.WaterfallGrid
 import com.flowgallery.app.ui.theme.Accent
@@ -169,7 +172,8 @@ private fun CenteredHint(icon: ImageVector, title: String, desc: String) {
 @Composable
 fun SettingsScreen(
     viewModel: GalleryViewModel,
-    onAddFolder: () -> Unit
+    onAddFolder: () -> Unit,
+    onRemoveFolder: (Folder) -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
 
@@ -229,6 +233,14 @@ fun SettingsScreen(
                         checkedThumbColor = Color.White
                     )
                 )
+                // Remove folder (FR-2)
+                IconButton(onClick = { onRemoveFolder(folder) }) {
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = stringResource(R.string.cd_remove_folder),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
 

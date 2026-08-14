@@ -19,12 +19,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -36,6 +38,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.flowgallery.app.data.model.GalleryTab
+import com.flowgallery.app.data.model.Folder
 import com.flowgallery.app.R
 import com.flowgallery.app.ui.components.FolderSelectionModal
 import com.flowgallery.app.ui.components.ImageViewer
@@ -115,6 +118,7 @@ private fun MainScaffold(
     val favorites by viewModel.favorites.collectAsState()
 
     var showFolderModal by remember { mutableStateOf(false) }
+    var folderToRemove by remember { mutableStateOf<Folder?>(null) }
 
     val visibleImages = viewModel.visibleImages(state)
 
@@ -145,6 +149,10 @@ private fun MainScaffold(
                     onImageClick = { img ->
                         val idx = visibleImages.indexOfFirst { it.id == img.id }
                         if (idx >= 0) viewModel.openViewer(idx)
+                    },
+                    onRemoveFolder = { folder ->
+                        showFolderModal = false
+                        folderToRemove = folder
                     }
                 )
                 GalleryTab.Search -> SearchScreen(
@@ -156,7 +164,8 @@ private fun MainScaffold(
                 )
                 GalleryTab.Settings -> SettingsScreen(
                     viewModel = viewModel,
-                    onAddFolder = onPickFolder
+                    onAddFolder = onPickFolder,
+                    onRemoveFolder = { folder -> folderToRemove = folder }
                 )
             }
         }
@@ -211,6 +220,30 @@ private fun MainScaffold(
             },
             onClose = viewModel::closeViewer,
             onToggleFavorite = viewModel::toggleFavorite
+        )
+    }
+
+    // Remove-folder confirmation dialog (FR-2)
+    folderToRemove?.let { folder ->
+        AlertDialog(
+            onDismissRequest = { folderToRemove = null },
+            title = { Text(stringResource(R.string.remove_folder_title)) },
+            text = {
+                Text(stringResource(R.string.remove_folder_msg, folder.name, folder.imageCount))
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.removeFolder(folder.id)
+                    folderToRemove = null
+                }) {
+                    Text(stringResource(R.string.remove_folder_confirm), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { folderToRemove = null }) {
+                    Text(stringResource(R.string.remove_folder_cancel))
+                }
+            }
         )
     }
 }

@@ -9,6 +9,7 @@
 
     <!-- Home -->
     <string name="all">All</string>
+    <string name="favorites">Favorites</string>
     <string name="stat_images">IMAGES</string>
     <string name="stat_folders">FOLDERS</string>
     <string name="stat_hd">HD</string>
@@ -55,4 +56,11 @@
     <string name="setting_cache_desc">Release cached thumbnails</string>
     <string name="setting_about">FlowGallery</string>
     <string name="setting_version">Version 1.0.0</string>
+
+    <!-- Remove folder -->
+    <string name="remove_folder_title">Remove Folder</string>
+    <string name="remove_folder_msg">Remove "%1$s" (%2$d images) from the library? Its files will not be deleted.</string>
+    <string name="remove_folder_confirm">Remove</string>
+    <string name="remove_folder_cancel">Cancel</string>
+    <string name="cd_remove_folder">Remove folder</string>
 </resources>

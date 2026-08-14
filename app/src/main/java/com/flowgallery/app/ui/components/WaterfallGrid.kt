@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,12 +14,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
-import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -36,13 +37,14 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.flowgallery.app.R
 import com.flowgallery.app.data.model.ImageItem
+import com.flowgallery.app.data.model.MediaType
 import com.flowgallery.app.ui.theme.Success
-import com.flowgallery.app.ui.theme.Surface2
 import com.flowgallery.app.ui.theme.Warning
 
 /**
  * Pinterest-style waterfall (staggered) grid. Items keep their natural aspect
  * ratio, producing the classic masonry look of the design prototype.
+ * Supports 2/3 column density (FR-1 decision #3) and media-type badges (FR-10).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -52,11 +54,11 @@ fun WaterfallGrid(
     onImageClick: (ImageItem) -> Unit,
     onToggleFavorite: (Long) -> Unit,
     modifier: Modifier = Modifier,
-    contentPadding: androidx.compose.foundation.layout.PaddingValues =
-        androidx.compose.foundation.layout.PaddingValues(12.dp)
+    columnCount: Int = 2,
+    contentPadding: PaddingValues = PaddingValues(12.dp)
 ) {
     LazyVerticalStaggeredGrid(
-        columns = StaggeredGridCells.Fixed(2),
+        columns = StaggeredGridCells.Fixed(columnCount),
         modifier = modifier.fillMaxSize(),
         verticalItemSpacing = 10.dp,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -128,6 +130,11 @@ private fun WaterfallCard(
                 .padding(horizontal = 6.dp, vertical = 3.dp)
         )
 
+        // Media type badge (GIF / WEBP / video play icon) — top-left, FR-10
+        if (image.type != MediaType.STATIC_IMAGE) {
+            TypeBadge(image.type, Modifier.align(Alignment.TopStart))
+        }
+
         // Favorite toggle
         Box(
             modifier = Modifier
@@ -146,6 +153,39 @@ private fun WaterfallCard(
                 ),
                 tint = if (isFavorite) Color(0xFFEF4444) else Color.White,
                 modifier = Modifier.size(14.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun TypeBadge(type: MediaType, modifier: Modifier = Modifier) {
+    val label = when (type) {
+        MediaType.ANIMATED_GIF -> "GIF"
+        MediaType.ANIMATED_WEBP -> "WEBP"
+        MediaType.VIDEO -> "VIDEO"
+        MediaType.STATIC_IMAGE -> return
+    }
+    Box(
+        modifier = modifier
+            .padding(8.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(Color.Black.copy(alpha = 0.6f))
+            .padding(horizontal = 5.dp, vertical = 2.dp)
+    ) {
+        if (type == MediaType.VIDEO) {
+            Icon(
+                Icons.Filled.PlayArrow,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(12.dp)
+            )
+        } else {
+            Text(
+                text = label,
+                color = Color.White,
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold
             )
         }
     }

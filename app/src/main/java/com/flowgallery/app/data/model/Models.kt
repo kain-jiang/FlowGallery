@@ -8,20 +8,47 @@ data class Folder(
     val name: String,
     val uriString: String,
     val imageCount: Int = 0,
-    val isSelected: Boolean = true
+    val isSelected: Boolean = true,
+    val subFolders: List<SubFolder> = emptyList()
 )
 
 /**
- * A single image discovered inside a [Folder].
+ * A first-level subfolder inside a root [Folder]; its count aggregates
+ * all nested images recursively (FR-2.1).
+ */
+data class SubFolder(
+    val id: Long,
+    val name: String,
+    val uriString: String,
+    val imageCount: Int = 0
+)
+
+/** Media type classification (FR-10). */
+enum class MediaType {
+    STATIC_IMAGE,
+    ANIMATED_GIF,
+    ANIMATED_WEBP,
+    VIDEO;
+
+    val isAnimated: Boolean get() = this == ANIMATED_GIF || this == ANIMATED_WEBP
+    val isVideo: Boolean get() = this == VIDEO
+}
+
+/**
+ * A single media item discovered inside a [Folder].
  */
 data class ImageItem(
     val id: Long,
     val folderId: Long,
     val folderName: String,
+    val subFolderId: Long? = null,
+    val subFolderName: String? = null,
     val name: String,
     val uriString: String,
-    val width: Int,
-    val height: Int,
+    val type: MediaType = MediaType.STATIC_IMAGE,
+    val width: Int = 0,
+    val height: Int = 0,
+    val durationMs: Long? = null,
     val isFavorite: Boolean = false
 ) {
     val isHd: Boolean get() = width >= 1920 || height >= 1080
@@ -42,4 +69,10 @@ enum class GalleryTab(val label: String) {
     Home("Home"),
     Search("Search"),
     Settings("Settings")
+}
+
+/** Special home-tab filters that are not real folders. */
+object HomeFilter {
+    const val ALL: Long = -1L
+    const val FAVORITES: Long = -2L
 }

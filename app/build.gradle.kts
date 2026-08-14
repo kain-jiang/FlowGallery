@@ -62,8 +62,12 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
 
-    // Coil for image loading
+    // Coil for image loading (supports GIF/WebP animation decoding)
     implementation("io.coil-kt:coil-compose:2.7.0")
+
+    // Media3 ExoPlayer for video playback
+    implementation("androidx.media3:media3-exoplayer:1.4.1")
+    implementation("androidx.media3:media3-ui:1.4.1")
 
     // ViewModel
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
