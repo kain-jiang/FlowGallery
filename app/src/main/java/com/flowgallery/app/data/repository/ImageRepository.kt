@@ -2,7 +2,6 @@ package com.flowgallery.app.data.repository
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.media.MediaMetadataRetriever
 import android.net.Uri
 import com.flowgallery.app.data.model.Folder
 import com.flowgallery.app.data.model.ImageItem
@@ -152,7 +151,8 @@ class ImageRepository(private val context: Context) {
             for ((childUri, childName, mime) in children) {
                 when {
                     isImageName(childName) || isVideoName(childName) -> {
-                        val (w, h, dur, type) = resolver.analyzeMedia(childUri, childName)
+                        // No content IO during scan — classify by extension only
+                        // (dimensions are filled in lazily by the UI via Coil).
                         out.add(
                             ImageItem(
                                 id = nextId++,
@@ -162,10 +162,9 @@ class ImageRepository(private val context: Context) {
                                 subFolderName = subFolderName,
                                 name = childName,
                                 uriString = childUri.toString(),
-                                type = type,
-                                width = w,
-                                height = h,
-                                durationMs = dur
+                                type = classify(childName),
+                                width = 0,
+                                height = 0
                             )
                         )
                     }
@@ -183,7 +182,6 @@ class ImageRepository(private val context: Context) {
         for ((childUri, childName, mime) in rootChildren) {
             when {
                 isImageName(childName) || isVideoName(childName) -> {
-                    val (w, h, dur, type) = resolver.analyzeMedia(childUri, childName)
                     allItems.add(
                         ImageItem(
                             id = nextId++,
@@ -191,10 +189,9 @@ class ImageRepository(private val context: Context) {
                             folderName = folder.name,
                             name = childName,
                             uriString = childUri.toString(),
-                            type = type,
-                            width = w,
-                            height = h,
-                            durationMs = dur
+                            type = classify(childName),
+                            width = 0,
+                            height = 0
                         )
                     )
                 }
@@ -292,64 +289,18 @@ class ImageRepository(private val context: Context) {
     }
 
     /**
-     * Analyze a media document: dimensions, video duration, media type.
-     * (FR-10: static / animated GIF / animated WebP / video)
+     * Classify media type by file extension only — zero content IO.
+     * Dimensions are resolved lazily by the UI (Coil) when thumbnails load.
      */
-    private fun android.content.ContentResolver.analyzeMedia(
-        uri: Uri,
-        name: String
-    ): MediaInfo {
+    private fun classify(name: String): MediaType {
         val lower = name.lowercase()
-        return try {
-            if (isVideoName(name)) {
-                // video: use MediaMetadataRetriever for resolution + duration
-                val mmr = MediaMetadataRetriever()
-                try {
-                    mmr.setDataSource(context, uri)
-                    val w = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
-                        ?.toIntOrNull() ?: 0
-                    val h = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
-                        ?.toIntOrNull() ?: 0
-                    val dur = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-                        ?.toLongOrNull()
-                    MediaInfo(w, h, dur, MediaType.VIDEO)
-                } finally {
-                    runCatching { mmr.release() }
-                }
-            } else {
-                // image: BitmapFactory bounds + detect animation
-                val opts = android.graphics.BitmapFactory.Options()
-                opts.inJustDecodeBounds = true
-                resolver.openInputStream(uri)?.use { input ->
-                    android.graphics.BitmapFactory.decodeStream(input, null, opts)
-                }
-                val w = opts.outWidth
-                val h = opts.outHeight
-                val type = when {
-                    lower.endsWith(".gif") -> MediaType.ANIMATED_GIF
-                    lower.endsWith(".webp") -> MediaType.ANIMATED_WEBP
-                    else -> MediaType.STATIC_IMAGE
-                }
-                MediaInfo(w, h, null, type)
-            }
-        } catch (e: Exception) {
-            // fallback: classify by extension only
-            val type = when {
-                isVideoName(name) -> MediaType.VIDEO
-                lower.endsWith(".gif") -> MediaType.ANIMATED_GIF
-                lower.endsWith(".webp") -> MediaType.ANIMATED_WEBP
-                else -> MediaType.STATIC_IMAGE
-            }
-            MediaInfo(0, 0, null, type)
+        return when {
+            isVideoName(name) -> MediaType.VIDEO
+            lower.endsWith(".gif") -> MediaType.ANIMATED_GIF
+            lower.endsWith(".webp") -> MediaType.ANIMATED_WEBP
+            else -> MediaType.STATIC_IMAGE
         }
     }
-
-    private data class MediaInfo(
-        val width: Int,
-        val height: Int,
-        val durationMs: Long?,
-        val type: MediaType
-    )
 
     private fun isImageName(name: String): Boolean {
         val n = name.lowercase()

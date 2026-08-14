@@ -24,6 +24,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,7 +38,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import com.flowgallery.app.R
 import com.flowgallery.app.data.model.ImageItem
 import com.flowgallery.app.data.model.MediaType
@@ -86,6 +90,12 @@ private fun WaterfallCard(
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
+    // Real dimensions are unknown at scan time (zero-IO scan); resolve them
+    // lazily from the loaded drawable so the masonry layout stays accurate.
+    var resolvedRatio by remember(image.uriString) {
+        mutableStateOf(if (image.aspectRatio != 1f) image.aspectRatio else 1f)
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -93,11 +103,19 @@ private fun WaterfallCard(
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable(onClick = onClick)
     ) {
-        val ratio = image.aspectRatio.coerceIn(0.4f, 2.5f)
-        AsyncImage(
+        val ratio = resolvedRatio.coerceIn(0.4f, 2.5f)
+        SubcomposeAsyncImage(
             model = image.uriString,
             contentDescription = image.name,
             contentScale = ContentScale.Crop,
+            onSuccess = { state ->
+                val d = state.result.drawable
+                val w = d.intrinsicWidth
+                val h = d.intrinsicHeight
+                if (w > 0 && h > 0) {
+                    resolvedRatio = w.toFloat() / h
+                }
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(ratio)

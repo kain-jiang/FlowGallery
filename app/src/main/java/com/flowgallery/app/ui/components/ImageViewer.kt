@@ -57,7 +57,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import com.flowgallery.app.R
 import com.flowgallery.app.data.model.ImageItem
 import com.flowgallery.app.data.model.MediaType
@@ -83,6 +83,9 @@ fun ImageViewer(
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
     var chromeVisible by remember { mutableStateOf(true) }
+    // Real dimensions resolved lazily from the loaded drawable (zero-IO scan).
+    var resolvedWidth by remember(image.uriString) { mutableStateOf(image.width) }
+    var resolvedHeight by remember(image.uriString) { mutableStateOf(image.height) }
 
     // Reset transform when switching images
     LaunchedEffect(currentIndex) {
@@ -115,23 +118,17 @@ fun ImageViewer(
         // Main media: video player / animated image / static image
         when {
             image.type.isVideo -> VideoPlayerView(image.uriString)
-            image.type.isAnimated -> AsyncImage(
+            else -> SubcomposeAsyncImage(
                 model = image.uriString,
                 contentDescription = image.name,
                 contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        translationX = offsetX
-                        translationY = offsetY
+                onSuccess = { state ->
+                    val d = state.result.drawable
+                    if (d.intrinsicWidth > 0 && d.intrinsicHeight > 0) {
+                        resolvedWidth = d.intrinsicWidth
+                        resolvedHeight = d.intrinsicHeight
                     }
-            )
-            else -> AsyncImage(
-                model = image.uriString,
-                contentDescription = image.name,
-                contentScale = ContentScale.Fit,
+                },
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
@@ -253,7 +250,7 @@ fun ImageViewer(
                         modifier = Modifier.weight(1f)
                     )
                     Text(
-                        text = stringResource(R.string.dimensions, image.width, image.height),
+                        text = stringResource(R.string.dimensions, resolvedWidth, resolvedHeight),
                         color = Color.White.copy(alpha = 0.6f),
                         fontSize = 12.sp
                     )
@@ -271,7 +268,7 @@ fun ImageViewer(
                                 .background(Surface2)
                                 .clickable { onNavigate(idx) }
                         ) {
-                            AsyncImage(
+                            SubcomposeAsyncImage(
                                 model = img.uriString,
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
