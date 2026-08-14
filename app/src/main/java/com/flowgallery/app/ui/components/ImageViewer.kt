@@ -78,6 +78,7 @@ fun ImageViewer(
 ) {
     if (images.isEmpty()) return
     val image = images[currentIndex]
+    val isVideo = image.type.isVideo
 
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
@@ -100,19 +101,21 @@ fun ImageViewer(
             .background(Color.Black)
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .pointerInput(currentIndex) {
-                detectTransformGestures { _, pan, zoom, _ ->
-                    scale = (scale * zoom).coerceIn(1f, 4f)
-                    if (scale > 1f) {
-                        offsetX += pan.x
-                        offsetY += pan.y
-                    } else {
-                        offsetX = 0f
-                        offsetY = 0f
+                // Video: let PlayerView own all touch handling (its controls).
+                // Images: pinch-zoom/pan + tap toggles the chrome.
+                if (!isVideo) {
+                    detectTransformGestures { _, pan, zoom, _ ->
+                        scale = (scale * zoom).coerceIn(1f, 4f)
+                        if (scale > 1f) {
+                            offsetX += pan.x
+                            offsetY += pan.y
+                        } else {
+                            offsetX = 0f
+                            offsetY = 0f
+                        }
                     }
+                    detectTapGestures { chromeVisible = !chromeVisible }
                 }
-            }
-            .pointerInput(currentIndex) {
-                detectTapGestures { chromeVisible = !chromeVisible }
             }
     ) {
         // Main media: video player / animated image / static image
@@ -140,8 +143,8 @@ fun ImageViewer(
             )
         }
 
-        // Prev / Next arrows
-        if (chromeVisible && currentIndex > 0) {
+        // Prev / Next arrows (hidden for videos — PlayerView controls would overlap)
+        if (chromeVisible && !isVideo && currentIndex > 0) {
             IconButton(
                 onClick = { onNavigate(currentIndex - 1) },
                 modifier = Modifier
@@ -154,7 +157,7 @@ fun ImageViewer(
                 Icon(Icons.Filled.ChevronLeft, contentDescription = stringResource(R.string.cd_prev), tint = Color.White)
             }
         }
-        if (chromeVisible && currentIndex < images.lastIndex) {
+        if (chromeVisible && !isVideo && currentIndex < images.lastIndex) {
             IconButton(
                 onClick = { onNavigate(currentIndex + 1) },
                 modifier = Modifier
@@ -223,7 +226,8 @@ fun ImageViewer(
             }
         }
 
-        // Bottom info + thumbnail strip
+        // Bottom info + thumbnail strip (thumbnail strip hidden for videos —
+        // PlayerView's own control bar occupies the bottom of the frame)
         if (chromeVisible) {
             Column(
                 modifier = Modifier
@@ -256,10 +260,11 @@ fun ImageViewer(
                     )
                 }
                 Spacer(Modifier.height(12.dp))
-                LazyRow(
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                if (!isVideo) {
+                    LazyRow(
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                     itemsIndexed(images) { idx, img ->
                         Box(
                             modifier = Modifier
@@ -298,7 +303,8 @@ fun ImageViewer(
                             }
                         }
                     }
-                }
+                    } // LazyRow
+                } // if (!isVideo)
             }
         }
     }
@@ -312,43 +318,24 @@ private fun VideoPlayerView(uriString: String) {
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(MediaItem.fromUri(uriString))
             prepare()
-            // do not autoplay: show first frame + play button
+            // do not autoplay: show first frame, user taps play in the controls
             playWhenReady = false
         }
     }
-    var isPlaying by remember { mutableStateOf(false) }
 
     DisposableEffect(exoPlayer) {
         onDispose { exoPlayer.release() }
     }
 
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    useController = true
-                    this.player = exoPlayer
-                }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
-        // Tap to toggle play
-        IconButton(
-            onClick = {
-                if (isPlaying) exoPlayer.pause() else exoPlayer.play()
-                isPlaying = !isPlaying
-            },
-            modifier = Modifier
-                .size(72.dp)
-                .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.5f))
-        ) {
-            Icon(
-                Icons.Filled.PlayArrow,
-                contentDescription = if (isPlaying) "Pause" else "Play",
-                tint = Color.White,
-                modifier = Modifier.size(40.dp)
-            )
-        }
-    }
+    // PlayerView owns its controller (play/pause/seek/volume) — no custom
+    // overlay button, so nothing overlaps the native controls.
+    AndroidView(
+        factory = { ctx ->
+            PlayerView(ctx).apply {
+                useController = true
+                this.player = exoPlayer
+            }
+        },
+        modifier = Modifier.fillMaxSize()
+    )
 }

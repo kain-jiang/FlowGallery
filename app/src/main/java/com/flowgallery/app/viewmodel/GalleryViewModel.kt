@@ -21,9 +21,10 @@ data class GalleryUiState(
     val folders: List<Folder> = emptyList(),
     val images: List<ImageItem> = emptyList(),
     val currentTab: GalleryTab = GalleryTab.Home,
-    /** null = All, HomeFilter.FAVORITES = favorites, else folder id or subfolder id */
+    /** null = All, HomeFilter.FAVORITES = favorites, else root folder id */
     val currentFilter: Long? = null,
-    val isSubFolderFilter: Boolean = false,
+    /** selected first-level subfolder inside the current root folder (null = root level) */
+    val currentSubFolderId: Long? = null,
     val viewer: ViewerState = ViewerState(),
     val isRefreshing: Boolean = false,
     val error: String? = null,
@@ -88,9 +89,9 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             repository.removeFolder(id)
             val folders = repository.loadFolders()
             val st = _uiState.value
-            val filterReset = if (!st.isSubFolderFilter && st.currentFilter == id) null else st.currentFilter
+            val filterReset = if (st.currentFilter == id) null else st.currentFilter
             _uiState.update {
-                it.copy(folders = folders, currentFilter = filterReset)
+                it.copy(folders = folders, currentFilter = filterReset, currentSubFolderId = null)
             }
             rescan()
         }
@@ -119,8 +120,31 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                         isRefreshing = false
                     )
                 }
+                // Resolve real dimensions in the background so HD/SD badges,
+                // stats and masonry ratios become accurate (zero-IO scan
+                // leaves width/height at 0).
+                resolveDimensionsInBackground(images)
             }.onFailure { e ->
                 _uiState.update { it.copy(isRefreshing = false, error = e.message) }
+            }
+        }
+    }
+
+    /** Background dimension resolution, batched to avoid excessive recomposition. */
+    private fun resolveDimensionsInBackground(images: List<ImageItem>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val resolved = repository.resolveDimensions(images)
+            // Update in chunks so the UI streams results progressively
+            val chunk = 40
+            for (i in resolved.indices step chunk) {
+                val end = (i + chunk).coerceAtMost(resolved.size)
+                val partial = resolved.subList(0, end).associateBy { it.id }
+                _uiState.update { st ->
+                    st.copy(images = st.images.map { partial[it.id] ?: it })
+                }
+                if (end < resolved.size) {
+                    kotlinx.coroutines.delay(50)
+                }
             }
         }
     }
@@ -129,9 +153,13 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     fun selectTab(tab: GalleryTab) = _uiState.update { it.copy(currentTab = tab) }
 
-    /** Select a home filter: null = All, HomeFilter.FAVORITES, folder id, or (id, true) for subfolder. */
-    fun selectFilter(id: Long?, isSubFolder: Boolean = false) =
-        _uiState.update { it.copy(currentFilter = id, isSubFolderFilter = isSubFolder) }
+    /** Select a home filter: null = All, HomeFilter.FAVORITES, or a root folder id. */
+    fun selectFilter(id: Long?) =
+        _uiState.update { it.copy(currentFilter = id, currentSubFolderId = null) }
+
+    /** Drill into a first-level subfolder of the current root folder. */
+    fun selectSubFolder(subId: Long) =
+        _uiState.update { it.copy(currentSubFolderId = subId) }
 
     /** Toggle grid density 2<->3 columns (FR-1 decision #3), persisted. */
     fun toggleColumns() {
@@ -184,10 +212,12 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         when (state.currentFilter) {
             null -> {} // All
             HomeFilter.FAVORITES -> list = list.filter { it.id in _favorites.value }
-            else -> list = if (state.isSubFolderFilter) {
-                list.filter { it.subFolderId == state.currentFilter }
-            } else {
-                list.filter { it.folderId == state.currentFilter }
+            else -> {
+                list = if (state.currentSubFolderId != null) {
+                    list.filter { it.subFolderId == state.currentSubFolderId }
+                } else {
+                    list.filter { it.folderId == state.currentFilter }
+                }
             }
         }
         return list

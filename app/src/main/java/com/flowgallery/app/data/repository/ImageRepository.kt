@@ -177,7 +177,7 @@ class ImageRepository(private val context: Context) {
 
         // Root pass: direct files + first-level subfolders
         val rootChildren = resolver.getChildDocuments(rootUri) ?: emptyList()
-        val subGroups = LinkedHashMap<String, MutableList<ImageItem>>()
+        val subGroups = LinkedHashMap<String, Pair<SubFolder, List<ImageItem>>>()
         for ((childUri, childName, mime) in rootChildren) {
             if (isImageName(childName) || isVideoName(childName)) {
                 allItems.add(
@@ -193,26 +193,23 @@ class ImageRepository(private val context: Context) {
                     )
                 )
             } else {
-                // first-level subfolder: recursive collect with tag
+                // first-level subfolder: recursive collect with tag.
+                // IMPORTANT: the SubFolder must reuse the SAME id that the
+                // items were tagged with, otherwise tab filtering never matches.
                 val subId = nextId++
                 val subItems = mutableListOf<ImageItem>()
                 collectRecursive(childUri, subId, childName, subItems)
                 if (subItems.isNotEmpty() || resolver.isDirectory(childUri)) {
-                    subGroups[childUri.toString()] = subItems
+                    val subName = resolver.displayNameOf(childUri) ?: childName
+                    subGroups[childUri.toString()] =
+                        SubFolder(id = subId, name = subName, uriString = childUri.toString(), imageCount = subItems.size) to subItems
                     allItems.addAll(subItems)
                 }
             }
         }
 
         // Build first-level subfolder summaries
-        val subs = subGroups.map { (uriStr, items) ->
-            SubFolder(
-                id = nextId++,
-                name = resolver.displayNameOf(Uri.parse(uriStr)) ?: "sub",
-                uriString = uriStr,
-                imageCount = items.size
-            )
-        }
+        val subs = subGroups.values.map { it.first }
         FolderScanResult(folder.id, allItems, subs)
     }
 
@@ -220,6 +217,23 @@ class ImageRepository(private val context: Context) {
     suspend fun scanAll(folders: List<Folder>): List<FolderScanResult> = withContext(Dispatchers.IO) {
         folders.map { scanFolder(it) }
     }
+
+    /**
+     * Lazily resolve real dimensions for items that were scanned with zero IO.
+     * Images: BitmapFactory bounds decode (fast, header only). Videos are
+     * skipped — their resolution is not needed for HD/SD badges.
+     */
+    suspend fun resolveDimensions(items: List<ImageItem>): List<ImageItem> =
+        withContext(Dispatchers.IO) {
+            items.map { item ->
+                if (item.width > 0 || item.type == MediaType.VIDEO) {
+                    item
+                } else {
+                    val (w, h) = resolver.dimensionOf(Uri.parse(item.uriString))
+                    if (w > 0 && h > 0) item.copy(width = w, height = h) else item
+                }
+            }
+        }
 
     // ------------------------------------------------------------------ helpers
 
@@ -297,6 +311,22 @@ class ImageRepository(private val context: Context) {
             } ?: false
         } catch (e: Exception) {
             false
+        }
+    }
+
+    /** Decode image bounds without loading pixels (fast, header only). */
+    private fun android.content.ContentResolver.dimensionOf(uri: Uri): Pair<Int, Int> {
+        return try {
+            val opts = android.graphics.BitmapFactory.Options()
+            opts.inJustDecodeBounds = true
+            resolver.openInputStream(uri)?.use { input ->
+                android.graphics.BitmapFactory.decodeStream(input, null, opts)
+                if (opts.outWidth > 0 && opts.outHeight > 0) {
+                    opts.outWidth to opts.outHeight
+                } else 0 to 0
+            } ?: (0 to 0)
+        } catch (e: Exception) {
+            (0 to 0)
         }
     }
 

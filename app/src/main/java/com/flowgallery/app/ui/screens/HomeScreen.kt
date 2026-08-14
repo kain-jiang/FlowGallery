@@ -92,7 +92,7 @@ fun HomeScreen(
                 }
             }
 
-            // Folder tab strip: All → Favorites → root folders → subfolders
+            // Row 1: All → Favorites → root folders
             LazyRow(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -118,17 +118,33 @@ fun HomeScreen(
                     FolderTab(
                         label = folder.name,
                         count = folder.imageCount,
-                        isActive = !state.isSubFolderFilter && state.currentFilter == folder.id,
+                        isActive = state.currentFilter == folder.id && state.currentSubFolderId == null,
                         onClick = { viewModel.selectFilter(folder.id) }
                     )
-                    // First-level subfolder tabs (FR-2.1)
-                    folder.subFolders.forEach { sub ->
-                        FolderTab(
-                            label = "${folder.name}/${sub.name}",
+                }
+            }
+
+            // Row 2: drill-down subfolder tabs for the selected root folder (FR-2.1)
+            val activeFolder = selectedFolders.find { it.id == state.currentFilter }
+            if (activeFolder != null && activeFolder.subFolders.isNotEmpty()) {
+                LazyRow(
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item {
+                        SubFolderTab(
+                            label = activeFolder.name,
+                            count = activeFolder.subFolders.sumOf { it.imageCount },
+                            isActive = state.currentSubFolderId == null,
+                            onClick = { viewModel.selectSubFolder(-1L) }
+                        )
+                    }
+                    items(activeFolder.subFolders, key = { it.id }) { sub ->
+                        SubFolderTab(
+                            label = sub.name,
                             count = sub.imageCount,
-                            isActive = state.isSubFolderFilter && state.currentFilter == sub.id,
-                            onClick = { viewModel.selectFilter(sub.id, isSubFolder = true) },
-                            isSub = true
+                            isActive = state.currentSubFolderId == sub.id,
+                            onClick = { viewModel.selectSubFolder(sub.id) }
                         )
                     }
                 }
@@ -187,20 +203,13 @@ private fun FolderTab(
     count: Int,
     isActive: Boolean,
     onClick: () -> Unit,
-    isFavorite: Boolean = false,
-    isSub: Boolean = false
+    isFavorite: Boolean = false
 ) {
     val scheme = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
-            .background(
-                when {
-                    isActive -> scheme.primaryContainer
-                    isSub -> scheme.surfaceVariant
-                    else -> scheme.surface
-                }
-            )
+            .background(if (isActive) scheme.primaryContainer else scheme.surface)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -217,7 +226,7 @@ private fun FolderTab(
         Text(
             text = label,
             color = if (isActive) scheme.primary else scheme.onSurfaceVariant,
-            fontSize = if (isSub) 12.sp else 14.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.Medium
         )
         Spacer(Modifier.width(6.dp))
@@ -231,6 +240,46 @@ private fun FolderTab(
                 text = "$count",
                 color = if (isActive) Color.White else scheme.outline,
                 fontSize = 11.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+/** Second-row drill-down tab for a first-level subfolder (FR-2.1). */
+@Composable
+private fun SubFolderTab(
+    label: String,
+    count: Int,
+    isActive: Boolean,
+    onClick: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (isActive) scheme.primaryContainer else scheme.surfaceVariant)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            color = if (isActive) scheme.primary else scheme.onSurfaceVariant,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium
+        )
+        Spacer(Modifier.width(6.dp))
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(if (isActive) scheme.primary else scheme.surface)
+                .padding(horizontal = 5.dp, vertical = 1.dp)
+        ) {
+            Text(
+                text = "$count",
+                color = if (isActive) Color.White else scheme.outline,
+                fontSize = 10.sp,
                 fontWeight = FontWeight.Medium
             )
         }

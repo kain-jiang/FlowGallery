@@ -90,10 +90,11 @@ private fun WaterfallCard(
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
-    // Real dimensions are unknown at scan time (zero-IO scan); resolve them
-    // lazily from the loaded drawable so the masonry layout stays accurate.
-    var resolvedRatio by remember(image.uriString) {
-        mutableStateOf(if (image.aspectRatio != 1f) image.aspectRatio else 1f)
+    // Real dimensions are unknown at scan time (zero-IO scan); they are
+    // resolved in the background by the ViewModel. Keep the ratio in sync
+    // and also fall back to resolving from the loaded drawable.
+    var resolvedRatio by remember(image.uriString, image.width, image.height) {
+        mutableStateOf(if (image.width > 0 && image.height > 0) image.width.toFloat() / image.height else 1f)
     }
 
     Box(
@@ -134,19 +135,21 @@ private fun WaterfallCard(
                 )
         )
 
-        // Quality badge (HD / SD)
-        Text(
-            text = if (image.isHd) "HD" else "SD",
-            color = Color.White,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(8.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(if (image.isHd) Success.copy(alpha = 0.85f) else Warning.copy(alpha = 0.85f))
-                .padding(horizontal = 6.dp, vertical = 3.dp)
-        )
+        // Quality badge (HD / SD) — only for images; videos show type badge only
+        if (!image.type.isVideo) {
+            Text(
+                text = if (image.isHd) "HD" else "SD",
+                color = Color.White,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(if (image.isHd) Success.copy(alpha = 0.85f) else Warning.copy(alpha = 0.85f))
+                    .padding(horizontal = 6.dp, vertical = 3.dp)
+            )
+        }
 
         // Media type badge (GIF / WEBP / video play icon) — top-left, FR-10
         if (image.type != MediaType.STATIC_IMAGE) {
