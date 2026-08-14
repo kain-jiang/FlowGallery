@@ -1,0 +1,1689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>FlowGallery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.29.0/babel.min.js"></script>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #0a0a0c;
+      --surface: #141418;
+      --surface-2: #1c1c22;
+      --surface-3: #252530;
+      --fg: #f0f0f5;
+      --fg-secondary: #a0a0b0;
+      --muted: #606070;
+      --border: #2a2a35;
+      --border-subtle: #1f1f28;
+      --accent: #7c5cff;
+      --accent-hover: #8f72ff;
+      --accent-muted: rgba(124, 92, 255, 0.15);
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --shadow: 0 4px 24px rgba(0,0,0,0.4);
+      --shadow-lg: 0 8px 40px rgba(0,0,0,0.5);
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-xl: 24px;
+      --font-display: 'Inter', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--font-display);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    #root {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .android-frame {
+      width: 100%;
+      height: 100%;
+      max-width: 430px;
+      margin: 0 auto;
+      background: var(--bg);
+      position: relative;
+      overflow: hidden;
+      border-radius: 0;
+      box-shadow: none;
+    }
+
+    @media (min-width: 500px) {
+      .android-frame {
+        max-width: 430px;
+        height: 100vh;
+        border-radius: 40px;
+        box-shadow: var(--shadow-lg);
+        border: 8px solid #1a1a1a;
+        margin: 20px auto;
+      }
+    }
+
+    .status-bar {
+      height: 44px;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      font-size: 14px;
+      font-weight: 500;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+    }
+
+    .status-bar-time {
+      font-weight: 600;
+    }
+
+    .status-bar-icons {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .status-bar-icons svg {
+      width: 18px;
+      height: 18px;
+      fill: var(--fg);
+    }
+
+    .nav-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 80px;
+      background: var(--surface);
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      padding-bottom: 16px;
+      z-index: 100;
+    }
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      padding: 8px 16px;
+      border-radius: var(--radius-md);
+      transition: all 0.2s ease;
+    }
+
+    .nav-item svg {
+      width: 24px;
+      height: 24px;
+      fill: var(--muted);
+      transition: fill 0.2s ease;
+    }
+
+    .nav-item span {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 500;
+      transition: color 0.2s ease;
+    }
+
+    .nav-item.active svg {
+      fill: var(--accent);
+    }
+
+    .nav-item.active span {
+      color: var(--accent);
+    }
+
+    .nav-item:hover:not(.active) svg {
+      fill: var(--fg-secondary);
+    }
+
+    .app-content {
+      position: absolute;
+      top: 44px;
+      left: 0;
+      right: 0;
+      bottom: 80px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      height: 56px;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      flex-shrink: 0;
+    }
+
+    .header-title {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .header-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .header-btn svg {
+      width: 20px;
+      height: 20px;
+      fill: var(--fg-secondary);
+    }
+
+    .header-btn:hover {
+      background: var(--surface-2);
+    }
+
+    .header-btn:hover svg {
+      fill: var(--fg);
+    }
+
+    .tab-strip {
+      display: flex;
+      gap: 4px;
+      padding: 8px 16px;
+      background: var(--bg);
+      overflow-x: auto;
+      flex-shrink: 0;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    .tab-strip::-webkit-scrollbar {
+      display: none;
+    }
+
+    .tab {
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: var(--surface);
+      color: var(--fg-secondary);
+      border: 1px solid transparent;
+    }
+
+    .tab.active {
+      background: var(--accent-muted);
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .tab:hover:not(.active) {
+      background: var(--surface-2);
+      color: var(--fg);
+    }
+
+    .tab .count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      background: var(--surface-3);
+      border-radius: 10px;
+      font-size: 11px;
+      margin-left: 6px;
+    }
+
+    .tab.active .count {
+      background: var(--accent);
+      color: white;
+    }
+
+    .waterfall-container {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 12px;
+      display: flex;
+      gap: 10px;
+    }
+
+    .waterfall-column {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .image-card {
+      position: relative;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      cursor: pointer;
+      break-inside: avoid;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .image-card:active {
+      transform: scale(0.98);
+    }
+
+    .image-card img {
+      width: 100%;
+      display: block;
+      background: var(--surface-2);
+    }
+
+    .image-card-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 8px;
+      background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+
+    .quality-badge {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 500;
+      padding: 3px 6px;
+      border-radius: 4px;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(8px);
+      color: var(--fg);
+    }
+
+    .quality-badge.hd {
+      background: rgba(34, 197, 94, 0.8);
+    }
+
+    .quality-badge.sd {
+      background: rgba(245, 158, 11, 0.8);
+    }
+
+    .image-favorite {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .image-favorite svg {
+      width: 14px;
+      height: 14px;
+      fill: none;
+      stroke: white;
+      stroke-width: 2;
+    }
+
+    .image-favorite.active svg {
+      fill: var(--error);
+      stroke: var(--error);
+    }
+
+    .fab {
+      position: absolute;
+      bottom: 96px;
+      right: 20px;
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      background: var(--accent);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 16px rgba(124, 92, 255, 0.4);
+      transition: all 0.2s ease;
+      z-index: 50;
+    }
+
+    .fab:hover {
+      background: var(--accent-hover);
+      transform: scale(1.05);
+    }
+
+    .fab svg {
+      width: 24px;
+      height: 24px;
+      fill: white;
+    }
+
+    .folder-modal {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(8px);
+      z-index: 200;
+      display: flex;
+      align-items: flex-end;
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .folder-modal-content {
+      width: 100%;
+      background: var(--surface);
+      border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+      padding: 24px;
+      max-height: 70vh;
+      overflow-y: auto;
+      animation: slideUp 0.3s ease;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+
+    .folder-modal-handle {
+      width: 40px;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin: 0 auto 20px;
+    }
+
+    .folder-modal-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 20px;
+    }
+
+    .folder-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: var(--surface-2);
+      border-radius: var(--radius-md);
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: 2px solid transparent;
+    }
+
+    .folder-item:hover {
+      background: var(--surface-3);
+    }
+
+    .folder-item.selected {
+      border-color: var(--accent);
+      background: var(--accent-muted);
+    }
+
+    .folder-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-sm);
+      background: var(--surface-3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .folder-icon svg {
+      width: 24px;
+      height: 24px;
+      fill: var(--accent);
+    }
+
+    .folder-info {
+      flex: 1;
+    }
+
+    .folder-name {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .folder-meta {
+      font-size: 12px;
+      color: var(--fg-secondary);
+    }
+
+    .folder-check {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .folder-item.selected .folder-check {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .folder-check svg {
+      width: 14px;
+      height: 14px;
+      fill: white;
+      opacity: 0;
+    }
+
+    .folder-item.selected .folder-check svg {
+      opacity: 1;
+    }
+
+    .add-folder-btn {
+      width: 100%;
+      padding: 16px;
+      background: var(--accent-muted);
+      border: 2px dashed var(--accent);
+      border-radius: var(--radius-md);
+      color: var(--accent);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      margin-top: 12px;
+    }
+
+    .add-folder-btn:hover {
+      background: var(--accent);
+      color: white;
+      border-style: solid;
+    }
+
+    .add-folder-btn svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+
+    .viewer-overlay {
+      position: absolute;
+      inset: 0;
+      background: #000;
+      z-index: 300;
+      display: flex;
+      flex-direction: column;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .viewer-header {
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px;
+      flex-shrink: 0;
+    }
+
+    .viewer-back {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.1);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .viewer-back svg {
+      width: 24px;
+      height: 24px;
+      fill: white;
+    }
+
+    .viewer-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .viewer-action {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.1);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .viewer-action svg {
+      width: 22px;
+      height: 22px;
+      fill: white;
+    }
+
+    .viewer-content {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .viewer-image-container {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .viewer-image {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      transition: transform 0.1s ease;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    .viewer-nav {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(8px);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .viewer-nav:hover {
+      background: rgba(255,255,255,0.25);
+    }
+
+    .viewer-nav.prev {
+      left: 12px;
+    }
+
+    .viewer-nav.next {
+      right: 12px;
+    }
+
+    .viewer-nav svg {
+      width: 28px;
+      height: 28px;
+      fill: white;
+    }
+
+    .viewer-footer {
+      padding: 16px 20px;
+      padding-bottom: 36px;
+      background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%);
+    }
+
+    .viewer-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .viewer-filename {
+      font-size: 14px;
+      font-weight: 500;
+      color: white;
+    }
+
+    .viewer-dimensions {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+    }
+
+    .viewer-thumbnails {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+      scrollbar-width: none;
+    }
+
+    .viewer-thumbnails::-webkit-scrollbar {
+      display: none;
+    }
+
+    .viewer-thumb {
+      width: 48px;
+      height: 48px;
+      border-radius: 6px;
+      overflow: hidden;
+      flex-shrink: 0;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .viewer-thumb.active {
+      border-color: white;
+    }
+
+    .viewer-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .pull-indicator {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 16px;
+      gap: 8px;
+      transform: translateY(-60px);
+      transition: transform 0.3s ease;
+      z-index: 10;
+    }
+
+    .pull-indicator.pulling {
+      transform: translateY(0);
+    }
+
+    .pull-indicator svg {
+      width: 24px;
+      height: 24px;
+      fill: var(--accent);
+      animation: none;
+    }
+
+    .pull-indicator.pulling svg {
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      padding: 40px;
+      text-align: center;
+    }
+
+    .empty-icon {
+      width: 80px;
+      height: 80px;
+      border-radius: 24px;
+      background: var(--surface-2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+
+    .empty-icon svg {
+      width: 40px;
+      height: 40px;
+      fill: var(--muted);
+    }
+
+    .empty-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .empty-desc {
+      font-size: 14px;
+      color: var(--fg-secondary);
+      line-height: 1.5;
+    }
+
+    .stats-bar {
+      display: flex;
+      gap: 16px;
+      padding: 12px 16px;
+      background: var(--surface);
+      border-radius: var(--radius-md);
+      margin: 0 16px 12px;
+    }
+
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stat-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: var(--surface-2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .stat-icon svg {
+      width: 16px;
+      height: 16px;
+      fill: var(--accent);
+    }
+
+    .stat-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stat-value {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .screen {
+      display: none;
+      height: 100%;
+    }
+
+    .screen.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .search-bar {
+      margin: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--surface);
+      border-radius: var(--radius-md);
+      padding: 12px 16px;
+    }
+
+    .search-bar svg {
+      width: 20px;
+      height: 20px;
+      fill: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .search-bar input {
+      flex: 1;
+      background: none;
+      border: none;
+      font-size: 15px;
+      color: var(--fg);
+      outline: none;
+    }
+
+    .search-bar input::placeholder {
+      color: var(--muted);
+    }
+
+    .settings-section {
+      padding: 16px;
+    }
+
+    .settings-section-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+
+    .settings-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: var(--surface);
+      border-radius: var(--radius-md);
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .settings-item:hover {
+      background: var(--surface-2);
+    }
+
+    .settings-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .settings-icon svg {
+      width: 20px;
+      height: 20px;
+      fill: var(--fg-secondary);
+    }
+
+    .settings-info {
+      flex: 1;
+    }
+
+    .settings-name {
+      font-size: 15px;
+      font-weight: 500;
+      margin-bottom: 2px;
+    }
+
+    .settings-desc {
+      font-size: 12px;
+      color: var(--fg-secondary);
+    }
+
+    .settings-arrow {
+      width: 20px;
+      height: 20px;
+      fill: var(--muted);
+    }
+
+    .switch {
+      width: 48px;
+      height: 28px;
+      border-radius: 14px;
+      background: var(--surface-3);
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .switch.active {
+      background: var(--accent);
+    }
+
+    .switch::after {
+      content: '';
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: white;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.2s ease;
+    }
+
+    .switch.active::after {
+      transform: translateX(20px);
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback, memo } = React;
+
+    // Sample image data with various aspect ratios
+    const sampleImages = [
+      { id: 1, url: 'https://images.unsplash.com/photo-1682687220742-aba13b6e50ba?w=400&h=600&fit=crop', folder: 'Landscapes', width: 400, height: 600, quality: 'hd', name: 'mountain-lake.jpg' },
+      { id: 2, url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=300&fit=crop', folder: 'Landscapes', width: 400, height: 300, quality: 'hd', name: 'alpine-view.jpg' },
+      { id: 3, url: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=400&h=500&fit=crop', folder: 'Landscapes', width: 400, height: 500, quality: 'hd', name: 'sunlight-forest.jpg' },
+      { id: 4, url: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=400&h=250&fit=crop', folder: 'Landscapes', width: 400, height: 250, quality: 'sd', name: 'foggy-hills.jpg' },
+      { id: 5, url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop', folder: 'Portraits', width: 400, height: 400, quality: 'hd', name: 'portrait-man.jpg' },
+      { id: 6, url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=550&fit=crop', folder: 'Portraits', width: 400, height: 550, quality: 'hd', name: 'portrait-woman.jpg' },
+      { id: 7, url: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400&h=600&fit=crop', folder: 'Portraits', width: 400, height: 600, quality: 'hd', name: 'beauty-shot.jpg' },
+      { id: 8, url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&h=300&fit=crop', folder: 'Portraits', width: 400, height: 300, quality: 'sd', name: 'candid-portrait.jpg' },
+      { id: 9, url: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=500&fit=crop', folder: 'Architecture', width: 400, height: 500, quality: 'hd', name: 'modern-building.jpg' },
+      { id: 10, url: 'https://images.unsplash.com/photo-1486325212027-8081e485255e?w=400&h=300&fit=crop', folder: 'Architecture', width: 400, height: 300, quality: 'hd', name: 'urban-architecture.jpg' },
+      { id: 11, url: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=400&h=250&fit=crop', folder: 'Architecture', width: 400, height: 250, quality: 'sd', name: 'street-view.jpg' },
+      { id: 12, url: 'https://images.unsplash.com/photo-1493246507139-91e8fad9978e?w=400&h=550&fit=crop', folder: 'Landscapes', width: 400, height: 550, quality: 'hd', name: 'waterfall-forest.jpg' },
+      { id: 13, url: 'https://images.unsplash.com/photo-1518837695005-2083093ee35b?w=400&h=300&fit=crop', folder: 'Landscapes', width: 400, height: 300, quality: 'hd', name: 'ocean-waves.jpg' },
+      { id: 14, url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=400&h=600&fit=crop', folder: 'Landscapes', width: 400, height: 600, quality: 'hd', name: 'yosemite-valley.jpg' },
+      { id: 15, url: 'https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?w=400&h=400&fit=crop', folder: 'Architecture', width: 400, height: 400, quality: 'hd', name: 'interior-design.jpg' },
+      { id: 16, url: 'https://images.unsplash.com/photo-1523821741446-edb2b68bb7a0?w=400&h=550&fit=crop', folder: 'Architecture', width: 400, height: 550, quality: 'hd', name: 'spiral-stairs.jpg' },
+    ];
+
+    const folders = [
+      { id: 1, name: 'Landscapes', path: '/storage/emulated/0/DCIM/Landscapes', count: 8 },
+      { id: 2, name: 'Portraits', path: '/storage/emulated/0/DCIM/Portraits', count: 4 },
+      { id: 3, name: 'Architecture', path: '/storage/emulated/0/Pictures/Architecture', count: 5 },
+    ];
+
+    // Icons
+    const Icons = {
+      Home: () => (
+        <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+      ),
+      Search: () => (
+        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+      ),
+      Settings: () => (
+        <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+      ),
+      Folder: () => (
+        <svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+      ),
+      FolderOpen: () => (
+        <svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/></svg>
+      ),
+      Add: () => (
+        <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+      ),
+      Check: () => (
+        <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+      ),
+      ArrowBack: () => (
+        <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+      ),
+      Favorite: () => (
+        <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+      ),
+      Share: () => (
+        <svg viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
+      ),
+      MoreVert: () => (
+        <svg viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+      ),
+      Refresh: () => (
+        <svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+      ),
+      ChevronLeft: () => (
+        <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+      ),
+      ChevronRight: () => (
+        <svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+      ),
+      Signal: () => (
+        <svg viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
+      ),
+      Storage: () => (
+        <svg viewBox="0 0 24 24"><path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z"/></svg>
+      ),
+      GridView: () => (
+        <svg viewBox="0 0 24 24"><path d="M3 3v8h8V3H3zm6 6H5V5h4v4zm-6 4v8h8v-8H3zm6 6H5v-4h4v4zm4-16v8h8V3h-8zm6 6h-4V5h4v4zm-6 4v8h8v-8h-8zm6 6h-4v-4h4v4z"/></svg>
+      ),
+      Info: () => (
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+      ),
+      Image: () => (
+        <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+      ),
+      Clear: () => (
+        <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+      ),
+    };
+
+    // Waterfall Image Card Component
+    const ImageCard = memo(({ image, onClick }) => {
+      const [loaded, setLoaded] = useState(false);
+      
+      return (
+        <div className="image-card" onClick={() => onClick(image)} data-od-id={`image-card-${image.id}`}>
+          {!loaded && (
+            <div style={{ 
+              paddingBottom: `${(image.height / image.width) * 100}%`,
+              background: 'var(--surface-2)'
+            }} />
+          )}
+          <img 
+            src={image.url} 
+            alt={image.name}
+            loading="lazy"
+            onLoad={() => setLoaded(true)}
+            style={{ display: loaded ? 'block' : 'none' }}
+          />
+          <div className="image-card-overlay">
+            <span className={`quality-badge ${image.quality}`}>
+              {image.quality.toUpperCase()}
+            </span>
+            <div className="image-favorite">
+              <Icons.Favorite />
+            </div>
+          </div>
+        </div>
+      );
+    });
+
+    // Waterfall Grid Component
+    const WaterfallGrid = ({ images, onImageClick }) => {
+      const [columns, setColumns] = useState(2);
+      const containerRef = useRef(null);
+
+      useEffect(() => {
+        const updateColumns = () => {
+          const width = containerRef.current?.offsetWidth || 380;
+          setColumns(width < 300 ? 2 : width < 400 ? 2 : 2);
+        };
+        updateColumns();
+        window.addEventListener('resize', updateColumns);
+        return () => window.removeEventListener('resize', updateColumns);
+      }, []);
+
+      const distributeImages = () => {
+        const cols = Array.from({ length: columns }, () => []);
+        const colHeights = Array(columns).fill(0);
+        
+        images.forEach(img => {
+          const shortestCol = colHeights.indexOf(Math.min(...colHeights));
+          cols[shortestCol].push(img);
+          colHeights[shortestCol] += img.height / img.width;
+        });
+        
+        return cols;
+      };
+
+      const cols = distributeImages();
+
+      return (
+        <div className="waterfall-container" ref={containerRef}>
+          {cols.map((col, colIndex) => (
+            <div key={colIndex} className="waterfall-column">
+              {col.map(image => (
+                <ImageCard 
+                  key={image.id} 
+                  image={image} 
+                  onClick={onImageClick}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      );
+    };
+
+    // Full Screen Viewer Component
+    const ImageViewer = ({ images, currentIndex, onClose, onNavigate }) => {
+      const [scale, setScale] = useState(1);
+      const [translateX, setTranslateX] = useState(0);
+      const [translateY, setTranslateY] = useState(0);
+      const [lastTouch, setLastTouch] = useState(null);
+      const containerRef = useRef(null);
+      const imageRef = useRef(null);
+      const currentImage = images[currentIndex];
+
+      const handleWheel = (e) => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        setScale(s => Math.min(Math.max(s * delta, 1), 4));
+      };
+
+      const handleTouchStart = (e) => {
+        if (e.touches.length === 1) {
+          setLastTouch({ x: e.touches[0].clientX, y: e.touches[0].clientY });
+        }
+      };
+
+      const handleTouchMove = (e) => {
+        if (e.touches.length === 1 && scale > 1 && lastTouch) {
+          const dx = e.touches[0].clientX - lastTouch.x;
+          const dy = e.touches[0].clientY - lastTouch.y;
+          setTranslateX(x => x + dx);
+          setTranslateY(y => y + dy);
+          setLastTouch({ x: e.touches[0].clientX, y: e.touches[0].clientY });
+        }
+      };
+
+      const handleTouchEnd = (e) => {
+        setLastTouch(null);
+        if (scale === 1 && e.changedTouches.length === 1) {
+          const dx = e.changedTouches[0].clientX - (lastTouch?.x || 0);
+          if (Math.abs(dx) > 50) {
+            if (dx > 0) onNavigate('prev');
+            else onNavigate('next');
+          }
+        }
+      };
+
+      const resetTransform = () => {
+        setScale(1);
+        setTranslateX(0);
+        setTranslateY(0);
+      };
+
+      const handleBackdropClick = (e) => {
+        if (e.target === containerRef.current) {
+          onClose();
+        }
+      };
+
+      return (
+        <div className="viewer-overlay" ref={containerRef} onClick={handleBackdropClick}>
+          <div className="viewer-header">
+            <button className="viewer-back" onClick={onClose} data-od-id="viewer-close">
+              <Icons.ArrowBack />
+            </button>
+            <div className="viewer-actions">
+              <button className="viewer-action" data-od-id="viewer-favorite">
+                <Icons.Favorite />
+              </button>
+              <button className="viewer-action" data-od-id="viewer-share">
+                <Icons.Share />
+              </button>
+              <button className="viewer-action" data-od-id="viewer-more">
+                <Icons.MoreVert />
+              </button>
+            </div>
+          </div>
+          
+          <div 
+            className="viewer-content"
+            onWheel={handleWheel}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onClick={resetTransform}
+          >
+            {currentIndex > 0 && (
+              <button className="viewer-nav prev" onClick={() => onNavigate('prev')} data-od-id="viewer-prev">
+                <Icons.ChevronLeft />
+              </button>
+            )}
+            
+            <div className="viewer-image-container">
+              <img 
+                ref={imageRef}
+                src={currentImage?.url.replace('w=400', 'w=1200')}
+                alt={currentImage?.name}
+                className="viewer-image"
+                style={{
+                  transform: `scale(${scale}) translate(${translateX / scale}px, ${translateY / scale}px)`,
+                  cursor: scale > 1 ? 'move' : 'default'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+            
+            {currentIndex < images.length - 1 && (
+              <button className="viewer-nav next" onClick={() => onNavigate('next')} data-od-id="viewer-next">
+                <Icons.ChevronRight />
+              </button>
+            )}
+          </div>
+          
+          <div className="viewer-footer">
+            <div className="viewer-info">
+              <span className="viewer-filename">{currentImage?.name}</span>
+              <span className="viewer-dimensions">{currentImage?.width} × {currentImage?.height}</span>
+            </div>
+            <div className="viewer-thumbnails">
+              {images.map((img, idx) => (
+                <div 
+                  key={img.id}
+                  className={`viewer-thumb ${idx === currentIndex ? 'active' : ''}`}
+                  onClick={() => { onNavigate(idx); resetTransform(); }}
+                  data-od-id={`thumb-${idx}`}
+                >
+                  <img src={img.url} alt="" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // Folder Selection Modal
+    const FolderModal = ({ folders, selectedIds, onToggle, onClose, onAddFolder }) => {
+      return (
+        <div className="folder-modal" onClick={onClose}>
+          <div className="folder-modal-content" onClick={e => e.stopPropagation()}>
+            <div className="folder-modal-handle" />
+            <h2 className="folder-modal-title" data-od-id="folder-modal-title">Select Folders</h2>
+            
+            {folders.map(folder => (
+              <div 
+                key={folder.id}
+                className={`folder-item ${selectedIds.includes(folder.id) ? 'selected' : ''}`}
+                onClick={() => onToggle(folder.id)}
+                data-od-id={`folder-item-${folder.id}`}
+              >
+                <div className="folder-icon">
+                  <Icons.FolderOpen />
+                </div>
+                <div className="folder-info">
+                  <div className="folder-name">{folder.name}</div>
+                  <div className="folder-meta">{folder.count} images • {folder.path}</div>
+                </div>
+                <div className="folder-check">
+                  <Icons.Check />
+                </div>
+              </div>
+            ))}
+            
+            <button className="add-folder-btn" onClick={onAddFolder} data-od-id="add-folder-btn">
+              <Icons.Add />
+              Add New Folder
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    // Home Screen
+    const HomeScreen = ({ folders, selectedFolders, images, onOpenFolderModal, onImageClick, currentFolder, setCurrentFolder }) => {
+      const [isRefreshing, setIsRefreshing] = useState(false);
+      const [pullDistance, setPullDistance] = useState(0);
+      const scrollRef = useRef(null);
+
+      const filteredImages = images.filter(img => 
+        selectedFolders.includes(folders.find(f => f.name === img.folder)?.id)
+      );
+
+      const currentFolderImages = currentFolder === 'all' 
+        ? filteredImages 
+        : filteredImages.filter(img => img.folder === folders.find(f => f.id === currentFolder)?.name);
+
+      const handleScroll = (e) => {
+        if (e.target.scrollTop === 0 && pullDistance === 0) {
+          // Allow pull to refresh
+        }
+      };
+
+      const handleTouchMove = (e) => {
+        if (scrollRef.current?.scrollTop === 0 && e.touches[0].clientY > 60) {
+          setPullDistance(Math.min(e.touches[0].clientY - 60, 80));
+        }
+      };
+
+      const handleTouchEnd = () => {
+        if (pullDistance > 60) {
+          setIsRefreshing(true);
+          setTimeout(() => {
+            setIsRefreshing(false);
+            setPullDistance(0);
+          }, 1500);
+        } else {
+          setPullDistance(0);
+        }
+      };
+
+      const totalImages = selectedFolders.reduce((sum, id) => {
+        const folder = folders.find(f => f.id === id);
+        return sum + (folder?.count || 0);
+      }, 0);
+
+      return (
+        <div className="screen active" data-od-id="home-screen">
+          <div className="header">
+            <span className="header-title" data-od-id="header-title">FlowGallery</span>
+            <div className="header-actions">
+              <button className="header-btn" data-od-id="header-search">
+                <Icons.Search />
+              </button>
+              <button className="header-btn" data-od-id="header-grid-toggle">
+                <Icons.GridView />
+              </button>
+            </div>
+          </div>
+
+          <div 
+            className="tab-strip"
+            ref={scrollRef}
+            onScroll={handleScroll}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
+            <div 
+              className={`tab ${currentFolder === 'all' ? 'active' : ''}`}
+              onClick={() => setCurrentFolder('all')}
+              data-od-id="tab-all"
+            >
+              All <span className="count">{totalImages}</span>
+            </div>
+            {folders.filter(f => selectedFolders.includes(f.id)).map(folder => (
+              <div 
+                key={folder.id}
+                className={`tab ${currentFolder === folder.id ? 'active' : ''}`}
+                onClick={() => setCurrentFolder(folder.id)}
+                data-od-id={`tab-${folder.id}`}
+              >
+                {folder.name} <span className="count">{folder.count}</span>
+              </div>
+            ))}
+          </div>
+
+          <div 
+            className={`pull-indicator ${isRefreshing || pullDistance > 0 ? 'pulling' : ''}`}
+            style={{ transform: `translateY(${pullDistance > 0 ? 0 : -60}px)` }}
+          >
+            <Icons.Refresh />
+            <span style={{ fontSize: '12px', color: 'var(--accent)' }}>
+              {isRefreshing ? 'Refreshing...' : 'Pull to refresh'}
+            </span>
+          </div>
+
+          <div className="stats-bar" data-od-id="stats-bar">
+            <div className="stat-item">
+              <div className="stat-icon"><Icons.Image /></div>
+              <div className="stat-info">
+                <span className="stat-value">{currentFolderImages.length}</span>
+                <span className="stat-label">Images</span>
+              </div>
+            </div>
+            <div className="stat-item">
+              <div className="stat-icon"><Icons.Folder /></div>
+              <div className="stat-info">
+                <span className="stat-value">{selectedFolders.length}</span>
+                <span className="stat-label">Folders</span>
+              </div>
+            </div>
+            <div className="stat-item">
+              <div className="stat-icon"><Icons.Signal /></div>
+              <div className="stat-info">
+                <span className="stat-value">HD</span>
+                <span className="stat-label">Quality</span>
+              </div>
+            </div>
+          </div>
+
+          {currentFolderImages.length > 0 ? (
+            <WaterfallGrid images={currentFolderImages} onImageClick={onImageClick} />
+          ) : (
+            <div className="empty-state">
+              <div className="empty-icon">
+                <Icons.Image />
+              </div>
+              <h3 className="empty-title">No images yet</h3>
+              <p className="empty-desc">Tap the + button to add folders and start browsing your images</p>
+            </div>
+          )}
+
+          <button className="fab" onClick={onOpenFolderModal} data-od-id="folder-fab">
+            <Icons.Add />
+          </button>
+        </div>
+      );
+    };
+
+    // Search Screen
+    const SearchScreen = () => (
+      <div className="screen" data-od-id="search-screen">
+        <div className="header">
+          <span className="header-title">Search</span>
+        </div>
+        <div className="search-bar">
+          <Icons.Search />
+          <input type="text" placeholder="Search images..." data-od-id="search-input" />
+        </div>
+        <div className="empty-state">
+          <div className="empty-icon">
+            <Icons.Search />
+          </div>
+          <h3 className="empty-title">Search your gallery</h3>
+          <p className="empty-desc">Find images by name, folder, date, or tags</p>
+        </div>
+      </div>
+    );
+
+    // Settings Screen
+    const SettingsScreen = () => (
+      <div className="screen" data-od-id="settings-screen">
+        <div className="header">
+          <span className="header-title">Settings</span>
+        </div>
+        <div className="settings-section">
+          <div className="settings-section-title">Display</div>
+          <div className="settings-item" data-od-id="settings-cache">
+            <div className="settings-icon"><Icons.Storage /></div>
+            <div className="settings-info">
+              <div className="settings-name">Clear Cache</div>
+              <div className="settings-desc">124 MB cached</div>
+            </div>
+          </div>
+          <div className="settings-item" data-od-id="settings-quality">
+            <div className="settings-icon"><Icons.Signal /></div>
+            <div className="settings-info">
+              <div className="settings-name">Image Quality</div>
+              <div className="settings-desc">HD thumbnails</div>
+            </div>
+            <div className="switch active" />
+          </div>
+          <div className="settings-item" data-od-id="settings-grid">
+            <div className="settings-icon"><Icons.GridView /></div>
+            <div className="settings-info">
+              <div className="settings-name">Grid Columns</div>
+              <div className="settings-desc">2 columns</div>
+            </div>
+            <svg className="settings-arrow" viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+          </div>
+        </div>
+        <div className="settings-section">
+          <div className="settings-section-title">About</div>
+          <div className="settings-item" data-od-id="settings-info">
+            <div className="settings-icon"><Icons.Info /></div>
+            <div className="settings-info">
+              <div className="settings-name">FlowGallery</div>
+              <div className="settings-desc">Version 1.0.0</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+
+    // Main App Component
+    const App = () => {
+      const [currentScreen, setCurrentScreen] = useState('home');
+      const [showFolderModal, setShowFolderModal] = useState(false);
+      const [selectedFolders, setSelectedFolders] = useState([1, 2, 3]);
+      const [currentFolder, setCurrentFolder] = useState('all');
+      const [viewerState, setViewerState] = useState({ open: false, index: 0 });
+
+      const filteredImages = sampleImages.filter(img => 
+        selectedFolders.includes(folders.find(f => f.name === img.folder)?.id)
+      );
+
+      const handleFolderToggle = (id) => {
+        setSelectedFolders(prev => 
+          prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+        );
+      };
+
+      const handleImageClick = (image) => {
+        const idx = filteredImages.findIndex(img => img.id === image.id);
+        setViewerState({ open: true, index: idx });
+      };
+
+      const handleViewerNavigate = (direction) => {
+        if (typeof direction === 'number') {
+          setViewerState(prev => ({ ...prev, index: direction }));
+        } else {
+          setViewerState(prev => ({
+            ...prev,
+            index: direction === 'prev' 
+              ? Math.max(0, prev.index - 1)
+              : Math.min(filteredImages.length - 1, prev.index + 1)
+          }));
+        }
+      };
+
+      const currentTime = new Date().toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+      });
+
+      return (
+        <div className="android-frame">
+          <div className="status-bar">
+            <span className="status-bar-time">{currentTime}</span>
+            <div className="status-bar-icons">
+              <svg viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
+              <svg viewBox="0 0 24 24"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/></svg>
+            </div>
+          </div>
+
+          <div className="app-content">
+            <HomeScreen 
+              folders={folders}
+              selectedFolders={selectedFolders}
+              images={sampleImages}
+              onOpenFolderModal={() => setShowFolderModal(true)}
+              onImageClick={handleImageClick}
+              currentFolder={currentFolder}
+              setCurrentFolder={setCurrentFolder}
+            />
+            <SearchScreen />
+            <SettingsScreen />
+          </div>
+
+          <div className="nav-bar">
+            <div 
+              className={`nav-item ${currentScreen === 'home' ? 'active' : ''}`}
+              onClick={() => setCurrentScreen('home')}
+              data-od-id="nav-home"
+            >
+              <Icons.Home />
+              <span>Home</span>
+            </div>
+            <div 
+              className={`nav-item ${currentScreen === 'search' ? 'active' : ''}`}
+              onClick={() => setCurrentScreen('search')}
+              data-od-id="nav-search"
+            >
+              <Icons.Search />
+              <span>Search</span>
+            </div>
+            <div 
+              className={`nav-item ${currentScreen === 'settings' ? 'active' : ''}`}
+              onClick={() => setCurrentScreen('settings')}
+              data-od-id="nav-settings"
+            >
+              <Icons.Settings />
+              <span>Settings</span>
+            </div>
+          </div>
+
+          {showFolderModal && (
+            <FolderModal 
+              folders={folders}
+              selectedIds={selectedFolders}
+              onToggle={handleFolderToggle}
+              onClose={() => setShowFolderModal(false)}
+              onAddFolder={() => alert('Open system folder picker')}
+            />
+          )}
+
+          {viewerState.open && (
+            <ImageViewer 
+              images={filteredImages}
+              currentIndex={viewerState.index}
+              onClose={() => setViewerState({ open: false, index: 0 })}
+              onNavigate={handleViewerNavigate}
+            />
+          )}
+        </div>
+      );
+    };
+
+    // Render
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+
+    // Sync screens with navigation
+    const observer = new MutationObserver(() => {
+      const navItems = document.querySelectorAll('.nav-item');
+      const screens = document.querySelectorAll('.screen');
+      
+      navItems.forEach((item, idx) => {
+        item.addEventListener('click', () => {
+          screens.forEach((s, i) => {
+            s.classList.toggle('active', i === idx);
+          });
+          navItems.forEach((n, i) => {
+            n.classList.toggle('active', i === idx);
+          });
+        });
+      });
+    });
+
+    // Switch logic
+    window.addEventListener('click', (e) => {
+      const navMap = { 'nav-home': 0, 'nav-search': 1, 'nav-settings': 2 };
+      const id = e.target.closest('[data-od-id]')?.getAttribute('data-od-id');
+      if (navMap[id] !== undefined) {
+        const screens = document.querySelectorAll('.screen');
+        const navItems = document.querySelectorAll('.nav-item');
+        screens.forEach((s, i) => s.classList.toggle('active', i === navMap[id]));
+        navItems.forEach((n, i) => n.classList.toggle('active', i === navMap[id]));
+      }
+    });
+  </script>
+</body>
+</html>
