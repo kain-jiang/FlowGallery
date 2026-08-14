@@ -20,22 +20,28 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -95,6 +101,9 @@ fun ImageViewer(
         val target = (currentIndex - 2).coerceAtLeast(0)
         thumbListState.animateScrollToItem(target)
     }
+    // Duplicate files dialog state (content-dedup copies of this item).
+    var showDuplicates by remember { mutableStateOf(false) }
+    val duplicates = remember(image.id) { image.duplicates }
 
     // Reset transform when switching images
     LaunchedEffect(currentIndex) {
@@ -273,6 +282,41 @@ fun ImageViewer(
                         fontSize = 12.sp
                     )
                 }
+                // Duplicate copies indicator — shows every file path/name/hash
+                // of the same media when content-dedup found copies elsewhere.
+                if (duplicates.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 4.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.White.copy(alpha = 0.12f))
+                            .clickable { showDuplicates = true }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Filled.ContentCopy,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.8f),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(R.string.duplicate_files, duplicates.size + 1),
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 12.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            Icons.Filled.ChevronRight,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.6f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
                 Spacer(Modifier.height(12.dp))
                 LazyRow(
                     state = thumbListState,
@@ -319,6 +363,67 @@ fun ImageViewer(
                     }
                     } // LazyRow
             }
+        }
+    }
+
+    // Duplicate files dialog: lists every copy's folder path, file name and
+    // content hash, so users can see where else the same media lives.
+    if (showDuplicates && duplicates.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { showDuplicates = false },
+            title = { Text(stringResource(R.string.duplicate_title)) },
+            text = {
+                androidx.compose.foundation.layout.Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                ) {
+                    // Current file first
+                    DuplicateRow(item = image, isCurrent = true)
+                    duplicates.forEach { dup ->
+                        DuplicateRow(item = dup, isCurrent = false)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDuplicates = false }) {
+                    Text(stringResource(R.string.duplicate_close))
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun DuplicateRow(item: ImageItem, isCurrent: Boolean) {
+    androidx.compose.foundation.layout.Column(modifier = Modifier.padding(vertical = 4.dp)) {
+        Text(
+            text = item.name,
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = "${item.folderName}${item.subFolderName?.let { " / $it" } ?: ""}",
+            color = Color.White.copy(alpha = 0.7f),
+            fontSize = 12.sp
+        )
+        item.contentHash?.let { hash ->
+            Text(
+                text = "MD5: $hash",
+                color = Color.White.copy(alpha = 0.5f),
+                fontSize = 10.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+            )
+        }
+        if (isCurrent) {
+            Text(
+                text = stringResource(R.string.duplicate_current),
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium
+            )
         }
     }
 }

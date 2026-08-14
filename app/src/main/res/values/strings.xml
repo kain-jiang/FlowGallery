@@ -38,6 +38,12 @@
     <string name="cd_more">More</string>
     <string name="cd_play">Play</string>
     <string name="cd_pause">Pause</string>
+
+    <!-- Duplicate files -->
+    <string name="duplicate_files">%1$d copies of this file</string>
+    <string name="duplicate_title">Duplicate Files</string>
+    <string name="duplicate_current">Current file</string>
+    <string name="duplicate_close">Close</string>
     <string name="dimensions">%1$d × %2$d</string>
 
     <!-- Search -->

@@ -298,7 +298,8 @@ class ImageRepository(private val context: Context) {
     /**
      * Content-level dedup: same file size + same content hash ⇒ duplicate.
      * Only items sharing a size with another item get hashed, so unique
-     * files are never read. Keeps the first occurrence.
+     * files are never read. The kept item carries its duplicate copies in
+     * `duplicates` (for the viewer's "all file paths" display).
      */
     suspend fun dedupByContent(items: List<ImageItem>): List<ImageItem> =
         withContext(Dispatchers.IO) {
@@ -312,17 +313,26 @@ class ImageRepository(private val context: Context) {
                 if (hash != null) hashById[item.id] = hash
             }
 
-            val seen = HashSet<String>()
-            val kept = mutableListOf<ImageItem>()
+            // Group items by (size:hash); unique sizes form their own group.
+            val groups = LinkedHashMap<String, MutableList<ImageItem>>()
             for (item in items) {
                 val hash = hashById[item.id]
-                if (hash == null) {
-                    // Unique size (or hash failed) — always keep.
-                    kept.add(item)
-                } else {
-                    val key = "${item.sizeBytes}:$hash"
-                    if (seen.add(key)) kept.add(item)
-                }
+                val key = if (hash != null) "${item.sizeBytes}:$hash" else "uniq:${item.id}"
+                groups.getOrPut(key) { mutableListOf() }.add(item)
+            }
+
+            val kept = mutableListOf<ImageItem>()
+            for (group in groups.values) {
+                val first = group.first()
+                val hash = hashById[first.id]
+                kept.add(
+                    if (group.size > 1) {
+                        first.copy(
+                            contentHash = hash,
+                            duplicates = group.drop(1).map { it.copy(contentHash = hash) }
+                        )
+                    } else first
+                )
             }
             kept
         }

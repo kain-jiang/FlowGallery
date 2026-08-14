@@ -36,6 +36,9 @@ enum class MediaType {
 
 /**
  * A single media item discovered inside a [Folder].
+ *
+ * When content-dedup runs, the kept item carries its duplicate copies in
+ * [duplicates] so the viewer can show every file path/name of the same media.
  */
 data class ImageItem(
     val id: Long,
@@ -50,7 +53,9 @@ data class ImageItem(
     val height: Int = 0,
     val sizeBytes: Long = 0L,
     val durationMs: Long? = null,
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
+    val contentHash: String? = null,
+    val duplicates: List<ImageItem> = emptyList()
 ) {
     val isHd: Boolean get() = width >= 1920 || height >= 1080
 

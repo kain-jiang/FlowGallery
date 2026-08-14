@@ -38,6 +38,12 @@
     <string name="cd_more">更多</string>
     <string name="cd_play">播放</string>
     <string name="cd_pause">暂停</string>
+
+    <!-- Duplicate files -->
+    <string name="duplicate_files">该文件有 %1$d 个副本</string>
+    <string name="duplicate_title">重复文件</string>
+    <string name="duplicate_current">当前文件</string>
+    <string name="duplicate_close">关闭</string>
     <string name="dimensions">%1$d × %2$d</string>
 
     <!-- Search -->
