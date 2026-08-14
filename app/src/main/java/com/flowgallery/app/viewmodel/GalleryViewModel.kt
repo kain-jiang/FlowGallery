@@ -106,12 +106,13 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             val selected = _uiState.value.folders.filter { it.isSelected }
             val result = runCatching { repository.scanAll(selected) }
             result.onSuccess { scanResults ->
-                // Merge all items with dedup by URI — a folder and its
-                // subfolder may both be added as separate library entries,
-                // which would otherwise duplicate the same media in "All".
-                val images = scanResults
-                    .flatMap { it.items }
-                    .distinctBy { it.uriString }
+                // Merge all items, then dedup: (1) fast URI-level pass,
+                // (2) content-level pass (size + MD5) for files that still
+                // share a size — catches duplicates across different folders
+                // or differently-added copies of the same media.
+                val merged = scanResults.flatMap { it.items }
+                val uriDeduped = merged.distinctBy { it.uriString }
+                val images = repository.dedupByContent(uriDeduped)
                 // Update per-folder counts and subfolder breakdowns in one pass
                 for (res in scanResults) {
                     repository.updateFolderSubFolders(res.folderId, res.subFolders, res.items.size)

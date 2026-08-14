@@ -204,7 +204,7 @@ class ImageRepository(private val context: Context) {
             out: MutableList<ImageItem>
         ) {
             val children = resolver.getChildDocuments(dirUri) ?: return
-            for ((childUri, childName, mime) in children) {
+            for ((childUri, childName, mime, size) in children) {
                 if (isImageName(childName) || isVideoName(childName)) {
                     // No content IO during scan — classify by extension only
                     // (dimensions are filled in lazily by the UI via Coil).
@@ -219,7 +219,8 @@ class ImageRepository(private val context: Context) {
                             uriString = childUri.toString(),
                             type = classify(childName),
                             width = 0,
-                            height = 0
+                            height = 0,
+                            sizeBytes = size
                         )
                     )
                 } else {
@@ -234,7 +235,7 @@ class ImageRepository(private val context: Context) {
         // Root pass: direct files + first-level subfolders
         val rootChildren = resolver.getChildDocuments(rootUri) ?: emptyList()
         val subGroups = LinkedHashMap<String, Pair<SubFolder, List<ImageItem>>>()
-        for ((childUri, childName, mime) in rootChildren) {
+        for ((childUri, childName, mime, size) in rootChildren) {
             if (isImageName(childName) || isVideoName(childName)) {
                 allItems.add(
                     ImageItem(
@@ -245,7 +246,8 @@ class ImageRepository(private val context: Context) {
                         uriString = childUri.toString(),
                         type = classify(childName),
                         width = 0,
-                        height = 0
+                        height = 0,
+                        sizeBytes = size
                     )
                 )
             } else {
@@ -293,6 +295,38 @@ class ImageRepository(private val context: Context) {
             }
         }
 
+    /**
+     * Content-level dedup: same file size + same content hash ⇒ duplicate.
+     * Only items sharing a size with another item get hashed, so unique
+     * files are never read. Keeps the first occurrence.
+     */
+    suspend fun dedupByContent(items: List<ImageItem>): List<ImageItem> =
+        withContext(Dispatchers.IO) {
+            // Group by size; only sizes appearing more than once need hashing.
+            val sizeCounts = items.groupingBy { it.sizeBytes }.eachCount()
+            val candidates = items.filter { (sizeCounts[it.sizeBytes] ?: 0) > 1 }
+
+            val hashById = mutableMapOf<Long, String>()
+            for (item in candidates) {
+                val hash = resolver.contentHash(Uri.parse(item.uriString))
+                if (hash != null) hashById[item.id] = hash
+            }
+
+            val seen = HashSet<String>()
+            val kept = mutableListOf<ImageItem>()
+            for (item in items) {
+                val hash = hashById[item.id]
+                if (hash == null) {
+                    // Unique size (or hash failed) — always keep.
+                    kept.add(item)
+                } else {
+                    val key = "${item.sizeBytes}:$hash"
+                    if (seen.add(key)) kept.add(item)
+                }
+            }
+            kept
+        }
+
     // ------------------------------------------------------------------ helpers
 
     /** Result of scanning one root folder: flat items + subfolder summaries. */
@@ -304,7 +338,7 @@ class ImageRepository(private val context: Context) {
 
     private fun android.content.ContentResolver.getChildDocuments(
         parentUri: Uri
-    ): List<Triple<Uri, String, String>>? {
+    ): List<Quad>? {
         return try {
             // Subfolders are document URIs, the root is a tree URI —
             // getDocumentId works for both (getTreeDocumentId only for trees).
@@ -316,13 +350,14 @@ class ImageRepository(private val context: Context) {
             val childrenUri = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(
                 parentUri, docId
             )
-            val list = mutableListOf<Triple<Uri, String, String>>()
+            val list = mutableListOf<Quad>()
             resolver.query(
                 childrenUri,
                 arrayOf(
                     android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID,
                     android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-                    android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE
+                    android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE,
+                    android.provider.DocumentsContract.Document.COLUMN_SIZE
                 ),
                 null, null, null
             )?.use { c ->
@@ -332,15 +367,19 @@ class ImageRepository(private val context: Context) {
                     android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME)
                 val mimeCol = c.getColumnIndexOrThrow(
                     android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE)
+                val sizeCol = c.getColumnIndex(
+                    android.provider.DocumentsContract.Document.COLUMN_SIZE)
                 while (c.moveToNext()) {
                     val docIdChild = c.getString(idCol)
                     val name = c.getString(nameCol) ?: "unknown"
                     val mime = c.getString(mimeCol) ?: ""
+                    val size = if (sizeCol >= 0 && !c.isNull(sizeCol)) c.getLong(sizeCol) else 0L
                     list.add(
-                        Triple(
+                        Quad(
                             android.provider.DocumentsContract.buildDocumentUriUsingTree(parentUri, docIdChild),
                             name,
-                            mime
+                            mime,
+                            size
                         )
                     )
                 }
@@ -350,6 +389,14 @@ class ImageRepository(private val context: Context) {
             null
         }
     }
+
+    /** (uri, displayName, mimeType, sizeBytes) */
+    private data class Quad(
+        val uri: Uri,
+        val name: String,
+        val mime: String,
+        val size: Long
+    )
 
     private fun android.content.ContentResolver.isDirectory(uri: Uri): Boolean {
         return try {
@@ -385,6 +432,24 @@ class ImageRepository(private val context: Context) {
             } ?: (0 to 0)
         } catch (e: Exception) {
             (0 to 0)
+        }
+    }
+
+    /** MD5 of the file contents, or null on failure. Used for content dedup. */
+    private fun android.content.ContentResolver.contentHash(uri: Uri): String? {
+        return try {
+            val md = java.security.MessageDigest.getInstance("MD5")
+            resolver.openInputStream(uri)?.use { input ->
+                val buf = ByteArray(64 * 1024)
+                while (true) {
+                    val n = input.read(buf)
+                    if (n <= 0) break
+                    md.update(buf, 0, n)
+                }
+                md.digest().joinToString("") { "%02x".format(it) }
+            }
+        } catch (e: Exception) {
+            null
         }
     }
 

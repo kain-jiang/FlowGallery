@@ -48,6 +48,7 @@ data class ImageItem(
     val type: MediaType = MediaType.STATIC_IMAGE,
     val width: Int = 0,
     val height: Int = 0,
+    val sizeBytes: Long = 0L,
     val durationMs: Long? = null,
     val isFavorite: Boolean = false
 ) {
