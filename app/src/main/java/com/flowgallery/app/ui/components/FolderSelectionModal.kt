@@ -28,10 +28,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.flowgallery.app.R
 import com.flowgallery.app.data.model.Folder
 import com.flowgallery.app.ui.theme.Accent
 import com.flowgallery.app.ui.theme.AccentMuted
@@ -54,7 +56,7 @@ fun FolderSelectionModal(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(24.dp))
-                .background(Surface)
+                .background(MaterialTheme.colorScheme.surface)
                 .padding(24.dp)
                 .verticalScroll(rememberScrollState())
         ) {
@@ -64,12 +66,12 @@ fun FolderSelectionModal(
                     .size(width = 40.dp, height = 4.dp)
                     .align(Alignment.CenterHorizontally)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(Muted)
+                    .background(MaterialTheme.colorScheme.outline)
             )
             Spacer(Modifier.height(20.dp))
 
             Text(
-                text = "Select Folders",
+                text = stringResource(R.string.select_folders),
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -88,17 +90,17 @@ fun FolderSelectionModal(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .background(AccentMuted)
+                    .background(MaterialTheme.colorScheme.primaryContainer)
                     .clickable(onClick = onAddFolder)
                     .padding(16.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Filled.Add, contentDescription = null, tint = Accent, modifier = Modifier.size(20.dp))
+                Icon(Icons.Filled.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "Add New Folder",
-                    color = Accent,
+                    text = stringResource(R.string.add_new_folder),
+                    color = MaterialTheme.colorScheme.primary,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -110,11 +112,12 @@ fun FolderSelectionModal(
 
 @Composable
 private fun FolderRow(folder: Folder, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(if (folder.isSelected) AccentMuted else Surface2)
+            .background(if (folder.isSelected) scheme.primaryContainer else scheme.surfaceVariant)
             .clickable(onClick = onClick)
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -123,13 +126,13 @@ private fun FolderRow(folder: Folder, onClick: () -> Unit) {
             modifier = Modifier
                 .size(48.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(Surface3),
+                .background(scheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 Icons.Filled.FolderOpen,
                 contentDescription = null,
-                tint = Accent,
+                tint = scheme.primary,
                 modifier = Modifier.size(24.dp)
             )
         }
@@ -139,12 +142,12 @@ private fun FolderRow(folder: Folder, onClick: () -> Unit) {
                 text = folder.name,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = scheme.onSurface
             )
             Text(
-                text = "${folder.imageCount} images",
+                text = stringResource(R.string.image_count, folder.imageCount),
                 fontSize = 12.sp,
-                color = FgSecondary
+                color = scheme.onSurfaceVariant
             )
         }
         // Check indicator
@@ -152,13 +155,13 @@ private fun FolderRow(folder: Folder, onClick: () -> Unit) {
             modifier = Modifier
                 .size(24.dp)
                 .clip(CircleShape)
-                .background(if (folder.isSelected) Accent else Surface3),
+                .background(if (folder.isSelected) scheme.primary else scheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
             if (folder.isSelected) {
                 Icon(
                     Icons.Filled.Check,
-                    contentDescription = "Selected",
+                    contentDescription = stringResource(R.string.cd_selected),
                     tint = Color.White,
                     modifier = Modifier.size(14.dp)
                 )

@@ -9,12 +9,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -43,10 +46,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.flowgallery.app.R
 import com.flowgallery.app.data.model.ImageItem
 import com.flowgallery.app.ui.theme.Surface2
 
@@ -82,6 +87,7 @@ fun ImageViewer(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .windowInsetsPadding(WindowInsets.safeDrawing)
             .pointerInput(currentIndex) {
                 detectTransformGestures { _, pan, zoom, _ ->
                     scale = (scale * zoom).coerceIn(1f, 4f)
@@ -122,9 +128,9 @@ fun ImageViewer(
                     .padding(12.dp)
                     .size(56.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.15f))
+                    .background(Color.Black.copy(alpha = 0.5f))
             ) {
-                Icon(Icons.Filled.ChevronLeft, contentDescription = "Previous", tint = Color.White)
+                Icon(Icons.Filled.ChevronLeft, contentDescription = stringResource(R.string.cd_prev), tint = Color.White)
             }
         }
         if (chromeVisible && currentIndex < images.lastIndex) {
@@ -135,19 +141,20 @@ fun ImageViewer(
                     .padding(12.dp)
                     .size(56.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.15f))
+                    .background(Color.Black.copy(alpha = 0.5f))
             ) {
-                Icon(Icons.Filled.ChevronRight, contentDescription = "Next", tint = Color.White)
+                Icon(Icons.Filled.ChevronRight, contentDescription = stringResource(R.string.cd_next), tint = Color.White)
             }
         }
 
-        // Top bar
+        // Top bar — back button on the left, action group on the right
         if (chromeVisible) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp)
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
                     .align(Alignment.TopCenter),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
@@ -155,41 +162,42 @@ fun ImageViewer(
                     modifier = Modifier
                         .size(44.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.1f))
+                        .background(Color.Black.copy(alpha = 0.5f))
                 ) {
-                    Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back), tint = Color.White)
                 }
-                Spacer(Modifier.weight(1f))
-                IconButton(
-                    onClick = { onToggleFavorite(image.id) },
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.1f))
-                ) {
-                    Icon(
-                        imageVector = if (image.id in favoriteIds) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                        contentDescription = "Favorite",
-                        tint = if (image.id in favoriteIds) Color(0xFFEF4444) else Color.White
-                    )
-                }
-                IconButton(
-                    onClick = {},
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.1f))
-                ) {
-                    Icon(Icons.Filled.Share, contentDescription = "Share", tint = Color.White)
-                }
-                IconButton(
-                    onClick = {},
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.1f))
-                ) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = Color.White)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    IconButton(
+                        onClick = { onToggleFavorite(image.id) },
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.5f))
+                    ) {
+                        Icon(
+                            imageVector = if (image.id in favoriteIds) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                            contentDescription = stringResource(R.string.cd_favorite),
+                            tint = if (image.id in favoriteIds) Color(0xFFEF4444) else Color.White
+                        )
+                    }
+                    IconButton(
+                        onClick = {},
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.5f))
+                    ) {
+                        Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.cd_share), tint = Color.White)
+                    }
+                    IconButton(
+                        onClick = {},
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.5f))
+                    ) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more), tint = Color.White)
+                    }
                 }
             }
         }
@@ -221,7 +229,7 @@ fun ImageViewer(
                         modifier = Modifier.weight(1f)
                     )
                     Text(
-                        text = "${image.width} × ${image.height}",
+                        text = stringResource(R.string.dimensions, image.width, image.height),
                         color = Color.White.copy(alpha = 0.6f),
                         fontSize = 12.sp
                     )

@@ -166,16 +166,15 @@ class ImageRepository(context: Context) {
     }
 
     private fun android.content.ContentResolver.queryDimensions(uri: Uri): Pair<Int, Int> {
+        // MediaStore WIDTH/HEIGHT columns don't work for SAF document URIs,
+        // so decode the image header instead (fast, reads only the bounds).
         return try {
-            resolver.query(
-                uri,
-                arrayOf(MediaStore.Images.Media.WIDTH, MediaStore.Images.Media.HEIGHT),
-                null, null, null
-            )?.use { c ->
-                if (c.moveToFirst()) {
-                    val w = c.getInt(c.getColumnIndexOrThrow(MediaStore.Images.Media.WIDTH))
-                    val h = c.getInt(c.getColumnIndexOrThrow(MediaStore.Images.Media.HEIGHT))
-                    w to h
+            val opts = android.graphics.BitmapFactory.Options()
+            opts.inJustDecodeBounds = true
+            resolver.openInputStream(uri)?.use { input ->
+                android.graphics.BitmapFactory.decodeStream(input, null, opts)
+                if (opts.outWidth > 0 && opts.outHeight > 0) {
+                    opts.outWidth to opts.outHeight
                 } else 0 to 0
             } ?: (0 to 0)
         } catch (e: Exception) {

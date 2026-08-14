@@ -43,9 +43,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.flowgallery.app.R
 import com.flowgallery.app.data.model.ImageItem
 import com.flowgallery.app.ui.components.WaterfallGrid
 import com.flowgallery.app.ui.theme.Accent
@@ -76,8 +78,9 @@ fun SearchScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         Text(
-            text = "Search",
+            text = stringResource(R.string.search_title),
             style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
         )
 
@@ -87,23 +90,25 @@ fun SearchScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(Surface)
+                .background(MaterialTheme.colorScheme.surface)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Filled.Search, contentDescription = null, tint = Muted, modifier = Modifier.size(20.dp))
+            Icon(Icons.Filled.Search, contentDescription = null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(12.dp))
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = { Text("Search images...", color = Muted) },
+                placeholder = { Text(stringResource(R.string.search_hint), color = MaterialTheme.colorScheme.outline) },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
                     focusedBorderColor = Color.Transparent,
-                    unfocusedBorderColor = Color.Transparent
+                    unfocusedBorderColor = Color.Transparent,
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                 )
             )
         }
@@ -113,13 +118,13 @@ fun SearchScreen(
             when {
                 query.isBlank() -> CenteredHint(
                     icon = Icons.Filled.Search,
-                    title = "Search your gallery",
-                    desc = "Find images by name, folder, date, or tags"
+                    title = stringResource(R.string.search_empty_title),
+                    desc = stringResource(R.string.search_empty_desc)
                 )
                 filtered.isEmpty() -> CenteredHint(
                     icon = Icons.Filled.Search,
-                    title = "No results",
-                    desc = "Try a different keyword"
+                    title = stringResource(R.string.search_no_results),
+                    desc = stringResource(R.string.search_no_results_desc)
                 )
                 else -> WaterfallGrid(
                     images = filtered,
@@ -134,6 +139,7 @@ fun SearchScreen(
 
 @Composable
 private fun CenteredHint(icon: ImageVector, title: String, desc: String) {
+    val scheme = MaterialTheme.colorScheme
     Column(
         modifier = Modifier.fillMaxSize().padding(40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -143,17 +149,17 @@ private fun CenteredHint(icon: ImageVector, title: String, desc: String) {
             modifier = Modifier
                 .size(80.dp)
                 .clip(RoundedCornerShape(24.dp))
-                .background(Surface2),
+                .background(scheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, contentDescription = null, tint = Muted, modifier = Modifier.size(40.dp))
+            Icon(icon, contentDescription = null, tint = scheme.outline, modifier = Modifier.size(40.dp))
         }
         Spacer(Modifier.height(24.dp))
-        Text(title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Text(title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = scheme.onSurface)
         Spacer(Modifier.height(8.dp))
         Text(
             text = desc,
-            color = FgSecondary,
+            color = scheme.onSurfaceVariant,
             fontSize = 14.sp
         )
     }
@@ -169,19 +175,20 @@ fun SettingsScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         Text(
-            text = "Settings",
+            text = stringResource(R.string.settings_title),
             style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
         )
 
-        SettingsSectionTitle("Folders")
+        SettingsSectionTitle(stringResource(R.string.section_folders))
         state.folders.forEach { folder ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Surface)
+                    .background(MaterialTheme.colorScheme.surface)
                     .clickable { viewModel.toggleFolder(folder.id) }
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -190,30 +197,35 @@ fun SettingsScreen(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Surface2),
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         Icons.Filled.FolderOpen,
                         contentDescription = null,
-                        tint = Accent,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)
                     )
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(folder.name, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                     Text(
-                        text = "${folder.imageCount} images",
+                        folder.name,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = stringResource(R.string.image_count, folder.imageCount),
                         fontSize = 12.sp,
-                        color = FgSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Switch(
                     checked = folder.isSelected,
                     onCheckedChange = { viewModel.toggleFolder(folder.id) },
                     colors = SwitchDefaults.colors(
-                        checkedTrackColor = Accent,
+                        checkedTrackColor = MaterialTheme.colorScheme.primary,
                         checkedThumbColor = Color.White
                     )
                 )
@@ -225,7 +237,7 @@ fun SettingsScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 4.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(Surface)
+                .background(MaterialTheme.colorScheme.surface)
                 .clickable(onClick = onAddFolder)
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -234,40 +246,40 @@ fun SettingsScreen(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(Surface2),
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     Icons.Filled.Visibility,
                     contentDescription = null,
-                    tint = Accent,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
             }
             Spacer(Modifier.width(12.dp))
             Text(
-                text = "Add Folder",
+                text = stringResource(R.string.add_folder),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
-                color = Accent
+                color = MaterialTheme.colorScheme.primary
             )
         }
 
-        SettingsSectionTitle("Display")
+        SettingsSectionTitle(stringResource(R.string.section_display))
         SettingsItem(
             icon = Icons.Filled.HighQuality,
-            name = "Image Quality",
-            desc = "HD thumbnails"
+            name = stringResource(R.string.setting_quality),
+            desc = stringResource(R.string.setting_quality_desc)
         )
         SettingsItem(
             icon = Icons.Filled.Storage,
-            name = "Clear Cache",
-            desc = "Release cached thumbnails"
+            name = stringResource(R.string.setting_cache),
+            desc = stringResource(R.string.setting_cache_desc)
         )
         SettingsItem(
             icon = Icons.Filled.Info,
-            name = "FlowGallery",
-            desc = "Version 1.0.0"
+            name = stringResource(R.string.setting_about),
+            desc = stringResource(R.string.setting_version)
         )
     }
 }
@@ -278,7 +290,7 @@ private fun SettingsSectionTitle(title: String) {
         text = title.uppercase(),
         fontSize = 12.sp,
         fontWeight = FontWeight.SemiBold,
-        color = Muted,
+        color = MaterialTheme.colorScheme.outline,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
     )
 }
@@ -290,7 +302,7 @@ private fun SettingsItem(icon: ImageVector, name: String, desc: String) {
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Surface)
+            .background(MaterialTheme.colorScheme.surface)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -298,15 +310,29 @@ private fun SettingsItem(icon: ImageVector, name: String, desc: String) {
             modifier = Modifier
                 .size(40.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(Surface2),
+                .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, contentDescription = null, tint = FgSecondary, modifier = Modifier.size(20.dp))
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
         }
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(name, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-            Text(desc, fontSize = 12.sp, color = FgSecondary)
+            Text(
+                name,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                desc,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

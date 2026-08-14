@@ -39,6 +39,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.res.stringResource
+import com.flowgallery.app.R
 import com.flowgallery.app.data.model.Folder
 import com.flowgallery.app.data.model.GalleryTab
 import com.flowgallery.app.data.model.ImageItem
@@ -75,15 +77,15 @@ fun HomeScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "FlowGallery",
+                text = stringResource(R.string.app_name),
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.weight(1f)
             )
             IconButton(onClick = {}) {
-                Icon(Icons.Filled.Search, contentDescription = "Search", tint = FgSecondary)
+                Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.cd_search), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             IconButton(onClick = {}) {
-                Icon(Icons.Filled.GridView, contentDescription = "Grid toggle", tint = FgSecondary)
+                Icon(Icons.Filled.GridView, contentDescription = stringResource(R.string.cd_grid_toggle), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
@@ -94,7 +96,7 @@ fun HomeScreen(
         ) {
             item {
                 FolderTab(
-                    label = "All",
+                    label = stringResource(R.string.all),
                     count = visible.size,
                     isActive = state.currentFolderId == null,
                     onClick = { viewModel.selectFolder(null) }
@@ -124,7 +126,7 @@ fun HomeScreen(
             if (state.isRefreshing && visible.isEmpty()) {
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.Center),
-                    color = Accent
+                    color = MaterialTheme.colorScheme.primary
                 )
             } else if (visible.isEmpty()) {
                 EmptyState(
@@ -145,30 +147,31 @@ fun HomeScreen(
         // FAB for adding folders
         FloatingActionButton(
             onClick = onOpenFolderModal,
-            containerColor = Accent,
+            containerColor = MaterialTheme.colorScheme.primary,
             contentColor = Color.White,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(20.dp)
         ) {
-            Icon(Icons.Filled.Add, contentDescription = "Add folder")
+            Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.cd_add_folder))
         }
     } // Box
 }
 
 @Composable
 private fun FolderTab(label: String, count: Int, isActive: Boolean, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
-            .background(if (isActive) AccentMuted else Surface)
+            .background(if (isActive) scheme.primaryContainer else scheme.surface)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
-            color = if (isActive) Accent else FgSecondary,
+            color = if (isActive) scheme.primary else scheme.onSurfaceVariant,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium
         )
@@ -176,12 +179,12 @@ private fun FolderTab(label: String, count: Int, isActive: Boolean, onClick: () 
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(10.dp))
-                .background(if (isActive) Accent else Surface2)
+                .background(if (isActive) scheme.primary else scheme.surfaceVariant)
                 .padding(horizontal = 6.dp, vertical = 2.dp)
         ) {
             Text(
                 text = "$count",
-                color = if (isActive) Color.White else Muted,
+                color = if (isActive) Color.White else scheme.outline,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -191,32 +194,34 @@ private fun FolderTab(label: String, count: Int, isActive: Boolean, onClick: () 
 
 @Composable
 private fun StatsBar(imageCount: Int, folderCount: Int, hdCount: Int) {
+    val scheme = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Surface)
+            .background(scheme.surface)
             .padding(12.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        StatItem(Icons.Filled.Image, "$imageCount", "IMAGES")
-        StatItem(Icons.Filled.Folder, "$folderCount", "FOLDERS")
-        StatItem(Icons.Filled.Image, "$hdCount", "HD")
+        StatItem(Icons.Filled.Image, "$imageCount", stringResource(R.string.stat_images))
+        StatItem(Icons.Filled.Folder, "$folderCount", stringResource(R.string.stat_folders))
+        StatItem(Icons.Filled.Image, "$hdCount", stringResource(R.string.stat_hd))
     }
 }
 
 @Composable
 private fun StatItem(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String, label: String) {
+    val scheme = MaterialTheme.colorScheme
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
                 .size(32.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(Surface2),
+                .background(scheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, contentDescription = null, tint = Accent, modifier = Modifier.size(16.dp))
+            Icon(icon, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(16.dp))
         }
         Spacer(Modifier.width(8.dp))
         Column {
@@ -229,7 +234,7 @@ private fun StatItem(icon: androidx.compose.ui.graphics.vector.ImageVector, valu
             Text(
                 text = label,
                 fontSize = 9.sp,
-                color = Muted,
+                color = scheme.outline,
                 fontWeight = FontWeight.Medium
             )
         }
@@ -238,6 +243,7 @@ private fun StatItem(icon: androidx.compose.ui.graphics.vector.ImageVector, valu
 
 @Composable
 private fun EmptyState(onAddFolder: () -> Unit, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
     Column(
         modifier = modifier.padding(40.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -246,32 +252,33 @@ private fun EmptyState(onAddFolder: () -> Unit, modifier: Modifier = Modifier) {
             modifier = Modifier
                 .size(80.dp)
                 .clip(RoundedCornerShape(24.dp))
-                .background(Surface2),
+                .background(scheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 Icons.Filled.Image,
                 contentDescription = null,
-                tint = Muted,
+                tint = scheme.outline,
                 modifier = Modifier.size(40.dp)
             )
         }
         Spacer(Modifier.height(24.dp))
         Text(
-            text = "No images yet",
+            text = stringResource(R.string.empty_title),
             fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
+            color = scheme.onSurface
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Tap the + button to add folders and start browsing your image packs",
-            color = FgSecondary,
+            text = stringResource(R.string.empty_desc),
+            color = scheme.onSurfaceVariant,
             fontSize = 14.sp
         )
         Spacer(Modifier.height(16.dp))
         Text(
-            text = "Add Folder",
-            color = Accent,
+            text = stringResource(R.string.add_folder),
+            color = scheme.primary,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier
                 .clip(RoundedCornerShape(20.dp))

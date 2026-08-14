@@ -1,4 +1,58 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">FlowGallery</string>
+
+    <!-- Navigation -->
+    <string name="tab_home">Home</string>
+    <string name="tab_search">Search</string>
+    <string name="tab_settings">Settings</string>
+
+    <!-- Home -->
+    <string name="all">All</string>
+    <string name="stat_images">IMAGES</string>
+    <string name="stat_folders">FOLDERS</string>
+    <string name="stat_hd">HD</string>
+    <string name="empty_title">No images yet</string>
+    <string name="empty_desc">Tap the + button to add folders and start browsing your image packs</string>
+    <string name="add_folder">Add Folder</string>
+    <string name="cd_search">Search</string>
+    <string name="cd_grid_toggle">Grid toggle</string>
+    <string name="cd_add_folder">Add folder</string>
+    <string name="default_folder_name">Folder</string>
+
+    <!-- Folder modal -->
+    <string name="select_folders">Select Folders</string>
+    <string name="add_new_folder">Add New Folder</string>
+    <string name="image_count">%1$d images</string>
+    <string name="cd_selected">Selected</string>
+    <string name="cd_folder_open">Folder</string>
+
+    <!-- Viewer -->
+    <string name="cd_prev">Previous</string>
+    <string name="cd_next">Next</string>
+    <string name="cd_back">Back</string>
+    <string name="cd_favorite">Favorite</string>
+    <string name="cd_unfavorite">Unfavorite</string>
+    <string name="cd_share">Share</string>
+    <string name="cd_more">More</string>
+    <string name="dimensions">%1$d × %2$d</string>
+
+    <!-- Search -->
+    <string name="search_title">Search</string>
+    <string name="search_hint">Search images...</string>
+    <string name="search_empty_title">Search your gallery</string>
+    <string name="search_empty_desc">Find images by name, folder, date, or tags</string>
+    <string name="search_no_results">No results</string>
+    <string name="search_no_results_desc">Try a different keyword</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="section_folders">Folders</string>
+    <string name="section_display">Display</string>
+    <string name="setting_quality">Image Quality</string>
+    <string name="setting_quality_desc">HD thumbnails</string>
+    <string name="setting_cache">Clear Cache</string>
+    <string name="setting_cache_desc">Release cached thumbnails</string>
+    <string name="setting_about">FlowGallery</string>
+    <string name="setting_version">Version 1.0.0</string>
 </resources>

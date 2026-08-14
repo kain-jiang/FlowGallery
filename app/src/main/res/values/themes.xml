@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.FlowGallery" parent="android:Theme.Material.NoActionBar">
-        <item name="android:statusBarColor">#0a0a0c</item>
-        <item name="android:navigationBarColor">#141418</item>
-        <item name="android:windowBackground">#0a0a0c</item>
+        <item name="android:statusBarColor">#1E1E26</item>
+        <item name="android:navigationBarColor">#1E1E26</item>
+        <item name="android:windowBackground">#0A0A0C</item>
     </style>
 </resources>

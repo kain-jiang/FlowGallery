@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">瀑布画廊</string>
+
+    <!-- Navigation -->
+    <string name="tab_home">首页</string>
+    <string name="tab_search">搜索</string>
+    <string name="tab_settings">设置</string>
+
+    <!-- Home -->
+    <string name="all">全部</string>
+    <string name="stat_images">图片</string>
+    <string name="stat_folders">文件夹</string>
+    <string name="stat_hd">高清</string>
+    <string name="empty_title">还没有图片</string>
+    <string name="empty_desc">点击 + 按钮添加文件夹，开始浏览你的图包</string>
+    <string name="add_folder">添加文件夹</string>
+    <string name="cd_search">搜索</string>
+    <string name="cd_grid_toggle">切换网格视图</string>
+    <string name="cd_add_folder">添加文件夹</string>
+    <string name="default_folder_name">文件夹</string>
+
+    <!-- Folder modal -->
+    <string name="select_folders">选择文件夹</string>
+    <string name="add_new_folder">添加新文件夹</string>
+    <string name="image_count">%1$d 张图片</string>
+    <string name="cd_selected">已选择</string>
+    <string name="cd_folder_open">文件夹</string>
+
+    <!-- Viewer -->
+    <string name="cd_prev">上一张</string>
+    <string name="cd_next">下一张</string>
+    <string name="cd_back">返回</string>
+    <string name="cd_favorite">收藏</string>
+    <string name="cd_unfavorite">取消收藏</string>
+    <string name="cd_share">分享</string>
+    <string name="cd_more">更多</string>
+    <string name="dimensions">%1$d × %2$d</string>
+
+    <!-- Search -->
+    <string name="search_title">搜索</string>
+    <string name="search_hint">搜索图片...</string>
+    <string name="search_empty_title">搜索你的图库</string>
+    <string name="search_empty_desc">按名称、文件夹、日期或标签查找图片</string>
+    <string name="search_no_results">没有结果</string>
+    <string name="search_no_results_desc">换个关键词试试</string>
+
+    <!-- Settings -->
+    <string name="settings_title">设置</string>
+    <string name="section_folders">文件夹</string>
+    <string name="section_display">显示</string>
+    <string name="setting_quality">图片质量</string>
+    <string name="setting_quality_desc">高清缩略图</string>
+    <string name="setting_cache">清除缓存</string>
+    <string name="setting_cache_desc">释放缩略图缓存</string>
+    <string name="setting_about">瀑布画廊</string>
+    <string name="setting_version">版本 1.0.0</string>
+</resources>

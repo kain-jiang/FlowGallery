@@ -3,9 +3,15 @@ package com.flowgallery.app
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.launch
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -27,8 +33,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.flowgallery.app.data.model.GalleryTab
+import com.flowgallery.app.R
 import com.flowgallery.app.ui.components.FolderSelectionModal
 import com.flowgallery.app.ui.components.ImageViewer
 import com.flowgallery.app.ui.screens.HomeScreen
@@ -50,7 +58,7 @@ class MainActivity : ComponentActivity() {
                         android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
                     )
                 }
-                val name = queryDisplayName(uri) ?: "Folder ${uri.lastPathSegment ?: ""}"
+                val name = queryDisplayName(uri) ?: getString(R.string.default_folder_name)
                 val vm = viewModel
                 if (vm != null) {
                     vm.addFolder(uri, name)
@@ -66,6 +74,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Force light status-bar icons so they stay visible on the dark background
+        // regardless of the system's light/dark appearance setting.
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
+        }
         setContent {
             FlowGalleryTheme {
                 val vm: GalleryViewModel = viewModel()
@@ -112,8 +126,8 @@ private fun MainScaffold(
                     NavigationBarItem(
                         selected = state.currentTab == tab,
                         onClick = { viewModel.selectTab(tab) },
-                        icon = { Icon(tabIcon(tab), contentDescription = tab.label) },
-                        label = { Text(tab.label) }
+                        icon = { Icon(tabIcon(tab), contentDescription = tabLabel(tab)) },
+                        label = { Text(tabLabel(tab)) }
                     )
                 }
             }
@@ -148,6 +162,13 @@ private fun MainScaffold(
         }
     }
 
+    // Back handling: viewer → close viewer; folder modal → close modal
+    if (state.viewer.isOpen) {
+        BackHandler { viewModel.closeViewer() }
+    } else if (showFolderModal) {
+        BackHandler { showFolderModal = false }
+    }
+
     // Folder selection modal
     if (showFolderModal) {
         FolderSelectionModal(
@@ -164,6 +185,23 @@ private fun MainScaffold(
     // Full-screen viewer
     if (state.viewer.isOpen && visibleImages.isNotEmpty()) {
         val index = state.viewer.index.coerceIn(0, visibleImages.lastIndex)
+        // Immersive mode: hide status bar + nav bar while viewing
+        val view = LocalView.current
+        DisposableEffect(view) {
+            val window = (view.context as? android.app.Activity)?.window
+            if (window != null) {
+                val controller = WindowCompat.getInsetsController(window, view)
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+                controller.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+            onDispose {
+                if (window != null) {
+                    WindowCompat.getInsetsController(window, view)
+                        .show(WindowInsetsCompat.Type.systemBars())
+                }
+            }
+        }
         ImageViewer(
             images = visibleImages,
             currentIndex = index,
@@ -181,4 +219,11 @@ private fun tabIcon(tab: GalleryTab): ImageVector = when (tab) {
     GalleryTab.Home -> Icons.Filled.Home
     GalleryTab.Search -> Icons.Filled.Search
     GalleryTab.Settings -> Icons.Filled.Settings
+}
+
+@Composable
+private fun tabLabel(tab: GalleryTab): String = when (tab) {
+    GalleryTab.Home -> stringResource(R.string.tab_home)
+    GalleryTab.Search -> stringResource(R.string.tab_search)
+    GalleryTab.Settings -> stringResource(R.string.tab_settings)
 }

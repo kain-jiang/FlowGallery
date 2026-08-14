@@ -28,12 +28,19 @@ private val DarkColors = darkColorScheme(
 private val LightColors = lightColorScheme(
     primary = LightAccent,
     onPrimary = Color.White,
+    primaryContainer = Color(0xFFE9E2FF),
+    onPrimaryContainer = Color(0xFF4A2FB0),
+    secondary = Color(0xFF6C4DF0),
+    onSecondary = Color.White,
     background = LightBg,
     onBackground = Color(0xFF1A1A1F),
     surface = LightSurface,
     onSurface = Color(0xFF1A1A1F),
     surfaceVariant = Color(0xFFF0F0F4),
-    onSurfaceVariant = Color(0xFF55555E)
+    onSurfaceVariant = Color(0xFF55555E),
+    outline = Color(0xFF8A8A94),
+    error = Color(0xFFD32F2F),
+    onError = Color.White
 )
 
 @Composable
