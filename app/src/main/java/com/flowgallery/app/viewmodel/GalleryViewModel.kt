@@ -47,6 +47,8 @@ data class GalleryUiState(
     val sortMode: SortMode = SortMode.DEFAULT,
     /** HD thumbnail toggle (FR-8) */
     val hdThumbnails: Boolean = true,
+    /** Monet (Material You) dynamic color from wallpaper (Android 12+) */
+    val monetColors: Boolean = false,
     /** type filter for search: null = all, else MediaType name */
     val mediaTypeFilter: String? = null
 )
@@ -72,7 +74,8 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                 singleColumn = prefs.getBoolean(KEY_SINGLE_COLUMN, false),
                 favoritesSingleColumn = prefs.getBoolean(KEY_FAVORITES_SINGLE_COLUMN, false),
                 sortMode = savedSort,
-                hdThumbnails = prefs.getBoolean(KEY_HD_THUMBNAILS, true)
+                hdThumbnails = prefs.getBoolean(KEY_HD_THUMBNAILS, true),
+                monetColors = prefs.getBoolean(KEY_MONET_COLORS, false)
             )
         }
         refreshFolders()
@@ -261,6 +264,13 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update { it.copy(hdThumbnails = newVal) }
     }
 
+    /** Toggle Monet (Material You) dynamic colors, persisted. */
+    fun toggleMonetColors() {
+        val newVal = !_uiState.value.monetColors
+        prefs.edit().putBoolean(KEY_MONET_COLORS, newVal).apply()
+        _uiState.update { it.copy(monetColors = newVal) }
+    }
+
     /** Set search media-type filter (null = all). */
     fun setMediaTypeFilter(type: String?) =
         _uiState.update { it.copy(mediaTypeFilter = type) }
@@ -434,5 +444,6 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         const val KEY_FAVORITES_SINGLE_COLUMN = "favorites_single_column"
         const val KEY_SORT_MODE = "sort_mode"
         const val KEY_HD_THUMBNAILS = "hd_thumbnails"
+        const val KEY_MONET_COLORS = "monet_colors"
     }
 }

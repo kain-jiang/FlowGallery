@@ -86,7 +86,9 @@
     <string name="section_folders">Folders</string>
     <string name="section_display">Display</string>
     <string name="setting_quality">Image Quality</string>
-    <string name="setting_quality_desc">HD thumbnails</string>
+    <string name="setting_quality_desc">High-quality thumbnails</string>
+    <string name="setting_monet">Monet Colors</string>
+    <string name="setting_monet_desc">Material You wallpaper colors (Android 12+)</string>
     <string name="setting_cache">Clear Cache</string>
     <string name="setting_cache_desc">Release cached thumbnails</string>
     <string name="setting_about">FlowGallery</string>

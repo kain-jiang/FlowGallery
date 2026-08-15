@@ -50,6 +50,7 @@ private val LightColors = lightColorScheme(
 @Composable
 fun FlowGalleryTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    monet: Boolean = false,
     content: @Composable () -> Unit
 ) {
     // Keep status/navigation bar icons readable in both themes:
@@ -67,8 +68,25 @@ fun FlowGalleryTheme(
         }
     }
 
+    // Monet (Material You): pull the color scheme from the system wallpaper
+    // on Android 12+ when enabled in Settings. Falls back to the custom
+    // accent scheme otherwise.
+    val scheme = if (monet && android.os.Build.VERSION.SDK_INT >= 31) {
+        if (darkTheme) {
+            androidx.compose.material3.dynamicDarkColorScheme(
+                androidx.compose.ui.platform.LocalContext.current
+            )
+        } else {
+            androidx.compose.material3.dynamicLightColorScheme(
+                androidx.compose.ui.platform.LocalContext.current
+            )
+        }
+    } else {
+        if (darkTheme) DarkColors else LightColors
+    }
+
     MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
+        colorScheme = scheme,
         typography = AppTypography,
         content = content
     )
