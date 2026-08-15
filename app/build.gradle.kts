@@ -24,7 +24,19 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            // Sign with the release keystore when RELEASE_KEYSTORE is set
+            // (CI secrets or local env); otherwise fall back to debug
+            // signing so local dev builds keep working out of the box.
+            signingConfig = if (System.getenv("RELEASE_KEYSTORE") != null) {
+                signingConfigs.create("release") {
+                    storeFile = file(System.getenv("RELEASE_KEYSTORE"))
+                    storePassword = System.getenv("RELEASE_STORE_PASSWORD")
+                    keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                    keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+                }
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
