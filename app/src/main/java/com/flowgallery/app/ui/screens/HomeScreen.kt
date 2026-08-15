@@ -44,7 +44,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -81,6 +83,7 @@ import com.flowgallery.app.ui.components.WaterfallGrid
 import com.flowgallery.app.viewmodel.GalleryViewModel
 
 /** Main gallery screen: folder selector as a scrolling header + waterfall grid. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: GalleryViewModel,
@@ -103,6 +106,12 @@ fun HomeScreen(
     var headerScrollTarget by remember { mutableStateOf(0) }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // Pull-to-refresh wraps the whole home content (FR-9)
+        PullToRefreshBox(
+            isRefreshing = state.isRefreshing,
+            onRefresh = viewModel::rescan,
+            modifier = Modifier.fillMaxSize()
+        ) {
         // Waterfall grid or empty state
         // fillMaxWidth: without it the Box collapses to its content
         // width inside the Column, so align(Center) centers within a
@@ -179,6 +188,7 @@ fun HomeScreen(
                 )
             }
         }
+        } // PullToRefreshBox
 
         // Compact floating selector — shown only while the header has fully
         // scrolled away; overlay that clears the punch-hole camera cutout.

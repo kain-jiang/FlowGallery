@@ -42,6 +42,8 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -692,6 +694,8 @@ private fun VideoPlayerView(
     var duration by remember { mutableStateOf(0L) }
     /** non-null while the user is dragging the seek bar (immediate feedback) */
     var dragValue by remember { mutableStateOf<Float?>(null) }
+    /** muted state (tap the volume icon to toggle) */
+    var muted by remember { mutableStateOf(false) }
 
     // Reset playback state whenever the video changes (swipe navigation).
     // Without this, the previous video's isPlaying/duration linger and the
@@ -855,6 +859,31 @@ private fun VideoPlayerView(
                     color = Color.White.copy(alpha = 0.8f),
                     fontSize = 11.sp
                 )
+                // Volume toggle (mute / unmute)
+                IconButton(
+                    onClick = {
+                        muted = !muted
+                        exoPlayer.volume = if (muted) 0f else 1f
+                    },
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = if (muted) Icons.Filled.VolumeOff else Icons.Filled.VolumeUp,
+                        contentDescription = stringResource(
+                            if (muted) R.string.cd_unmute else R.string.cd_mute
+                        ),
+                        tint = if (muted) MaterialTheme.colorScheme.primary else Color.White,
+                        modifier = Modifier
+                            .size(22.dp)
+                            .shadow(
+                                elevation = 9.dp,
+                                shape = CircleShape,
+                                clip = true,
+                                ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                            )
+                    )
+                }
                 // Fullscreen toggle (rotate into landscape pure-play view)
                 IconButton(
                     onClick = onToggleFullscreen,

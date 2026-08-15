@@ -59,6 +59,8 @@
     <string name="cd_play">播放</string>
     <string name="cd_pause">暂停</string>
     <string name="cd_fullscreen">全屏</string>
+    <string name="cd_mute">静音</string>
+    <string name="cd_unmute">取消静音</string>
 
     <!-- Duplicate files -->
     <string name="duplicate_files">该文件有 %1$d 个副本</string>
