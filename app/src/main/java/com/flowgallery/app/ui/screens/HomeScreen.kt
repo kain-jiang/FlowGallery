@@ -190,69 +190,110 @@ fun HomeScreen(
         }
         } // PullToRefreshBox
 
-        // Bottom-right (or bottom-left per Settings) vertical stack: stats
-        // pill on top, tap-to-top pill below it (thumb-friendly).
-        Column(
-            modifier = Modifier
-                .align(if (state.pillAlignmentLeft) Alignment.BottomStart else Alignment.BottomEnd)
-                .padding(16.dp),
-            horizontalAlignment = if (state.pillAlignmentLeft) Alignment.Start else Alignment.End
+        // Floating folder pill — top-center, shown only while the header has
+        // fully scrolled away (shows the current path). Fades in/out.
+        androidx.compose.animation.AnimatedVisibility(
+            visible = headerHidden,
+            enter = androidx.compose.animation.fadeIn() +
+                androidx.compose.animation.slideInVertically { -it },
+            exit = androidx.compose.animation.fadeOut() +
+                androidx.compose.animation.slideOutVertically { -it },
+            modifier = Modifier.align(Alignment.TopCenter)
         ) {
-            // Floating stats bar — replaces the FAB.
-            FloatingStats(
-                imageCount = visible.size,
-                folderCount = selectedFolders.size,
-                hdCount = visible.count { it.isHd },
-                folders = selectedFolders,
-                currentFilter = state.currentFilter,
-                currentSubFolderId = state.currentSubFolderId,
-                onSelectFolder = viewModel::selectFilter,
-                onSelectSubFolder = viewModel::selectSubFolder
-            )
-
-            // Compact floating selector — shown only while the header has fully
-            // scrolled away; stacked below the stats pill.
-            if (headerHidden) {
-                Spacer(Modifier.height(8.dp))
-                Box(
-                    modifier = Modifier
-                        .widthIn(max = 220.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
-                        .clickable { headerScrollTarget = headerScrollTarget + 1 }
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Filled.FolderOpen,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = currentFolderLabel(state, selectedFolders),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        // Tap-to-top affordance icon (clicking the pill scrolls
-                        // back to the top, so show a "go to top" icon instead
-                        // of a dropdown chevron).
-                        Icon(
-                            Icons.Filled.KeyboardArrowUp,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+            Box(
+                modifier = Modifier
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(top = 12.dp)
+                    .widthIn(max = 260.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+                    .clickable { headerScrollTarget = headerScrollTarget + 1 }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Filled.FolderOpen,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = currentFolderLabel(state, selectedFolders),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
                 }
             }
         }
+
+        // Bottom row (left or right per Settings): stats pill + tap-to-top
+        // button. The tap-to-top button always sits OUTERMOST (against the
+        // screen edge), the stats pill inside it. Smooth motion when the
+        // bottom nav bar hides/shows comes from MainActivity animating the
+        // content's bottom padding (no manual offset here — it would push
+        // the row off-screen once the bar is gone).
+        Row(
+            modifier = Modifier
+                .align(if (state.pillAlignmentLeft) Alignment.BottomStart else Alignment.BottomEnd)
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (state.pillAlignmentLeft) {
+                // Left-aligned: [ ↑ ][ stats ]
+                TapToTopButton { headerScrollTarget = headerScrollTarget + 1 }
+                FloatingStats(
+                    imageCount = visible.size,
+                    folderCount = selectedFolders.size,
+                    hdCount = visible.count { it.isHd },
+                    folders = selectedFolders,
+                    currentFilter = state.currentFilter,
+                    currentSubFolderId = state.currentSubFolderId,
+                    onSelectFolder = viewModel::selectFilter,
+                    onSelectSubFolder = viewModel::selectSubFolder
+                )
+            } else {
+                // Right-aligned: [ stats ][ ↑ ]
+                FloatingStats(
+                    imageCount = visible.size,
+                    folderCount = selectedFolders.size,
+                    hdCount = visible.count { it.isHd },
+                    folders = selectedFolders,
+                    currentFilter = state.currentFilter,
+                    currentSubFolderId = state.currentSubFolderId,
+                    onSelectFolder = viewModel::selectFilter,
+                    onSelectSubFolder = viewModel::selectSubFolder
+                )
+                TapToTopButton { headerScrollTarget = headerScrollTarget + 1 }
+            }
+        }
     } // Box
+}
+
+/** Circular tap-to-top button (scrolls the waterfall back to the top). */
+@Composable
+private fun TapToTopButton(
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            Icons.Filled.KeyboardArrowUp,
+            contentDescription = stringResource(R.string.cd_back_to_top),
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(22.dp)
+        )
+    }
 }
 
 /** Title row + folder selector — shared by the waterfall header and the
