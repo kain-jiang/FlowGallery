@@ -248,13 +248,29 @@ fun SettingsScreen(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        // Tap the leading icon to change the folder type
+                        .clickable { onEditType(folder) },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        Icons.Filled.FolderOpen,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        if (folder.type == com.flowgallery.app.data.model.FolderType.PACK) {
+                            Icons.Filled.Collections
+                        } else {
+                            Icons.Filled.FolderOpen
+                        },
+                        contentDescription = stringResource(
+                            if (folder.type == com.flowgallery.app.data.model.FolderType.PACK) {
+                                R.string.folder_type_pack
+                            } else {
+                                R.string.folder_type_normal
+                            }
+                        ),
+                        tint = if (folder.type == com.flowgallery.app.data.model.FolderType.PACK) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -268,34 +284,6 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.weight(1f, fill = false)
                         )
-                        Spacer(Modifier.width(8.dp))
-                        // Folder type icon: Folder = normal, Collections = pack.
-                        // Tap the icon to toggle the type.
-                        IconButton(
-                            onClick = { onEditType(folder) },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                if (folder.type == com.flowgallery.app.data.model.FolderType.PACK) {
-                                    Icons.Filled.Collections
-                                } else {
-                                    Icons.Filled.Folder
-                                },
-                                contentDescription = stringResource(
-                                    if (folder.type == com.flowgallery.app.data.model.FolderType.PACK) {
-                                        R.string.folder_type_pack
-                                    } else {
-                                        R.string.folder_type_normal
-                                    }
-                                ),
-                                tint = if (folder.type == com.flowgallery.app.data.model.FolderType.PACK) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
                     }
                     Text(
                         text = stringResource(R.string.image_count, folder.imageCount),
