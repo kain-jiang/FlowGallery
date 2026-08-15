@@ -37,10 +37,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.flowgallery.app.data.model.GalleryTab
 import com.flowgallery.app.data.model.Folder
+import com.flowgallery.app.data.model.FolderType
+import com.flowgallery.app.data.model.GalleryTab
 import com.flowgallery.app.R
 import com.flowgallery.app.ui.components.FolderSelectionModal
+import com.flowgallery.app.ui.components.FolderTypeDialog
 import com.flowgallery.app.ui.components.ImageViewer
 import com.flowgallery.app.ui.screens.HomeScreen
 import com.flowgallery.app.ui.screens.SearchScreen
@@ -49,6 +51,11 @@ import com.flowgallery.app.ui.theme.FlowGalleryTheme
 import com.flowgallery.app.viewmodel.GalleryViewModel
 
 class MainActivity : ComponentActivity() {
+
+    /** Pending SAF selection awaiting folder-type choice in the UI. */
+    private class PendingFolder(val uri: Uri, val name: String)
+
+    private var pendingFolder: PendingFolder? = null
 
     // SAF picker: let the user choose image folders ("图包" directories)
     private val folderPicker =
@@ -62,16 +69,13 @@ class MainActivity : ComponentActivity() {
                     )
                 }
                 val name = queryDisplayName(uri) ?: getString(R.string.default_folder_name)
-                val vm = viewModel
-                if (vm != null) {
-                    vm.addFolder(uri, name)
-                } else {
-                    // viewModel not composed yet — persist now, it will load on init
-                    val repo = com.flowgallery.app.data.repository.ImageRepository(applicationContext)
-                    repo.addFolder(uri, name)
-                }
+                pendingFolder = PendingFolder(uri, name)
+                pendingFolderTrigger.value = pendingFolderTrigger.value + 1
             }
         }
+
+    /** Observable bump so Compose knows a folder is awaiting type selection. */
+    private val pendingFolderTrigger = androidx.compose.runtime.mutableIntStateOf(0)
 
     private var viewModel: GalleryViewModel? = null
 
@@ -81,7 +85,14 @@ class MainActivity : ComponentActivity() {
             FlowGalleryTheme {
                 val vm: GalleryViewModel = viewModel()
                 viewModel = vm
-                MainScaffold(vm, onPickFolder = { folderPicker.launch(null) })
+                MainScaffold(
+                    vm,
+                    onPickFolder = { folderPicker.launch(null) },
+                    pendingFolderUri = pendingFolder?.uri,
+                    pendingFolderName = pendingFolder?.name,
+                    pendingTrigger = pendingFolderTrigger.value,
+                    onPendingConsumed = { pendingFolder = null }
+                )
             }
         }
     }
@@ -106,7 +117,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun MainScaffold(
     viewModel: GalleryViewModel,
-    onPickFolder: () -> Unit
+    onPickFolder: () -> Unit,
+    pendingFolderUri: Uri?,
+    pendingFolderName: String?,
+    pendingTrigger: Int,
+    onPendingConsumed: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
     val favorites by viewModel.favorites.collectAsState()
@@ -248,6 +263,26 @@ private fun MainScaffold(
                     Text(stringResource(R.string.remove_folder_cancel))
                 }
             }
+        )
+    }
+
+    // Folder-type selection after SAF pick (recommended type pre-selected)
+    if (pendingFolderUri != null && pendingFolderName != null && pendingTrigger > 0) {
+        // Compute recommendation off the main thread context-free: quick check.
+        val repo = com.flowgallery.app.data.repository.ImageRepository(
+            androidx.compose.ui.platform.LocalContext.current
+        )
+        val recommended = remember(pendingTrigger) {
+            if (repo.hasSubDirectories(pendingFolderUri)) FolderType.PACK else FolderType.NORMAL
+        }
+        FolderTypeDialog(
+            folderName = pendingFolderName,
+            recommended = recommended,
+            onConfirm = { type ->
+                viewModel.addFolder(pendingFolderUri, pendingFolderName, type)
+                onPendingConsumed()
+            },
+            onDismiss = { onPendingConsumed() }
         )
     }
 }

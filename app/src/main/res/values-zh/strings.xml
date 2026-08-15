@@ -22,6 +22,17 @@
     <string name="cd_sort">排序</string>
     <string name="default_folder_name">文件夹</string>
 
+    <!-- Folder type -->
+    <string name="folder_type_title">文件夹类型</string>
+    <string name="folder_type_normal">普通文件夹</string>
+    <string name="folder_type_normal_desc">直接展示内容，子文件夹不单独索引</string>
+    <string name="folder_type_pack">图包目录</string>
+    <string name="folder_type_pack_desc">子文件夹单独索引为可浏览条目</string>
+    <string name="folder_type_recommended">推荐</string>
+    <string name="folder_type_confirm">添加文件夹</string>
+    <string name="folder_type_normal_short">普通</string>
+    <string name="folder_type_pack_short">图包</string>
+
     <!-- Folder modal -->
     <string name="select_folders">选择文件夹</string>
     <string name="add_new_folder">添加新文件夹</string>

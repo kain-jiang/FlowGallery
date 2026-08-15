@@ -1,5 +1,13 @@
 package com.flowgallery.app.data.model
 
+/** Library entry kind — chosen manually when adding a folder. */
+enum class FolderType {
+    /** Plain folder: media shown directly, subfolders NOT indexed separately */
+    NORMAL,
+    /** Image pack: subfolders are indexed as browsable sub-entries */
+    PACK
+}
+
 /**
  * A browsable image folder selected by the user via Storage Access Framework.
  */
@@ -7,6 +15,7 @@ data class Folder(
     val id: Long,
     val name: String,
     val uriString: String,
+    val type: FolderType = FolderType.PACK,
     val imageCount: Int = 0,
     val isSelected: Boolean = true,
     val subFolders: List<SubFolder> = emptyList()

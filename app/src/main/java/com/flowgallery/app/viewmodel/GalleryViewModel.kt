@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.flowgallery.app.data.model.Folder
+import com.flowgallery.app.data.model.FolderType
 import com.flowgallery.app.data.model.GalleryTab
 import com.flowgallery.app.data.model.HomeFilter
 import com.flowgallery.app.data.model.ImageItem
@@ -77,9 +78,9 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Add a folder from SAF picker result, persist permission + scan it. */
-    fun addFolder(uri: Uri, displayName: String) {
+    fun addFolder(uri: Uri, displayName: String, type: FolderType = FolderType.PACK) {
         viewModelScope.launch {
-            val added = repository.addFolder(uri, displayName)
+            val added = repository.addFolder(uri, displayName, type)
             if (added) refreshFolders()
         }
     }

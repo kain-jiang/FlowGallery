@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
 import com.flowgallery.app.data.model.Folder
+import com.flowgallery.app.data.model.FolderType
 import com.flowgallery.app.data.model.ImageItem
 import com.flowgallery.app.data.model.MediaType
 import com.flowgallery.app.data.model.SubFolder
@@ -47,6 +48,9 @@ class ImageRepository(private val context: Context) {
                     id = o.getLong("id"),
                     name = o.getString("name"),
                     uriString = o.getString("uri"),
+                    type = runCatching {
+                        FolderType.valueOf(o.optString("type", "PACK"))
+                    }.getOrDefault(FolderType.PACK),
                     imageCount = o.optInt("count", 0),
                     isSelected = o.optBoolean("selected", true),
                     subFolders = subList
@@ -106,6 +110,7 @@ class ImageRepository(private val context: Context) {
                     .put("id", f.id)
                     .put("name", f.name)
                     .put("uri", f.uriString)
+                    .put("type", f.type.name)
                     .put("count", f.imageCount)
                     .put("selected", f.isSelected)
                     .put("subs", subs)
@@ -114,8 +119,8 @@ class ImageRepository(private val context: Context) {
         prefs.edit().putString(KEY_FOLDERS, arr.toString()).apply()
     }
 
-    /** Add a folder, dedup by URI. Returns true if it was actually added. */
-    fun addFolder(uri: Uri, displayName: String): Boolean {
+    /** Add a folder with an explicit type, dedup by URI. */
+    fun addFolder(uri: Uri, displayName: String, type: FolderType = FolderType.PACK): Boolean {
         val folders = loadFolders().toMutableList()
         if (folders.any { it.uriString == uri.toString() }) return false
 
@@ -135,7 +140,7 @@ class ImageRepository(private val context: Context) {
         }
 
         val nextId = (folders.maxOfOrNull { it.id } ?: 0L) + 1
-        folders.add(Folder(id = nextId, name = displayName, uriString = uri.toString()))
+        folders.add(Folder(id = nextId, name = displayName, uriString = uri.toString(), type = type))
         saveFolders(folders)
         return true
     }
@@ -146,6 +151,22 @@ class ImageRepository(private val context: Context) {
             android.provider.DocumentsContract.getTreeDocumentId(uri)
         } catch (e: Exception) {
             null
+        }
+    }
+
+    /**
+     * Lightweight check used to RECOMMEND a folder type: returns true when the
+     * folder tree contains at least one subdirectory (→ suggest PACK).
+     */
+    fun hasSubDirectories(uri: Uri): Boolean {
+        return try {
+            val children = resolver.getChildDocuments(uri) ?: return false
+            children.any { q ->
+                !isImageName(q.name) && !isVideoName(q.name) &&
+                    q.mime.startsWith("vnd.android.document/directory")
+            }
+        } catch (e: Exception) {
+            false
         }
     }
 
@@ -236,6 +257,10 @@ class ImageRepository(private val context: Context) {
         }
 
         // Root pass: direct files + first-level subfolders
+        // NORMAL folders: subfolders are collected recursively but NOT
+        // indexed as separate sub-entries. PACK folders: each first-level
+        // subfolder becomes a browsable sub-entry.
+        val isPack = folder.type == FolderType.PACK
         val rootChildren = resolver.getChildDocuments(rootUri) ?: emptyList()
         val subGroups = LinkedHashMap<String, Pair<SubFolder, List<ImageItem>>>()
         for ((childUri, childName, mime, size, modified) in rootChildren) {
@@ -254,8 +279,8 @@ class ImageRepository(private val context: Context) {
                         modifiedTime = modified
                     )
                 )
-            } else {
-                // first-level subfolder: recursive collect with tag.
+            } else if (isPack) {
+                // first-level subfolder of a PACK: recursive collect with tag.
                 // Stable id derived from the document URI (not a scan
                 // counter) so the persisted selection never drifts when
                 // folder contents change between scans.
@@ -269,6 +294,9 @@ class ImageRepository(private val context: Context) {
                         SubFolder(id = subId, name = subName, uriString = subUriStr, imageCount = subItems.size) to subItems
                     allItems.addAll(subItems)
                 }
+            } else {
+                // NORMAL folder: recurse into subfolders without tagging them.
+                collectRecursive(childUri, null, null, childName, allItems)
             }
         }
 

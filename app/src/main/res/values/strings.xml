@@ -22,6 +22,17 @@
     <string name="cd_sort">Sort</string>
     <string name="default_folder_name">Folder</string>
 
+    <!-- Folder type -->
+    <string name="folder_type_title">Folder Type</string>
+    <string name="folder_type_normal">Normal Folder</string>
+    <string name="folder_type_normal_desc">Show media directly, subfolders not indexed</string>
+    <string name="folder_type_pack">Image Pack</string>
+    <string name="folder_type_pack_desc">Subfolders indexed as separate entries</string>
+    <string name="folder_type_recommended">Recommended</string>
+    <string name="folder_type_confirm">Add Folder</string>
+    <string name="folder_type_normal_short">Normal</string>
+    <string name="folder_type_pack_short">Pack</string>
+
     <!-- Folder modal -->
     <string name="select_folders">Select Folders</string>
     <string name="add_new_folder">Add New Folder</string>
