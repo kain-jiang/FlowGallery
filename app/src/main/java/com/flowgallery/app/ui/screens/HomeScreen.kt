@@ -289,8 +289,7 @@ private fun FloatingStats(
         verticalAlignment = Alignment.CenterVertically
     ) {
         FloatingStatItem(
-            Icons.Filled.Image, "$imageCount",
-            stringResource(R.string.stat_images)
+            Icons.Filled.Image, "$imageCount"
         )
         // Folder item — only for a PACK folder being browsed: shows its
         // sub-folder count; tap lists the sub-folders to enter.
@@ -298,7 +297,6 @@ private fun FloatingStats(
             Box {
                 FloatingStatItem(
                     Icons.Filled.Folder, "$subFolderCount",
-                    stringResource(R.string.stat_folders),
                     clickable = subFolderCount > 1,
                     onClick = { folderMenuExpanded = true }
                 )
@@ -347,8 +345,7 @@ private fun FloatingStats(
             }
         }
         FloatingStatItem(
-            Icons.Filled.HighQuality, "$hdCount",
-            stringResource(R.string.stat_hd)
+            Icons.Filled.HighQuality, "$hdCount"
         )
     }
 }
@@ -357,7 +354,6 @@ private fun FloatingStats(
 private fun FloatingStatItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     value: String,
-    label: String,
     clickable: Boolean = false,
     onClick: () -> Unit = {}
 ) {
@@ -374,21 +370,13 @@ private fun FloatingStatItem(
         }
     ) {
         Icon(icon, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(6.dp))
-        Column {
-            Text(
-                text = value,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = scheme.onSurface
-            )
-            Text(
-                text = label,
-                fontSize = 9.sp,
-                color = scheme.onSurfaceVariant,
-                fontWeight = FontWeight.Medium
-            )
-        }
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text = value,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = scheme.onSurface
+        )
     }
 }
 
