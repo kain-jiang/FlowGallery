@@ -7,15 +7,21 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -29,6 +35,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sort
@@ -51,15 +58,19 @@ import kotlin.math.roundToInt
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.flowgallery.app.R
 import com.flowgallery.app.data.model.Folder
+import com.flowgallery.app.data.model.FolderType
 import com.flowgallery.app.data.model.GalleryTab
 import com.flowgallery.app.data.model.HomeFilter
 import com.flowgallery.app.data.model.ImageItem
@@ -68,7 +79,7 @@ import com.flowgallery.app.data.model.SortMode
 import com.flowgallery.app.ui.components.WaterfallGrid
 import com.flowgallery.app.viewmodel.GalleryViewModel
 
-/** Main gallery screen: dropdown selector + stats bar + waterfall grid + FAB. */
+/** Main gallery screen: folder selector as a scrolling header + waterfall grid. */
 @Composable
 fun HomeScreen(
     viewModel: GalleryViewModel,
@@ -84,162 +95,287 @@ fun HomeScreen(
     val visible = viewModel.visibleImages(state)
     val selectedFolders = state.folders.filter { it.isSelected }
 
-    // Auto-hide the top chrome tied to the scroll: it slides up gradually as
-    // the grid scrolls down (like being pushed by the content), instead of a
-    // hard animated toggle.
-    var viewportOffsetPx by remember { mutableFloatStateOf(0f) }
-    val chromeHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { 160.dp.toPx() }
-    val hideFraction = (viewportOffsetPx / chromeHeightPx).coerceIn(0f, 1f)
-    val chromeHidden = hideFraction >= 1f
-    val chromeOffset = -viewportOffsetPx.coerceAtMost(chromeHeightPx)
+    // Title + folder selector are a full-width HEADER ITEM of the waterfall:
+    // they only appear at the top of the content and scroll away together
+    // with the grid (identical speed, no separate animation).
+    var headerHidden by remember { mutableStateOf(false) }
+    var headerScrollTarget by remember { mutableStateOf(0) }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // Header — slides up gradually with the scroll (pushed by content)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .offset { androidx.compose.ui.unit.IntOffset(0, chromeOffset.roundToInt()) }
-            ) {
-                Column {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = stringResource(R.string.app_name),
-                            style = MaterialTheme.typography.titleLarge,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(onClick = onOpenSearch) {
-                            Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.cd_search), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        // Sort menu (deep-style dropdown matching the app language)
-                        SortMenuButton(
-                            current = state.sortMode,
-                            onSelect = viewModel::setSortMode
-                        )
-                        // Grid density toggle 2<->3 columns (FR-1 decision #3)
-                        IconButton(onClick = viewModel::toggleColumns) {
-                            Icon(
-                                Icons.Filled.GridView,
-                                contentDescription = stringResource(R.string.cd_grid_toggle),
-                                tint = if (state.threeColumns) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    // Folder selector: dropdown (All / folders / subfolders)
-                    FolderDropdown(
-                        folders = selectedFolders,
-                        currentFilter = state.currentFilter,
-                        currentSubFolderId = state.currentSubFolderId,
-                        totalCount = state.dedupedIds.size,
-                        onSelectFolder = viewModel::selectFilter,
-                        onSelectSubFolder = viewModel::selectSubFolder
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-
-                    // Stats bar
-                    StatsBar(
-                        imageCount = visible.size,
-                        folderCount = selectedFolders.size,
-                        hdCount = visible.count { it.isHd }
-                    )
-                }
-            }
-
-            // Compact floating selector shown once the chrome has fully slid
-            // away — a small pill with the current path; tap restores.
-            if (chromeHidden) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
-                        .clickable { viewportOffsetPx = 0f }
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Filled.FolderOpen,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = currentFolderLabel(state, selectedFolders),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Icon(
-                            Icons.Filled.ArrowDropDown,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-
-            // Waterfall grid or empty state
-            // fillMaxWidth: without it the Box collapses to its content
-            // width inside the Column, so align(Center) centers within a
-            // narrow box and the spinner / empty state appear off-center.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-            ) {
-                if (state.isRefreshing && visible.isEmpty()) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                } else if (visible.isEmpty()) {
-                    EmptyState(
-                        onAddFolder = onOpenFolderModal,
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                } else {
-                    WaterfallGrid(
-                        images = visible,
-                        favoriteIds = favorites,
-                        onImageClick = onImageClick,
-                        onToggleFavorite = viewModel::toggleFavorite,
-                        columnCount = adaptiveColumnCount(state.threeColumns),
-                        sortMode = state.sortMode,
-                        onViewportOffset = { px ->
-                            viewportOffsetPx = px
-                            // Bottom nav hides together with the top chrome
-                            onChromeVisibleChange(px < chromeHeightPx)
-                        }
-                    )
-                }
-            }
-        } // Column
-
-        // FAB for adding folders
-        FloatingActionButton(
-            onClick = onOpenFolderModal,
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = Color.White,
+        // Waterfall grid or empty state
+        // fillMaxWidth: without it the Box collapses to its content
+        // width inside the Column, so align(Center) centers within a
+        // narrow box and the spinner / empty state appear off-center.
+        Box(
             modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(20.dp)
+                .fillMaxWidth()
         ) {
-            Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.cd_add_folder))
+            if (state.isRefreshing && visible.isEmpty()) {
+                CircularProgressIndicator(
+                    modifier = Modifier.align(Alignment.Center),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            } else if (visible.isEmpty()) {
+                EmptyState(
+                    onAddFolder = onOpenFolderModal,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            } else {
+                WaterfallGrid(
+                    images = visible,
+                    favoriteIds = favorites,
+                    onImageClick = onImageClick,
+                    onToggleFavorite = viewModel::toggleFavorite,
+                    columnCount = adaptiveColumnCount(state.threeColumns),
+                    sortMode = state.sortMode,
+                    header = {
+                        Column {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.app_name),
+                                    style = MaterialTheme.typography.titleLarge,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(onClick = onOpenSearch) {
+                                    Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.cd_search), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                // Add-folder button (moved from the removed FAB)
+                                IconButton(onClick = onOpenFolderModal) {
+                                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.cd_add_folder), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                // Sort menu (deep-style dropdown matching the app language)
+                                SortMenuButton(
+                                    current = state.sortMode,
+                                    onSelect = viewModel::setSortMode
+                                )
+                                // Grid density toggle 2<->3 columns (FR-1 decision #3)
+                                IconButton(onClick = viewModel::toggleColumns) {
+                                    Icon(
+                                        Icons.Filled.GridView,
+                                        contentDescription = stringResource(R.string.cd_grid_toggle),
+                                        tint = if (state.threeColumns) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            // Folder selector: dropdown (All / folders / subfolders)
+                            FolderDropdown(
+                                folders = selectedFolders,
+                                currentFilter = state.currentFilter,
+                                currentSubFolderId = state.currentSubFolderId,
+                                totalCount = state.dedupedIds.size,
+                                onSelectFolder = viewModel::selectFilter,
+                                onSelectSubFolder = viewModel::selectSubFolder
+                            )
+
+                            Spacer(Modifier.height(4.dp))
+                        }
+                    },
+                    onHeaderHidden = { hidden ->
+                        if (headerHidden != hidden) {
+                            headerHidden = hidden
+                            onChromeVisibleChange(!hidden)
+                        }
+                    },
+                    scrollToTopTrigger = headerScrollTarget
+                )
+            }
         }
+
+        // Compact floating selector — shown only while the header has fully
+        // scrolled away; overlay that clears the punch-hole camera cutout.
+        if (headerHidden) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(top = 12.dp)
+                    .widthIn(max = 260.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+                    .clickable { headerScrollTarget = headerScrollTarget + 1 }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Filled.FolderOpen,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = currentFolderLabel(state, selectedFolders),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    // Tap-to-top affordance icon (clicking the pill scrolls back
+                    // to the top, so show a "go to top" icon instead of a
+                    // dropdown chevron).
+                    Icon(
+                        Icons.Filled.KeyboardArrowUp,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+
+        // Floating stats bar — replaces the FAB, sits at bottom-right.
+        FloatingStats(
+            imageCount = visible.size,
+            folderCount = selectedFolders.size,
+            hdCount = visible.count { it.isHd },
+            folders = selectedFolders,
+            currentFilter = state.currentFilter,
+            onSelectFolder = viewModel::selectFilter,
+            onSelectSubFolder = viewModel::selectSubFolder,
+            modifier = Modifier.align(Alignment.BottomEnd)
+        )
     } // Box
+}
+
+/** Compact floating stats pill at bottom-right (replaces the add FAB). */
+@Composable
+private fun FloatingStats(
+    imageCount: Int,
+    folderCount: Int,
+    hdCount: Int,
+    folders: List<Folder>,
+    currentFilter: Long?,
+    onSelectFolder: (Long?) -> Unit,
+    onSelectSubFolder: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val scheme = MaterialTheme.colorScheme
+    var folderMenuExpanded by remember { mutableStateOf(false) }
+
+    // Folder stat reflects the CURRENTLY BROWSED folder:
+    // - PACK (图包) folder → show its sub-folder count, tap to pick a
+    //   sub-folder to enter.
+    // - NORMAL folder / All view → no folder item at all.
+    val currentFolder = folders.find { it.id == currentFilter }
+    val showFolderItem = currentFolder != null &&
+        currentFolder.type == FolderType.PACK &&
+        currentFolder.subFolders.isNotEmpty()
+    val subFolderCount = currentFolder?.subFolders?.size ?: 0
+
+    Row(
+        modifier = modifier
+            .padding(16.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(scheme.surface) // opaque — readable on any content
+            // Consume taps anywhere on the pill so they never fall through
+            // to the waterfall below (opening a viewer by accident).
+            .clickable(
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                indication = null,
+                onClick = {}
+            )
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(18.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        FloatingStatItem(
+            Icons.Filled.Image, "$imageCount",
+            stringResource(R.string.stat_images)
+        )
+        // Folder item — only for a PACK folder being browsed: shows its
+        // sub-folder count; tap lists the sub-folders to enter.
+        if (showFolderItem) {
+            Box {
+                FloatingStatItem(
+                    Icons.Filled.Folder, "$subFolderCount",
+                    stringResource(R.string.stat_folders),
+                    clickable = subFolderCount > 1,
+                    onClick = { folderMenuExpanded = true }
+                )
+                DropdownMenu(
+                    expanded = folderMenuExpanded,
+                    onDismissRequest = { folderMenuExpanded = false },
+                    modifier = Modifier.clip(RoundedCornerShape(16.dp)),
+                    containerColor = scheme.surface,
+                    shape = RoundedCornerShape(16.dp),
+                    tonalElevation = 0.dp,
+                    shadowElevation = 0.dp
+                ) {
+                    // Only the sub-folders represented by this count.
+                    currentFolder!!.subFolders.forEach { sub ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    sub.name,
+                                    color = scheme.onSurface,
+                                    fontSize = 15.sp,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            },
+                            leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null, tint = scheme.primary) },
+                            onClick = {
+                                folderMenuExpanded = false
+                                onSelectSubFolder(sub.id)
+                            },
+                            colors = menuItemColors(scheme)
+                        )
+                    }
+                }
+            }
+        }
+        FloatingStatItem(
+            Icons.Filled.HighQuality, "$hdCount",
+            stringResource(R.string.stat_hd)
+        )
+    }
+}
+
+@Composable
+private fun FloatingStatItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    value: String,
+    label: String,
+    clickable: Boolean = false,
+    onClick: () -> Unit = {}
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = if (clickable) {
+            Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClick = onClick)
+                .padding(4.dp)
+        } else {
+            Modifier
+        }
+    ) {
+        Icon(icon, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Column {
+            Text(
+                text = value,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = scheme.onSurface
+            )
+            Text(
+                text = label,
+                fontSize = 9.sp,
+                color = scheme.onSurfaceVariant,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
 }
 
 /** Dropdown folder selector — All / root folders / subfolders. */
@@ -472,55 +608,6 @@ private fun SortMenuButton(
                     colors = menuItemColors(scheme)
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun StatsBar(imageCount: Int, folderCount: Int, hdCount: Int) {
-    val scheme = MaterialTheme.colorScheme
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(scheme.surface)
-            .padding(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        StatItem(Icons.Filled.Image, "$imageCount", stringResource(R.string.stat_images))
-        StatItem(Icons.Filled.Folder, "$folderCount", stringResource(R.string.stat_folders))
-        StatItem(Icons.Filled.HighQuality, "$hdCount", stringResource(R.string.stat_hd))
-    }
-}
-
-@Composable
-private fun StatItem(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String, label: String) {
-    val scheme = MaterialTheme.colorScheme
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(scheme.surfaceVariant),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(icon, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(16.dp))
-        }
-        Spacer(Modifier.width(8.dp))
-        Column {
-            Text(
-                text = value,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = label,
-                fontSize = 9.sp,
-                color = scheme.outline,
-                fontWeight = FontWeight.Medium
-            )
         }
     }
 }

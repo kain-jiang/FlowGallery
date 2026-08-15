@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -64,19 +65,29 @@ fun WaterfallGrid(
     columnCount: Int = 2,
     sortMode: SortMode = SortMode.DEFAULT,
     contentPadding: PaddingValues = PaddingValues(12.dp),
-    /** Reports the viewport scroll offset in px (monotonic — used to slide
-     *  the chrome away gradually, tied to the grid). */
-    onViewportOffset: ((Float) -> Unit)? = null
+    /** Full-width header rendered as the first grid item — scrolls with the
+     *  content (title + folder selector). */
+    header: (@Composable () -> Unit)? = null,
+    /** Called with true when the header has fully scrolled out of view. */
+    onHeaderHidden: ((Boolean) -> Unit)? = null,
+    /** Increment to scroll back to the top (e.g. tapping the floating pill). */
+    scrollToTopTrigger: Int = 0
 ) {
     val gridState = androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState()
 
-    // viewportStartOffset is the total content scroll in px and is monotonic
-    // (unlike per-item offsets, which jump when crossing items).
+    // Detect whether the header is still visible: hidden once we've scrolled
+    // past the first full-line item (index > 0).
     androidx.compose.runtime.LaunchedEffect(gridState) {
-        androidx.compose.runtime.snapshotFlow {
-            gridState.layoutInfo.viewportStartOffset
-        }.collect { px ->
-            onViewportOffset?.invoke(px.toFloat())
+        androidx.compose.runtime.snapshotFlow { gridState.firstVisibleItemIndex }
+            .collect { index ->
+                onHeaderHidden?.invoke(index > 0)
+            }
+    }
+
+    // Scroll back to top when the trigger changes (floating pill tap).
+    androidx.compose.runtime.LaunchedEffect(scrollToTopTrigger) {
+        if (scrollToTopTrigger > 0) {
+            gridState.animateScrollToItem(0)
         }
     }
 
@@ -88,6 +99,14 @@ fun WaterfallGrid(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = contentPadding
     ) {
+        if (header != null) {
+            item(
+                span = StaggeredGridItemSpan.FullLine,
+                contentType = "header"
+            ) {
+                header()
+            }
+        }
         items(
             count = images.size,
             key = { images[it].id }

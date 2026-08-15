@@ -150,8 +150,26 @@ private fun MainScaffold(
     var folderToRemove by remember { mutableStateOf<Folder?>(null) }
     var folderToEditType by remember { mutableStateOf<Folder?>(null) }
     var showSearch by remember { mutableStateOf(false) }
-    // Bottom nav auto-hide while browsing down (Home only)
+    // Bottom nav + system bars auto-hide while browsing down (Home only)
     var bottomBarVisible by remember { mutableStateOf(true) }
+
+    // Fully immersive while browsing: when the Home chrome is hidden, also
+    // hide the system status bar and navigation bar (white pill).
+    val immersiveView = LocalView.current
+    DisposableEffect(bottomBarVisible, state.currentTab, state.viewer.isOpen) {
+        val window = (immersiveView.context as? android.app.Activity)?.window
+        if (window != null && !state.viewer.isOpen) {
+            val controller = WindowCompat.getInsetsController(window, immersiveView)
+            if (state.currentTab == GalleryTab.Home && !bottomBarVisible) {
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+                controller.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            } else {
+                controller.show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+        onDispose {}
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
