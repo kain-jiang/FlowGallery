@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#0A0A0C</color>
+    <!-- Launcher icon background: bright violet so the white/soft-lavender
+         cards pop (light, cheerful icon). -->
+    <color name="ic_launcher_background">#8C6BFF</color>
 </resources>

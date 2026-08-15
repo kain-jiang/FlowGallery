@@ -4,17 +4,23 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Waterfall gallery icon: three staggered rounded rectangles -->
+    <!-- Waterfall gallery icon: four staggered rounded cards, light palette.
+         The card group fills the icon (close to the safety-zone edge) with
+         moderate gaps between cards. -->
+    <!-- top-left card (tall) -->
     <path
-        android:fillColor="#7C5CFF"
-        android:pathData="M28,30 h20 a4,4 0 0 1 4,4 v22 a4,4 0 0 1 -4,4 h-20 a4,4 0 0 1 -4,-4 v-22 a4,4 0 0 1 4,-4 z" />
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,34 h21 a5,5 0 0 1 5,5 v17 a5,5 0 0 1 -5,5 h-21 a5,5 0 0 1 -5,-5 v-17 a5,5 0 0 1 5,-5 z" />
+    <!-- top-right card (short) -->
     <path
-        android:fillColor="#9B85FF"
-        android:pathData="M60,24 h20 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-20 a4,4 0 0 1 -4,-4 v-12 a4,4 0 0 1 4,-4 z" />
+        android:fillColor="#EDE4FF"
+        android:pathData="M56,25 h21 a5,5 0 0 1 5,5 v10 a5,5 0 0 1 -5,5 h-21 a5,5 0 0 1 -5,-5 v-10 a5,5 0 0 1 5,-5 z" />
+    <!-- bottom-left card (short) -->
     <path
-        android:fillColor="#B7A6FF"
-        android:pathData="M28,66 h20 a4,4 0 0 1 4,4 v8 a4,4 0 0 1 -4,4 h-20 a4,4 0 0 1 -4,-4 v-8 a4,4 0 0 1 4,-4 z" />
+        android:fillColor="#EDE4FF"
+        android:pathData="M30,66 h21 a5,5 0 0 1 5,5 v5 a5,5 0 0 1 -5,5 h-21 a5,5 0 0 1 -5,-5 v-5 a5,5 0 0 1 5,-5 z" />
+    <!-- bottom-right card (tall) -->
     <path
-        android:fillColor="#7C5CFF"
-        android:pathData="M60,52 h20 a4,4 0 0 1 4,4 v22 a4,4 0 0 1 -4,4 h-20 a4,4 0 0 1 -4,-4 v-22 a4,4 0 0 1 4,-4 z" />
+        android:fillColor="#FFFFFF"
+        android:pathData="M56,51 h21 a5,5 0 0 1 5,5 v20 a5,5 0 0 1 -5,5 h-21 a5,5 0 0 1 -5,-5 v-20 a5,5 0 0 1 5,-5 z" />
 </vector>
