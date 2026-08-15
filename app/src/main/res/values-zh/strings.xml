@@ -52,6 +52,9 @@
     <string name="cd_share">分享</string>
     <string name="cd_more">更多</string>
     <string name="save_to_gallery">保存到相册</string>
+    <string name="share_failed">分享失败</string>
+    <string name="save_success">已保存到相册</string>
+    <string name="save_failed">保存失败</string>
     <string name="cd_play">播放</string>
     <string name="cd_pause">暂停</string>
     <string name="cd_fullscreen">全屏</string>

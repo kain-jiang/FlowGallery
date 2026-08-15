@@ -52,6 +52,9 @@
     <string name="cd_share">Share</string>
     <string name="cd_more">More</string>
     <string name="save_to_gallery">Save to Gallery</string>
+    <string name="share_failed">Share failed</string>
+    <string name="save_success">Saved to Gallery</string>
+    <string name="save_failed">Save failed</string>
     <string name="cd_play">Play</string>
     <string name="cd_pause">Pause</string>
     <string name="cd_fullscreen">Fullscreen</string>

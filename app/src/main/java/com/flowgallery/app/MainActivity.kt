@@ -335,14 +335,21 @@ private fun MainScaffold(
 
 /**
  * Share a media item via the system share sheet (ACTION_SEND + FileProvider).
- * The SAF document is copied into the app cache so FileProvider can expose it.
+ * The SAF document is copied into cacheDir/shared (the only cache path the
+ * FileProvider exposes) so the URI resolves; shows a toast on failure.
  */
 private fun android.content.Context.shareMedia(item: ImageItem) {
     val uri = Uri.parse(item.uriString)
-    runCatching {
-        val outFile = java.io.File(cacheDir, "share_${System.currentTimeMillis()}_${item.name}")
-        contentResolver.openInputStream(uri)?.use { input ->
+    try {
+        val shareDir = java.io.File(cacheDir, "shared").apply { mkdirs() }
+        val outFile = java.io.File(shareDir, "share_${System.currentTimeMillis()}_${item.name}")
+        val copied = contentResolver.openInputStream(uri)?.use { input ->
             outFile.outputStream().use { output -> input.copyTo(output) }
+            true
+        } ?: false
+        if (!copied) {
+            toast(getString(R.string.share_failed))
+            return
         }
         val shareUri = androidx.core.content.FileProvider.getUriForFile(
             this, "$packageName.fileprovider", outFile
@@ -354,17 +361,19 @@ private fun android.content.Context.shareMedia(item: ImageItem) {
             addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         startActivity(android.content.Intent.createChooser(intent, null))
+    } catch (e: Exception) {
+        toast(getString(R.string.share_failed))
     }
 }
 
 /**
  * Save a media item into the system gallery (MediaStore, no permission needed
- * on API 29+).
+ * on API 29+). Shows a toast on success or failure.
  */
 private fun android.content.Context.saveMediaToGallery(item: ImageItem) {
     val uri = Uri.parse(item.uriString)
     val mime = if (item.type == com.flowgallery.app.data.model.MediaType.VIDEO) "video/mp4" else "image/jpeg"
-    runCatching {
+    try {
         val values = android.content.ContentValues().apply {
             put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, item.name)
             put(android.provider.MediaStore.Images.Media.MIME_TYPE, mime)
@@ -373,13 +382,24 @@ private fun android.content.Context.saveMediaToGallery(item: ImageItem) {
         val collection = android.provider.MediaStore.Images.Media.getContentUri(
             android.provider.MediaStore.VOLUME_EXTERNAL_PRIMARY
         )
-        contentResolver.insert(collection, values)?.let { dest ->
+        val saved = contentResolver.insert(collection, values)?.let { dest ->
             contentResolver.openInputStream(uri)?.use { input ->
                 contentResolver.openOutputStream(dest)?.use { output ->
                     input.copyTo(output)
                 }
             }
-        }
+            true
+        } ?: false
+        toast(if (saved) getString(R.string.save_success) else getString(R.string.save_failed))
+    } catch (e: Exception) {
+        toast(getString(R.string.save_failed))
+    }
+}
+
+/** Show a short toast on the main thread. */
+private fun android.content.Context.toast(msg: String) {
+    android.os.Handler(android.os.Looper.getMainLooper()).post {
+        android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_SHORT).show()
     }
 }
 
