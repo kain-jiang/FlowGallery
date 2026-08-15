@@ -542,6 +542,15 @@ private fun VideoPlayerView(
     var position by remember { mutableStateOf(0L) }
     var duration by remember { mutableStateOf(0L) }
 
+    // Reset playback state whenever the video changes (swipe navigation).
+    // Without this, the previous video's isPlaying/duration linger and the
+    // controls misbehave (no play button, dead pause, stale slider range).
+    androidx.compose.runtime.LaunchedEffect(uriString) {
+        isPlaying = false
+        position = 0L
+        duration = 0L
+    }
+
     DisposableEffect(exoPlayer) {
         val listener = object : androidx.media3.common.Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) {
