@@ -1,5 +1,10 @@
 package com.flowgallery.app.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -72,7 +77,8 @@ fun HomeScreen(
     onOpenFolderModal: () -> Unit,
     onOpenSearch: () -> Unit,
     onImageClick: (ImageItem) -> Unit,
-    onRemoveFolder: (Folder) -> Unit
+    onRemoveFolder: (Folder) -> Unit,
+    onChromeVisibleChange: (Boolean) -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
     val favorites by viewModel.favorites.collectAsState()
@@ -80,56 +86,112 @@ fun HomeScreen(
     val visible = viewModel.visibleImages(state)
     val selectedFolders = state.folders.filter { it.isSelected }
 
+    // Auto-hide the top chrome (title/selector/stats) while scrolling down.
+    var chromeVisible by remember { mutableStateOf(true) }
+    fun setChromeVisible(v: Boolean) {
+        if (chromeVisible != v) {
+            chromeVisible = v
+            onChromeVisibleChange(v)
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Header
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // Header — slides away when scrolling down
+            AnimatedVisibility(
+                visible = chromeVisible,
+                enter = fadeIn() + slideInVertically { -it },
+                exit = fadeOut() + slideOutVertically { -it }
             ) {
-                Text(
-                    text = stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(onClick = onOpenSearch) {
-                    Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.cd_search), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                // Sort menu (deep-style dropdown matching the app language)
-                SortMenuButton(
-                    current = state.sortMode,
-                    onSelect = viewModel::setSortMode
-                )
-                // Grid density toggle 2<->3 columns (FR-1 decision #3)
-                IconButton(onClick = viewModel::toggleColumns) {
-                    Icon(
-                        Icons.Filled.GridView,
-                        contentDescription = stringResource(R.string.cd_grid_toggle),
-                        tint = if (state.threeColumns) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.app_name),
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = onOpenSearch) {
+                            Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.cd_search), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        // Sort menu (deep-style dropdown matching the app language)
+                        SortMenuButton(
+                            current = state.sortMode,
+                            onSelect = viewModel::setSortMode
+                        )
+                        // Grid density toggle 2<->3 columns (FR-1 decision #3)
+                        IconButton(onClick = viewModel::toggleColumns) {
+                            Icon(
+                                Icons.Filled.GridView,
+                                contentDescription = stringResource(R.string.cd_grid_toggle),
+                                tint = if (state.threeColumns) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // Folder selector: dropdown (All / folders / subfolders)
+                    FolderDropdown(
+                        folders = selectedFolders,
+                        currentFilter = state.currentFilter,
+                        currentSubFolderId = state.currentSubFolderId,
+                        totalCount = state.dedupedIds.size,
+                        onSelectFolder = viewModel::selectFilter,
+                        onSelectSubFolder = viewModel::selectSubFolder
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    // Stats bar
+                    StatsBar(
+                        imageCount = visible.size,
+                        folderCount = selectedFolders.size,
+                        hdCount = visible.count { it.isHd }
                     )
                 }
             }
 
-            // Folder selector: dropdown (All / folders / subfolders)
-            FolderDropdown(
-                folders = selectedFolders,
-                currentFilter = state.currentFilter,
-                currentSubFolderId = state.currentSubFolderId,
-                totalCount = state.dedupedIds.size,
-                onSelectFolder = viewModel::selectFilter,
-                onSelectSubFolder = viewModel::selectSubFolder
-            )
-
-            Spacer(Modifier.height(8.dp))
-
-            // Stats bar
-            StatsBar(
-                imageCount = visible.size,
-                folderCount = selectedFolders.size,
-                hdCount = visible.count { it.isHd }
-            )
+            // Compact floating selector shown while the chrome is hidden —
+            // a small pill with the current path; tap restores the chrome.
+            if (!chromeVisible) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+                        .clickable { setChromeVisible(true) }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Filled.FolderOpen,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = currentFolderLabel(state, selectedFolders),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            Icons.Filled.ArrowDropDown,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
 
             // Waterfall grid or empty state
             // fillMaxWidth: without it the Box collapses to its content
@@ -157,7 +219,10 @@ fun HomeScreen(
                         onImageClick = onImageClick,
                         onToggleFavorite = viewModel::toggleFavorite,
                         columnCount = adaptiveColumnCount(state.threeColumns),
-                        sortMode = state.sortMode
+                        sortMode = state.sortMode,
+                        onScrollDirection = { scrollingDown ->
+                            if (scrollingDown) setChromeVisible(false) else setChromeVisible(true)
+                        }
                     )
                 }
             }
@@ -524,5 +589,26 @@ private fun adaptiveColumnCount(threeColumns: Boolean): Int {
         width >= 840 -> 4
         width >= 600 -> 3
         else -> if (threeColumns) 3 else 2
+    }
+}
+
+/** Short label of the current filter for the compact selector pill. */
+@Composable
+private fun currentFolderLabel(
+    state: com.flowgallery.app.viewmodel.GalleryUiState,
+    folders: List<Folder>
+): String {
+    val filter = state.currentFilter
+    return when {
+        filter == null -> stringResource(R.string.all)
+        else -> {
+            val folder = folders.find { it.id == filter }
+            val sub = folder?.subFolders?.find { it.id == state.currentSubFolderId }
+            when {
+                sub != null -> "${folder!!.name} / ${sub.name}"
+                folder != null -> folder.name
+                else -> stringResource(R.string.all)
+            }
+        }
     }
 }

@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -63,11 +64,35 @@ fun WaterfallGrid(
     modifier: Modifier = Modifier,
     columnCount: Int = 2,
     sortMode: SortMode = SortMode.DEFAULT,
-    contentPadding: PaddingValues = PaddingValues(12.dp)
+    contentPadding: PaddingValues = PaddingValues(12.dp),
+    /** Reports scroll direction: positive = scrolling down, negative = up. */
+    onScrollDirection: ((Boolean) -> Unit)? = null
 ) {
+    var lastDelta by androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+
+    // Listen to scroll delta to detect direction (used to auto-hide chrome).
+    val scrollConnection = remember {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: androidx.compose.ui.geometry.Offset,
+                available: androidx.compose.ui.geometry.Offset,
+                source: androidx.compose.ui.input.nestedscroll.NestedScrollSource
+            ): androidx.compose.ui.geometry.Offset {
+                val delta = consumed.y + available.y
+                if (delta != 0f) {
+                    lastDelta = delta
+                    onScrollDirection?.invoke(delta > 0f)
+                }
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+        }
+    }
+
     LazyVerticalStaggeredGrid(
         columns = StaggeredGridCells.Fixed(columnCount),
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .nestedScroll(scrollConnection),
         verticalItemSpacing = 10.dp,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = contentPadding

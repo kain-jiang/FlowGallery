@@ -7,6 +7,9 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.launch
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -145,18 +148,27 @@ private fun MainScaffold(
     var folderToRemove by remember { mutableStateOf<Folder?>(null) }
     var folderToEditType by remember { mutableStateOf<Folder?>(null) }
     var showSearch by remember { mutableStateOf(false) }
+    // Bottom nav auto-hide while browsing down (Home only)
+    var bottomBarVisible by remember { mutableStateOf(true) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                GalleryTab.entries.forEach { tab ->
-                    NavigationBarItem(
-                        selected = state.currentTab == tab,
-                        onClick = { viewModel.selectTab(tab) },
-                        icon = { Icon(tabIcon(tab), contentDescription = tabLabel(tab)) },
-                        label = { Text(tabLabel(tab)) }
-                    )
+            AnimatedVisibility(
+                // Home hides with scroll; other tabs always show the bar
+                visible = state.currentTab != GalleryTab.Home || bottomBarVisible,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+                    GalleryTab.entries.forEach { tab ->
+                        NavigationBarItem(
+                            selected = state.currentTab == tab,
+                            onClick = { viewModel.selectTab(tab) },
+                            icon = { Icon(tabIcon(tab), contentDescription = tabLabel(tab)) },
+                            label = { Text(tabLabel(tab)) }
+                        )
+                    }
                 }
             }
         }
@@ -178,7 +190,8 @@ private fun MainScaffold(
                     onRemoveFolder = { folder ->
                         showFolderModal = false
                         folderToRemove = folder
-                    }
+                    },
+                    onChromeVisibleChange = { visible -> bottomBarVisible = visible }
                 )
                 GalleryTab.Favorites -> FavoritesScreen(
                     viewModel = viewModel,
