@@ -164,10 +164,23 @@ fun SearchScreen(
                     images = filtered,
                     favoriteIds = favorites,
                     onImageClick = onImageClick,
-                    onToggleFavorite = viewModel::toggleFavorite
+                    onToggleFavorite = viewModel::toggleFavorite,
+                    columnCount = searchAdaptiveColumns()
                 )
             }
         }
+    }
+}
+
+/** Search grid follows the same adaptive columns as Home. */
+@Composable
+private fun searchAdaptiveColumns(): Int {
+    val config = androidx.compose.ui.platform.LocalConfiguration.current
+    val width = config.screenWidthDp
+    return when {
+        width >= 840 -> 4
+        width >= 600 -> 3
+        else -> 2
     }
 }
 

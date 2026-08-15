@@ -49,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -155,7 +156,7 @@ fun HomeScreen(
                         favoriteIds = favorites,
                         onImageClick = onImageClick,
                         onToggleFavorite = viewModel::toggleFavorite,
-                        columnCount = if (state.threeColumns) 3 else 2,
+                        columnCount = adaptiveColumnCount(state.threeColumns),
                         sortMode = state.sortMode
                     )
                 }
@@ -506,5 +507,22 @@ private fun EmptyState(onAddFolder: () -> Unit, modifier: Modifier = Modifier) {
                 .clickable(onClick = onAddFolder)
                 .padding(horizontal = 20.dp, vertical = 10.dp)
         )
+    }
+}
+
+/**
+ * Adaptive grid column count (decision #1):
+ * - wide screens (>=840dp) → 4 columns
+ * - large screens (>=600dp, e.g. landscape phones) → 3 columns
+ * - phones → user toggle (2 or 3 columns)
+ */
+@Composable
+private fun adaptiveColumnCount(threeColumns: Boolean): Int {
+    val config = LocalConfiguration.current
+    val width = config.screenWidthDp
+    return when {
+        width >= 840 -> 4
+        width >= 600 -> 3
+        else -> if (threeColumns) 3 else 2
     }
 }

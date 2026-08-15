@@ -99,8 +99,21 @@ fun FavoritesScreen(
                 images = favImages,
                 favoriteIds = favorites,
                 onImageClick = onImageClick,
-                onToggleFavorite = viewModel::toggleFavorite
+                onToggleFavorite = viewModel::toggleFavorite,
+                columnCount = favAdaptiveColumns()
             )
         }
+    }
+}
+
+/** Favorites grid follows the same adaptive columns as Home. */
+@Composable
+private fun favAdaptiveColumns(): Int {
+    val config = androidx.compose.ui.platform.LocalConfiguration.current
+    val width = config.screenWidthDp
+    return when {
+        width >= 840 -> 4
+        width >= 600 -> 3
+        else -> 2
     }
 }
