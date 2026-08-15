@@ -1,10 +1,5 @@
 package com.flowgallery.app.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -47,9 +43,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlin.math.roundToInt
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -86,22 +84,22 @@ fun HomeScreen(
     val visible = viewModel.visibleImages(state)
     val selectedFolders = state.folders.filter { it.isSelected }
 
-    // Auto-hide the top chrome (title/selector/stats) while scrolling down.
-    var chromeVisible by remember { mutableStateOf(true) }
-    fun setChromeVisible(v: Boolean) {
-        if (chromeVisible != v) {
-            chromeVisible = v
-            onChromeVisibleChange(v)
-        }
-    }
+    // Auto-hide the top chrome tied to the scroll: it slides up gradually as
+    // the grid scrolls down (like being pushed by the content), instead of a
+    // hard animated toggle.
+    var viewportOffsetPx by remember { mutableFloatStateOf(0f) }
+    val chromeHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { 160.dp.toPx() }
+    val hideFraction = (viewportOffsetPx / chromeHeightPx).coerceIn(0f, 1f)
+    val chromeHidden = hideFraction >= 1f
+    val chromeOffset = -viewportOffsetPx.coerceAtMost(chromeHeightPx)
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Header — slides up & away when scrolling down
-            AnimatedVisibility(
-                visible = chromeVisible,
-                enter = fadeIn() + slideInVertically { -it / 2 },
-                exit = fadeOut() + slideOutVertically { -it / 2 }
+            // Header — slides up gradually with the scroll (pushed by content)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .offset { androidx.compose.ui.unit.IntOffset(0, chromeOffset.roundToInt()) }
             ) {
                 Column {
                     Row(
@@ -154,16 +152,16 @@ fun HomeScreen(
                 }
             }
 
-            // Compact floating selector shown while the chrome is hidden —
-            // a small pill with the current path; tap restores the chrome.
-            if (!chromeVisible) {
+            // Compact floating selector shown once the chrome has fully slid
+            // away — a small pill with the current path; tap restores.
+            if (chromeHidden) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 6.dp)
                         .clip(RoundedCornerShape(20.dp))
                         .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
-                        .clickable { setChromeVisible(true) }
+                        .clickable { viewportOffsetPx = 0f }
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                     contentAlignment = Alignment.CenterStart
                 ) {
@@ -220,8 +218,10 @@ fun HomeScreen(
                         onToggleFavorite = viewModel::toggleFavorite,
                         columnCount = adaptiveColumnCount(state.threeColumns),
                         sortMode = state.sortMode,
-                        onScrollDirection = { scrollingDown ->
-                            if (scrollingDown) setChromeVisible(false) else setChromeVisible(true)
+                        onViewportOffset = { px ->
+                            viewportOffsetPx = px
+                            // Bottom nav hides together with the top chrome
+                            onChromeVisibleChange(px < chromeHeightPx)
                         }
                     )
                 }
