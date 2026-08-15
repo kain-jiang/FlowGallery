@@ -4,6 +4,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -217,8 +221,9 @@ fun ImageViewer(
             if (item.type.isVideo) {
                 VideoPlayerView(
                     uriString = item.uriString,
-                    chromeVisible = chromeVisible,
+                    chromeVisible = chromeVisible && page == pagerState.currentPage,
                     fullscreen = videoFullscreen,
+                    isCurrentPage = page == pagerState.currentPage,
                     onToggleFullscreen = {
                         if (videoFullscreen) {
                             // exiting fullscreen: make sure browsing chrome is back
@@ -410,7 +415,12 @@ fun ImageViewer(
         // Bottom area — filename row + thumbnail strip for BOTH images and
         // videos (consistent browsing experience). The video control bar
         // lives inside the frame, padded above this area. Hidden in video
-        // fullscreen.
+        // fullscreen. Bound to the pager's current page so it updates
+        // instantly while swiping (no reliance on the external index sync).
+        val pagerCurrent = pagerState.currentPage.coerceIn(0, images.lastIndex)
+        val currentItem = images[pagerCurrent]
+        val curResolvedW = remember(currentItem.uriString) { mutableIntStateOf(currentItem.width) }
+        val curResolvedH = remember(currentItem.uriString) { mutableIntStateOf(currentItem.height) }
         if (chromeVisible && !videoFullscreen) {
             Column(
                 modifier = Modifier
@@ -430,14 +440,14 @@ fun ImageViewer(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = image.name,
+                        text = currentItem.name,
                         color = Color.White,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.weight(1f)
                     )
                     Text(
-                        text = stringResource(R.string.dimensions, resolvedWidth, resolvedHeight),
+                        text = stringResource(R.string.dimensions, curResolvedW.intValue, curResolvedH.intValue),
                         color = Color.White.copy(alpha = 0.6f),
                         fontSize = 12.sp
                     )
@@ -509,7 +519,7 @@ fun ImageViewer(
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
                             )
-                            if (idx == currentIndex) {
+                            if (idx == pagerCurrent) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
@@ -671,6 +681,7 @@ private fun VideoPlayerView(
     uriString: String,
     chromeVisible: Boolean,
     fullscreen: Boolean = false,
+    isCurrentPage: Boolean = true,
     onToggleFullscreen: () -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -721,6 +732,14 @@ private fun VideoPlayerView(
         onDispose {
             exoPlayer.removeListener(listener)
             exoPlayer.release()
+        }
+    }
+
+    // Pause when this page is no longer the current one (pager keeps
+    // adjacent pages composed — they must not keep playing).
+    androidx.compose.runtime.LaunchedEffect(isCurrentPage) {
+        if (!isCurrentPage && isPlaying) {
+            exoPlayer.pause()
         }
     }
 
@@ -961,17 +980,42 @@ private fun ZoomableImage(
                 )
             }
             .pointerInput(item.id) {
-                detectTransformGestures { _, pan, zoom, _ ->
-                    val newScale = (scale * zoom).coerceIn(1f, 4f)
-                    if (newScale <= 1f) {
-                        scale = 1f
-                        offsetX = 0f
-                        offsetY = 0f
-                    } else {
-                        scale = newScale
-                        offsetX += pan.x
-                        offsetY += pan.y
-                    }
+                // Custom transform: pinch-zoom + pan, but a single-finger
+                // horizontal drag at 1x is NOT consumed so the pager can
+                // swipe between items (detectTransformGestures would eat it).
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    do {
+                        val event = awaitPointerEvent()
+                        val pressed = event.changes.any { it.pressed }
+                        if (pressed) {
+                            val multi = event.changes.size > 1
+                            if (multi) {
+                                // Two fingers: pinch zoom + pan.
+                                val zoom = event.calculateZoom()
+                                val pan = event.calculatePan()
+                                val newScale = (scale * zoom).coerceIn(1f, 4f)
+                                if (newScale <= 1f) {
+                                    scale = 1f
+                                    offsetX = 0f
+                                    offsetY = 0f
+                                } else {
+                                    scale = newScale
+                                    offsetX += pan.x
+                                    offsetY += pan.y
+                                }
+                                event.changes.forEach { it.consume() }
+                            } else if (scale > 1f) {
+                                // Single finger while zoomed: pan the image.
+                                val pan = event.calculatePan()
+                                offsetX += pan.x
+                                offsetY += pan.y
+                                event.changes.forEach { it.consume() }
+                            }
+                            // scale == 1f single finger: leave unconsumed so
+                            // the pager handles horizontal swiping.
+                        }
+                    } while (pressed)
                 }
             }
     ) {
