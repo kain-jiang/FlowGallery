@@ -52,6 +52,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -111,7 +112,8 @@ fun ImageViewer(
     // Horizontal swipe accumulator for cross-media navigation.
     var swipeAccum by remember(currentIndex) { mutableFloatStateOf(0f) }
     // Landscape pure-play fullscreen for videos (no browsing chrome).
-    var videoFullscreen by remember(currentIndex) { mutableStateOf(false) }
+    // rememberSaveable so a config change (rotation) preserves the state.
+    var videoFullscreen by rememberSaveable(currentIndex) { mutableStateOf(false) }
 
     // Fullscreen: rotate the activity to landscape while in this mode.
     if (isVideo && videoFullscreen) {
