@@ -40,6 +40,27 @@
     <!-- Folder modal -->
     <string name="select_folders">Select Folders</string>
     <string name="add_new_folder">Add New Folder</string>
+    <string name="add_smb_share">Add SMB Share</string>
+    <string name="smb_title">SMB Network Share</string>
+    <string name="smb_host">Server</string>
+    <string name="smb_host_hint">e.g. 192.168.1.10 or nas.local</string>
+    <string name="smb_share">Share</string>
+    <string name="smb_share_hint">e.g. Pictures</string>
+    <string name="smb_path">Path (optional)</string>
+    <string name="smb_path_hint">Subdirectory inside the share</string>
+    <string name="smb_user">Username (optional)</string>
+    <string name="smb_user_hint">Anonymous if empty</string>
+    <string name="smb_pass">Password</string>
+    <string name="smb_pass_hint">••••••</string>
+    <string name="smb_domain">Domain (optional)</string>
+    <string name="smb_domain_hint">WORKGROUP by default</string>
+    <string name="smb_name">Display name (optional)</string>
+    <string name="smb_name_hint">Defaults to host/share</string>
+    <string name="smb_test">Test</string>
+    <string name="smb_testing">Testing…</string>
+    <string name="smb_add">Add Share</string>
+    <string name="smb_ok">Connected ✓</string>
+    <string name="smb_fail">Failed: %1$s</string>
     <string name="image_count">%1$d images</string>
     <string name="cd_selected">Selected</string>
     <string name="cd_folder_open">Folder</string>

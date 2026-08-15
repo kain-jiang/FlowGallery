@@ -715,7 +715,16 @@ private fun VideoPlayerView(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val exoPlayer = remember(uriString) {
-        ExoPlayer.Builder(context).build().apply {
+        val builder = ExoPlayer.Builder(context)
+        // SMB videos stream via the custom jcifs-ng DataSource.
+        if (uriString.startsWith("smb://")) {
+            builder.setMediaSourceFactory(
+                androidx.media3.exoplayer.source.DefaultMediaSourceFactory(
+                    com.flowgallery.app.data.SmbDataSourceFactory()
+                )
+            )
+        }
+        builder.build().apply {
             setMediaItem(MediaItem.fromUri(uriString))
             prepare()
             playWhenReady = false

@@ -3,10 +3,13 @@ package com.flowgallery.app.data.repository
 import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
+import com.flowgallery.app.data.SmbClient
 import com.flowgallery.app.data.model.Folder
+import com.flowgallery.app.data.model.FolderSource
 import com.flowgallery.app.data.model.FolderType
 import com.flowgallery.app.data.model.ImageItem
 import com.flowgallery.app.data.model.MediaType
+import com.flowgallery.app.data.model.SmbConfig
 import com.flowgallery.app.data.model.SubFolder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -53,7 +56,20 @@ class ImageRepository(private val context: Context) {
                     } ?: FolderType.NORMAL,
                     imageCount = o.optInt("count", 0),
                     isSelected = o.optBoolean("selected", true),
-                    subFolders = subList
+                    subFolders = subList,
+                    source = o.optString("source").takeIf { it.isNotBlank() }?.let { s ->
+                        runCatching { FolderSource.valueOf(s) }.getOrNull()
+                    } ?: FolderSource.LOCAL,
+                    smbConfig = o.optJSONObject("smb")?.let { smb ->
+                        SmbConfig(
+                            host = smb.optString("host", ""),
+                            share = smb.optString("share", ""),
+                            path = smb.optString("path", ""),
+                            username = smb.optString("user", ""),
+                            password = smb.optString("pass", ""),
+                            domain = smb.optString("domain", "")
+                        )
+                    }
                 )
             }
         } catch (e: Exception) {
@@ -114,6 +130,19 @@ class ImageRepository(private val context: Context) {
                     .put("count", f.imageCount)
                     .put("selected", f.isSelected)
                     .put("subs", subs)
+                    .put("source", f.source.name)
+                    .put(
+                        "smb",
+                        f.smbConfig?.let { smb ->
+                            JSONObject()
+                                .put("host", smb.host)
+                                .put("share", smb.share)
+                                .put("path", smb.path)
+                                .put("user", smb.username)
+                                .put("pass", smb.password)
+                                .put("domain", smb.domain)
+                        } ?: JSONObject.NULL
+                    )
             )
         }
         prefs.edit().putString(KEY_FOLDERS, arr.toString()).apply()
@@ -141,6 +170,29 @@ class ImageRepository(private val context: Context) {
 
         val nextId = (folders.maxOfOrNull { it.id } ?: 0L) + 1
         folders.add(Folder(id = nextId, name = displayName, uriString = uri.toString(), type = type))
+        saveFolders(folders)
+        return true
+    }
+
+    /** Add an SMB share folder with an explicit type, dedup by smb url. */
+    fun addSmbFolder(config: com.flowgallery.app.data.model.SmbConfig, displayName: String?, type: FolderType): Boolean {
+        val folders = loadFolders().toMutableList()
+        val url = config.url
+        if (folders.any { it.smbConfig?.url == url }) return false
+
+        val nextId = (folders.maxOfOrNull { it.id } ?: 0L) + 1
+        val name = displayName?.takeIf { it.isNotBlank() }
+            ?: "${config.host}/${config.share}${if (config.path.isNotBlank()) "/${config.path}" else ""}"
+        folders.add(
+            Folder(
+                id = nextId,
+                name = name,
+                uriString = url,
+                type = type,
+                source = FolderSource.SMB,
+                smbConfig = config
+            )
+        )
         saveFolders(folders)
         return true
     }
@@ -210,6 +262,10 @@ class ImageRepository(private val context: Context) {
      * subfolder breakdown.
      */
     suspend fun scanFolder(folder: Folder): FolderScanResult = withContext(Dispatchers.IO) {
+        // SMB shares use a different traversal (jcifs-ng listFiles).
+        if (folder.isSmb && folder.smbConfig != null) {
+            return@withContext scanSmbFolder(folder)
+        }
         val rootUri = Uri.parse(folder.uriString) ?: return@withContext FolderScanResult(folder.id, emptyList(), emptyList())
         val allItems = mutableListOf<ImageItem>()
         var nextId = folder.id * 1_000_000L
@@ -305,6 +361,100 @@ class ImageRepository(private val context: Context) {
             .map { it.first }
             .filter { it.imageCount > 0 }
         FolderScanResult(folder.id, allItems, subs)
+    }
+
+    /**
+     * Scan an SMB share: list via jcifs-ng, produce the same item shape.
+     * Item uriString = full smb:// URL (credentials embedded) so Coil's
+     * SmbFetcher and the video player can read them directly.
+     */
+    private suspend fun scanSmbFolder(folder: Folder): FolderScanResult {
+        val config = folder.smbConfig ?: return FolderScanResult(folder.id, emptyList(), emptyList())
+        val allItems = mutableListOf<ImageItem>()
+        var nextId = folder.id * 1_000_000L
+        val isPack = folder.type == FolderType.PACK
+
+        /**
+         * Recursively collect media under [subPath] (relative to the share root).
+         */
+        suspend fun collectRecursive(
+            subPath: String,
+            subFolderId: Long?,
+            subFolderUri: String?,
+            subFolderName: String?,
+            out: MutableList<ImageItem>
+        ) {
+            val entries = SmbClient.list(config, subPath)
+            for (e in entries) {
+                val childPath = if (subPath.isEmpty()) e.name else "$subPath/${e.name}"
+                if (isImageName(e.name) || isVideoName(e.name)) {
+                    out.add(
+                        ImageItem(
+                            id = nextId++,
+                            folderId = folder.id,
+                            folderName = folder.name,
+                            subFolderId = subFolderId,
+                            subFolderUri = subFolderUri,
+                            subFolderName = subFolderName,
+                            name = e.name,
+                            uriString = fileUrl(config, childPath),
+                            type = classify(e.name),
+                            width = 0,
+                            height = 0,
+                            sizeBytes = e.size,
+                            modifiedTime = e.lastModified
+                        )
+                    )
+                } else if (e.isDirectory) {
+                    collectRecursive(childPath, subFolderId, subFolderUri, subFolderName, out)
+                }
+            }
+        }
+
+        val rootEntries = SmbClient.list(config)
+        val subGroups = LinkedHashMap<String, Pair<SubFolder, List<ImageItem>>>()
+        for (e in rootEntries) {
+            if (isImageName(e.name) || isVideoName(e.name)) {
+                allItems.add(
+                    ImageItem(
+                        id = nextId++,
+                        folderId = folder.id,
+                        folderName = folder.name,
+                        name = e.name,
+                        uriString = fileUrl(config, e.name),
+                        type = classify(e.name),
+                        width = 0,
+                        height = 0,
+                        sizeBytes = e.size,
+                        modifiedTime = e.lastModified
+                    )
+                )
+            } else if (e.isDirectory && isPack) {
+                val subPath = e.name
+                val subUriStr = "smb://" + e.name
+                val subId = subUriStr.hashCode().toLong()
+                val subItems = mutableListOf<ImageItem>()
+                collectRecursive(subPath, subId, subUriStr, e.name, subItems)
+                if (subItems.isNotEmpty()) {
+                    subGroups[subUriStr] =
+                        SubFolder(id = subId, name = e.name, uriString = subUriStr, imageCount = subItems.size) to subItems
+                    allItems.addAll(subItems)
+                }
+            } else if (e.isDirectory) {
+                // NORMAL folder: recurse without tagging
+                collectRecursive(e.name, null, null, e.name, allItems)
+            }
+        }
+
+        val subs = subGroups.values.map { it.first }.filter { it.imageCount > 0 }
+        return FolderScanResult(folder.id, allItems, subs)
+    }
+
+    /** Full smb:// URL for a file under the share (credentials embedded). */
+    private fun fileUrl(config: com.flowgallery.app.data.model.SmbConfig, childPath: String): String {
+        val base = config.url.trimEnd('/')
+        val sub = childPath.trim('/')
+        return if (sub.isEmpty()) "$base/" else "$base/$sub"
     }
 
     /** Scan every selected folder and merge results (used by the "All" view). */

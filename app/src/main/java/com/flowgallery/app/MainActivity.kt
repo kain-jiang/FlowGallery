@@ -67,6 +67,7 @@ import com.flowgallery.app.R
 import com.flowgallery.app.ui.components.FolderSelectionModal
 import com.flowgallery.app.ui.components.FolderTypeDialog
 import com.flowgallery.app.ui.components.ImageViewer
+import com.flowgallery.app.ui.components.SmbAddDialog
 import com.flowgallery.app.ui.screens.FavoritesScreen
 import com.flowgallery.app.ui.screens.HomeScreen
 import com.flowgallery.app.ui.screens.SearchScreen
@@ -157,6 +158,7 @@ private fun MainScaffold(
     val favorites by viewModel.favorites.collectAsState()
 
     var showFolderModal by remember { mutableStateOf(false) }
+    var showSmbDialog by remember { mutableStateOf(false) }
     var folderToRemove by remember { mutableStateOf<Folder?>(null) }
     var folderToEditType by remember { mutableStateOf<Folder?>(null) }
     var showSearch by remember { mutableStateOf(false) }
@@ -300,7 +302,22 @@ private fun MainScaffold(
                 showFolderModal = false
                 onPickFolder()
             },
+            onAddSmb = {
+                showFolderModal = false
+                showSmbDialog = true
+            },
             onClose = { showFolderModal = false }
+        )
+    }
+
+    // SMB share add dialog
+    if (showSmbDialog) {
+        SmbAddDialog(
+            onConfirm = { config, name, type ->
+                showSmbDialog = false
+                viewModel.addSmbFolder(config, name, type)
+            },
+            onDismiss = { showSmbDialog = false }
         )
     }
 

@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Lan
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -49,6 +50,7 @@ fun FolderSelectionModal(
     folders: List<Folder>,
     onToggle: (Long) -> Unit,
     onAddFolder: () -> Unit,
+    onAddSmb: () -> Unit,
     onClose: () -> Unit
 ) {
     Dialog(onDismissRequest = onClose) {
@@ -100,6 +102,28 @@ fun FolderSelectionModal(
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = stringResource(R.string.add_new_folder),
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+
+            // Add SMB network share
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable(onClick = onAddSmb)
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Filled.Lan, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.add_smb_share),
                     color = MaterialTheme.colorScheme.primary,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold

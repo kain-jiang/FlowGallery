@@ -280,6 +280,12 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update { it.copy(pillAlignmentLeft = left) }
     }
 
+    /** Add an SMB share folder, then rescan. */
+    fun addSmbFolder(config: com.flowgallery.app.data.model.SmbConfig, name: String?, type: FolderType) {
+        val ok = repository.addSmbFolder(config, name, type)
+        if (ok) refreshFolders()
+    }
+
     /** Set search media-type filter (null = all). */
     fun setMediaTypeFilter(type: String?) =
         _uiState.update { it.copy(mediaTypeFilter = type) }

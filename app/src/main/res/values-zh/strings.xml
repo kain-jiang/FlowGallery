@@ -40,6 +40,27 @@
     <!-- Folder modal -->
     <string name="select_folders">选择文件夹</string>
     <string name="add_new_folder">添加新文件夹</string>
+    <string name="add_smb_share">添加 SMB 共享</string>
+    <string name="smb_title">SMB 网络共享</string>
+    <string name="smb_host">服务器</string>
+    <string name="smb_host_hint">例如 192.168.1.10 或 nas.local</string>
+    <string name="smb_share">共享名</string>
+    <string name="smb_share_hint">例如 Pictures</string>
+    <string name="smb_path">路径（可选）</string>
+    <string name="smb_path_hint">共享内的子目录</string>
+    <string name="smb_user">用户名（可选）</string>
+    <string name="smb_user_hint">留空为匿名</string>
+    <string name="smb_pass">密码</string>
+    <string name="smb_pass_hint">••••••</string>
+    <string name="smb_domain">域（可选）</string>
+    <string name="smb_domain_hint">默认 WORKGROUP</string>
+    <string name="smb_name">显示名称（可选）</string>
+    <string name="smb_name_hint">默认 主机/共享</string>
+    <string name="smb_test">测试</string>
+    <string name="smb_testing">测试中…</string>
+    <string name="smb_add">添加共享</string>
+    <string name="smb_ok">连接成功 ✓</string>
+    <string name="smb_fail">失败：%1$s</string>
     <string name="image_count">%1$d 张图片</string>
     <string name="cd_selected">已选择</string>
     <string name="cd_folder_open">文件夹</string>

@@ -8,8 +8,36 @@ enum class FolderType {
     PACK
 }
 
+/** SMB share connection settings (folder.kind == SMB). */
+data class SmbConfig(
+    val host: String,
+    val share: String,
+    /** path inside the share, "" = share root */
+    val path: String = "",
+    val username: String = "",
+    val password: String = "",
+    val domain: String = ""
+) {
+    /** Full smb:// URL used by jcifs-ng (credentials embedded). */
+    val url: String
+        get() {
+            val auth = if (username.isNotEmpty()) {
+                "${java.net.URLEncoder.encode(domain, "UTF-8")};" +
+                    "${java.net.URLEncoder.encode(username, "UTF-8")}:" +
+                    java.net.URLEncoder.encode(password, "UTF-8") + "@"
+            } else ""
+            val sharePath = share.trim('/')
+            val sub = path.trim('/')
+            return "smb://$auth$host/$sharePath" + if (sub.isNotEmpty()) "/$sub" else "" + "/"
+        }
+}
+
+/** Where a folder lives: local SAF directory or an SMB share. */
+enum class FolderSource { LOCAL, SMB }
+
 /**
- * A browsable image folder selected by the user via Storage Access Framework.
+ * A browsable image folder selected by the user via SAF (LOCAL) or an
+ * SMB network share (SMB).
  */
 data class Folder(
     val id: Long,
@@ -18,8 +46,12 @@ data class Folder(
     val type: FolderType = FolderType.NORMAL,
     val imageCount: Int = 0,
     val isSelected: Boolean = true,
-    val subFolders: List<SubFolder> = emptyList()
-)
+    val subFolders: List<SubFolder> = emptyList(),
+    val source: FolderSource = FolderSource.LOCAL,
+    val smbConfig: SmbConfig? = null
+) {
+    val isSmb: Boolean get() = source == FolderSource.SMB
+}
 
 /**
  * A first-level subfolder inside a root [Folder]; its count aggregates

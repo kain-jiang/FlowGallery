@@ -86,10 +86,15 @@ dependencies {
     // Media3 ExoPlayer for video playback
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
+    implementation("androidx.media3:media3-datasource:1.4.1")
 
     // ViewModel
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+
+    // SMB network shares (jcifs-ng: SMB1/2/3 client)
+    implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
+    implementation("org.slf4j:slf4j-api:1.7.36")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
