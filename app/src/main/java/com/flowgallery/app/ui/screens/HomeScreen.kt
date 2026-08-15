@@ -112,15 +112,43 @@ fun HomeScreen(
                 .fillMaxWidth()
         ) {
             if (state.isRefreshing && visible.isEmpty()) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center),
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Column(modifier = Modifier.fillMaxSize()) {
+                    HomeHeader(
+                        state = state,
+                        selectedFolders = selectedFolders,
+                        onOpenSearch = onOpenSearch,
+                        onOpenFolderModal = onOpenFolderModal,
+                        onSetSortMode = viewModel::setSortMode,
+                        onToggleSingleColumn = viewModel::toggleSingleColumn,
+                        onSelectFolder = viewModel::selectFilter,
+                        onSelectSubFolder = viewModel::selectSubFolder
+                    )
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
             } else if (visible.isEmpty()) {
-                EmptyState(
-                    onAddFolder = onOpenFolderModal,
-                    modifier = Modifier.align(Alignment.Center)
-                )
+                // Empty state must KEEP the header (title + folder selector)
+                // visible, otherwise the user cannot switch folders back.
+                Column(modifier = Modifier.fillMaxSize()) {
+                    HomeHeader(
+                        state = state,
+                        selectedFolders = selectedFolders,
+                        onOpenSearch = onOpenSearch,
+                        onOpenFolderModal = onOpenFolderModal,
+                        onSetSortMode = viewModel::setSortMode,
+                        onToggleSingleColumn = viewModel::toggleSingleColumn,
+                        onSelectFolder = viewModel::selectFilter,
+                        onSelectSubFolder = viewModel::selectSubFolder
+                    )
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        EmptyState(
+                            onAddFolder = onOpenFolderModal
+                        )
+                    }
+                }
             } else {
                 WaterfallGrid(
                     images = visible,
@@ -130,53 +158,16 @@ fun HomeScreen(
                     columnCount = effectiveColumnCount(state),
                     sortMode = state.sortMode,
                     header = {
-                        Column {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.app_name),
-                                    style = MaterialTheme.typography.titleLarge,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                IconButton(onClick = onOpenSearch) {
-                                    Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.cd_search), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                // Add-folder button (moved from the removed FAB)
-                                IconButton(onClick = onOpenFolderModal) {
-                                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.cd_add_folder), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                // Sort menu (deep-style dropdown matching the app language)
-                                SortMenuButton(
-                                    current = state.sortMode,
-                                    onSelect = viewModel::setSortMode
-                                )
-                                // Single-column force toggle (overrides the
-                                // default columns set in Settings)
-                                IconButton(onClick = viewModel::toggleSingleColumn) {
-                                    Icon(
-                                        Icons.Filled.ViewAgenda,
-                                        contentDescription = stringResource(R.string.cd_grid_toggle),
-                                        tint = if (state.singleColumn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-
-                            // Folder selector: dropdown (All / folders / subfolders)
-                            FolderDropdown(
-                                folders = selectedFolders,
-                                currentFilter = state.currentFilter,
-                                currentSubFolderId = state.currentSubFolderId,
-                                totalCount = state.dedupedIds.size,
-                                onSelectFolder = viewModel::selectFilter,
-                                onSelectSubFolder = viewModel::selectSubFolder
-                            )
-
-                            Spacer(Modifier.height(4.dp))
-                        }
+                        HomeHeader(
+                            state = state,
+                            selectedFolders = selectedFolders,
+                            onOpenSearch = onOpenSearch,
+                            onOpenFolderModal = onOpenFolderModal,
+                            onSetSortMode = viewModel::setSortMode,
+                            onToggleSingleColumn = viewModel::toggleSingleColumn,
+                            onSelectFolder = viewModel::selectFilter,
+                            onSelectSubFolder = viewModel::selectSubFolder
+                        )
                     },
                     onHeaderHidden = { hidden ->
                         if (headerHidden != hidden) {
@@ -246,6 +237,67 @@ fun HomeScreen(
             modifier = Modifier.align(Alignment.BottomEnd)
         )
     } // Box
+}
+
+/** Title row + folder selector — shared by the waterfall header and the
+ *  empty/loading states (so the selector is always reachable). */
+@Composable
+private fun HomeHeader(
+    state: com.flowgallery.app.viewmodel.GalleryUiState,
+    selectedFolders: List<Folder>,
+    onOpenSearch: () -> Unit,
+    onOpenFolderModal: () -> Unit,
+    onSetSortMode: (SortMode) -> Unit,
+    onToggleSingleColumn: () -> Unit,
+    onSelectFolder: (Long?) -> Unit,
+    onSelectSubFolder: (Long) -> Unit
+) {
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.app_name),
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = onOpenSearch) {
+                Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.cd_search), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            // Add-folder button (moved from the removed FAB)
+            IconButton(onClick = onOpenFolderModal) {
+                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.cd_add_folder), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            // Sort menu (deep-style dropdown matching the app language)
+            SortMenuButton(
+                current = state.sortMode,
+                onSelect = onSetSortMode
+            )
+            // Single-column force toggle (overrides the default columns)
+            IconButton(onClick = onToggleSingleColumn) {
+                Icon(
+                    Icons.Filled.ViewAgenda,
+                    contentDescription = stringResource(R.string.cd_grid_toggle),
+                    tint = if (state.singleColumn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // Folder selector: dropdown (All / folders / subfolders)
+        FolderDropdown(
+            folders = selectedFolders,
+            currentFilter = state.currentFilter,
+            currentSubFolderId = state.currentSubFolderId,
+            totalCount = state.dedupedIds.size,
+            onSelectFolder = onSelectFolder,
+            onSelectSubFolder = onSelectSubFolder
+        )
+
+        Spacer(Modifier.height(4.dp))
+    }
 }
 
 /** Compact floating stats pill at bottom-right (replaces the add FAB). */

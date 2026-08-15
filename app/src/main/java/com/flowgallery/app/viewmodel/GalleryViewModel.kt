@@ -109,11 +109,22 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     /** Toggle a folder's selected flag and rescan. */
     fun toggleFolder(id: Long) {
         viewModelScope.launch {
-            val folders = _uiState.value.folders.map {
+            val state0 = _uiState.value
+            val folders = state0.folders.map {
                 if (it.id == id) it.copy(isSelected = !it.isSelected) else it
             }
             repository.saveFolders(folders)
-            _uiState.update { it.copy(folders = folders) }
+            // If the currently-filtered folder was just deselected, fall back
+            // to "All" so the home screen never gets stuck showing nothing.
+            val folderNow = folders.find { it.id == id }
+            val filteredOff = folderNow != null && !folderNow.isSelected
+            _uiState.update {
+                if (filteredOff && it.currentFilter == id) {
+                    it.copy(folders = folders, currentFilter = null, currentSubFolderId = null)
+                } else {
+                    it.copy(folders = folders)
+                }
+            }
             rescan()
         }
     }
