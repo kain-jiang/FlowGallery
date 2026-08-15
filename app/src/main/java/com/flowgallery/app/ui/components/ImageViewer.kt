@@ -56,6 +56,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -83,6 +84,7 @@ import com.flowgallery.app.R
 import com.flowgallery.app.data.model.ImageItem
 import com.flowgallery.app.data.model.MediaType
 import com.flowgallery.app.ui.theme.Surface2
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /**
@@ -105,9 +107,6 @@ fun ImageViewer(
     val image = images[currentIndex]
     val isVideo = image.type.isVideo
 
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    var offsetY by remember { mutableFloatStateOf(0f) }
     var chromeVisible by remember { mutableStateOf(true) }
     // Real dimensions resolved lazily from the loaded drawable (zero-IO scan).
     var resolvedWidth by remember(image.uriString) { mutableStateOf(image.width) }
@@ -122,11 +121,49 @@ fun ImageViewer(
     var showDuplicates by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
     val duplicates = remember(image.id) { image.duplicates }
-    // Horizontal swipe accumulator for cross-media navigation.
-    var swipeAccum by remember(currentIndex) { mutableFloatStateOf(0f) }
     // Landscape pure-play fullscreen for videos (no browsing chrome).
     // rememberSaveable so a config change (rotation) preserves the state.
     var videoFullscreen by rememberSaveable(currentIndex) { mutableStateOf(false) }
+
+    // HorizontalPager: items are laid out side by side; dragging moves them
+    // together (ViewPager feel), vertical drags never navigate.
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(
+        initialPage = currentIndex
+    ) { images.size }
+
+    // External navigation (arrows / thumbnails / subfolder crossing) syncs
+    // the pager to the new current index.
+    LaunchedEffect(currentIndex) {
+        if (pagerState.currentPage != currentIndex) {
+            pagerState.scrollToPage(currentIndex)
+        }
+    }
+
+    // Pager page changes drive the external viewer index.
+    LaunchedEffect(pagerState) {
+        androidx.compose.runtime.snapshotFlow { pagerState.currentPage }
+            .distinctUntilChanged()
+            .collect { page ->
+                if (page != currentIndex) onNavigate(page)
+            }
+    }
+
+    // Subfolder-boundary crossing: at the first/last page, dragging further
+    // past the threshold jumps into the adjacent subfolder (delta callback).
+    LaunchedEffect(pagerState, images.size) {
+        androidx.compose.runtime.snapshotFlow {
+            pagerState.currentPage to pagerState.currentPageOffsetFraction
+        }.collect { (page, fraction) ->
+            val cb = onNavigateDelta
+            if (cb == null) return@collect
+            val last = images.lastIndex
+            if (page == 0 && fraction < -0.5f) {
+                cb(-1)
+            } else if (page == last && fraction > 0.5f) {
+                cb(1)
+            }
+        }
+    }
 
     // Fullscreen: rotate the activity to landscape while in this mode.
     if (isVideo && videoFullscreen) {
@@ -151,128 +188,51 @@ fun ImageViewer(
         if (cb != null) cb(delta) else onNavigate(currentIndex + delta)
     }
 
-    // Reset transform when switching images
-    LaunchedEffect(currentIndex) {
-        scale = 1f
-        offsetX = 0f
-        offsetY = 0f
-        swipeAccum = 0f
-    }
-
-    // Double-tap zoom: images only. First double-tap zooms to 2x (centered),
-    // second restores 1x. Uses an animated transition for a smooth feel.
-    val doubleTapScope = rememberCoroutineScope()
-    fun handleDoubleTap() {
-        if (isVideo || videoFullscreen) return
-        doubleTapScope.launch {
-            if (scale <= 1f) {
-                androidx.compose.animation.core.animate(
-                    initialValue = 1f,
-                    targetValue = 2f,
-                    animationSpec = androidx.compose.animation.core.tween(220)
-                ) { value, _ -> scale = value }
-            } else {
-                androidx.compose.animation.core.animate(
-                    initialValue = scale,
-                    targetValue = 1f,
-                    animationSpec = androidx.compose.animation.core.tween(220)
-                ) { value, _ ->
-                    scale = value
-                    offsetX = 0f
-                    offsetY = 0f
-                }
-            }
-        }
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .pointerInput(currentIndex, videoFullscreen) {
-                // Tap toggles the chrome (control bar) for images and videos
-                // — including in video fullscreen, so the progress bar can be
-                // hidden/shown while watching. Double-tap (images only) zooms
-                // in to 2x / restores 1x instead of toggling the chrome.
+                // Tap toggles the chrome (control bar) — including in video
+                // fullscreen so the progress bar can be hidden/shown. Zoom &
+                // double-tap live inside each page (ZoomableImage).
                 detectTapGestures(
-                    onDoubleTap = { handleDoubleTap() },
                     onTap = { chromeVisible = !chromeVisible }
                 )
             }
-            .pointerInput(currentIndex, videoFullscreen) {
-                // Swipe navigation is disabled in video fullscreen (pure play).
-                if (videoFullscreen) return@pointerInput
-                if (isVideo) {
-                    // Videos: horizontal swipe navigates (no zoom).
-                    detectHorizontalDragGestures { change, dragAmount ->
-                        change.consume()
-                        swipeAccum += dragAmount
-                        if (kotlin.math.abs(swipeAccum) > 90f) {
-                            navigateBy(if (swipeAccum < 0) 1 else -1)
-                            swipeAccum = 0f
-                        }
-                    }
-                } else {
-                    // Images: pinch-zoom/pan, and swipe to navigate at 1x.
-                    detectTransformGestures { _, pan, zoom, _ ->
-                        val newScale = (scale * zoom).coerceIn(1f, 4f)
-                        if (newScale <= 1f) {
-                            // At 1x: horizontal drags navigate instead of pan.
-                            swipeAccum += pan.x
-                            if (kotlin.math.abs(swipeAccum) > 90f) {
-                                navigateBy(if (swipeAccum < 0) 1 else -1)
-                                swipeAccum = 0f
-                            }
-                            scale = 1f
-                            offsetX = 0f
-                            offsetY = 0f
-                        } else {
-                            scale = newScale
-                            offsetX += pan.x
-                            offsetY += pan.y
-                        }
-                    }
-                }
-            }
     ) {
-        // Main media — the SAME VideoPlayerView composable is used in both
-        // normal and fullscreen modes so the ExoPlayer instance (and playback
-        // position) survives the toggle. Fullscreen hides all browsing chrome
-        // via the !videoFullscreen guards below.
-        when {
-            image.type.isVideo -> VideoPlayerView(
-                uriString = image.uriString,
-                chromeVisible = chromeVisible,
-                fullscreen = videoFullscreen,
-                onToggleFullscreen = {
-                    if (videoFullscreen) {
-                        // exiting fullscreen: make sure browsing chrome is back
-                        chromeVisible = true
+        // Main media — HorizontalPager: items sit side by side, dragging
+        // moves them together (standard ViewPager feel), vertical drags
+        // never trigger navigation. Each page owns its zoom/double-tap.
+        androidx.compose.foundation.pager.HorizontalPager(
+            state = pagerState,
+            key = { images[it].id },
+            beyondViewportPageCount = 1,
+            // Video fullscreen = pure play: no page swiping.
+            userScrollEnabled = !videoFullscreen,
+            modifier = Modifier.fillMaxSize()
+        ) { page ->
+            val item = images[page]
+            if (item.type.isVideo) {
+                VideoPlayerView(
+                    uriString = item.uriString,
+                    chromeVisible = chromeVisible,
+                    fullscreen = videoFullscreen,
+                    onToggleFullscreen = {
+                        if (videoFullscreen) {
+                            // exiting fullscreen: make sure browsing chrome is back
+                            chromeVisible = true
+                        }
+                        videoFullscreen = !videoFullscreen
                     }
-                    videoFullscreen = !videoFullscreen
-                }
-            )
-            else -> SubcomposeAsyncImage(
-                model = image.uriString,
-                contentDescription = image.name,
-                contentScale = ContentScale.Fit,
-                onSuccess = { state ->
-                    val d = state.result.drawable
-                    if (d.intrinsicWidth > 0 && d.intrinsicHeight > 0) {
-                        resolvedWidth = d.intrinsicWidth
-                        resolvedHeight = d.intrinsicHeight
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        translationX = offsetX
-                        translationY = offsetY
-                    }
-            )
+                )
+            } else {
+                ZoomableImage(
+                    item = item,
+                    onTap = { chromeVisible = !chromeVisible }
+                )
+            }
         }
 
         // Prev / Next arrows — shown when navigation is possible in that
@@ -955,4 +915,85 @@ private fun formatTime(ms: Long): String {
     val m = totalSec / 60
     val s = totalSec % 60
     return "%d:%02d".format(m, s)
+}
+
+/**
+ * One image page inside the pager: pinch-zoom (1x–4x), pan, and double-tap
+ * to zoom 2x / restore 1x. Tap is forwarded for chrome toggling.
+ */
+@Composable
+private fun ZoomableImage(
+    item: ImageItem,
+    onTap: () -> Unit
+) {
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    var offsetY by remember { mutableFloatStateOf(0f) }
+    var resolvedW by remember(item.uriString) { mutableIntStateOf(item.width) }
+    var resolvedH by remember(item.uriString) { mutableIntStateOf(item.height) }
+    val scope = rememberCoroutineScope()
+
+    fun animateTo(targetScale: Float) {
+        scope.launch {
+            androidx.compose.animation.core.animate(
+                initialValue = scale,
+                targetValue = targetScale,
+                animationSpec = androidx.compose.animation.core.tween(220)
+            ) { value, _ ->
+                scale = value
+                if (targetScale <= 1f) {
+                    offsetX = 0f
+                    offsetY = 0f
+                }
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(item.id) {
+                detectTapGestures(
+                    onDoubleTap = {
+                        animateTo(if (scale <= 1f) 2f else 1f)
+                    },
+                    onTap = { onTap() }
+                )
+            }
+            .pointerInput(item.id) {
+                detectTransformGestures { _, pan, zoom, _ ->
+                    val newScale = (scale * zoom).coerceIn(1f, 4f)
+                    if (newScale <= 1f) {
+                        scale = 1f
+                        offsetX = 0f
+                        offsetY = 0f
+                    } else {
+                        scale = newScale
+                        offsetX += pan.x
+                        offsetY += pan.y
+                    }
+                }
+            }
+    ) {
+        SubcomposeAsyncImage(
+            model = item.uriString,
+            contentDescription = item.name,
+            contentScale = ContentScale.Fit,
+            onSuccess = { state ->
+                val d = state.result.drawable
+                if (d.intrinsicWidth > 0 && d.intrinsicHeight > 0) {
+                    resolvedW = d.intrinsicWidth
+                    resolvedH = d.intrinsicHeight
+                }
+            },
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = offsetX
+                    translationY = offsetY
+                }
+        )
+    }
 }
