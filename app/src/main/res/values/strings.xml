@@ -5,11 +5,14 @@
     <!-- Navigation -->
     <string name="tab_home">Home</string>
     <string name="tab_search">Search</string>
+    <string name="tab_favorites">Favorites</string>
     <string name="tab_settings">Settings</string>
 
     <!-- Home -->
     <string name="all">All</string>
     <string name="favorites">Favorites</string>
+    <string name="favorites_empty">No favorites yet</string>
+    <string name="favorites_empty_desc">Tap the heart on any image to add it here</string>
     <string name="stat_images">IMAGES</string>
     <string name="stat_folders">FOLDERS</string>
     <string name="stat_hd">HD</string>

@@ -568,11 +568,17 @@ private fun VideoPlayerView(
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Video surface (no native controller — we draw our own).
+        // IMPORTANT: PlayerView must NOT consume touches, otherwise the
+        // Compose swipe/tap gestures above never fire. SurfaceView renders
+        // independently, so playback is unaffected by touch passthrough.
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     useController = false
                     this.player = exoPlayer
+                    isClickable = false
+                    isFocusable = false
+                    setOnTouchListener { _, _ -> false }
                 }
             },
             modifier = Modifier.fillMaxSize()

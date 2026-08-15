@@ -5,11 +5,14 @@
     <!-- Navigation -->
     <string name="tab_home">首页</string>
     <string name="tab_search">搜索</string>
+    <string name="tab_favorites">收藏</string>
     <string name="tab_settings">设置</string>
 
     <!-- Home -->
     <string name="all">全部</string>
     <string name="favorites">收藏</string>
+    <string name="favorites_empty">还没有收藏</string>
+    <string name="favorites_empty_desc">点击任意图片上的心形即可加入收藏</string>
     <string name="stat_images">图片</string>
     <string name="stat_folders">文件夹</string>
     <string name="stat_hd">高清</string>

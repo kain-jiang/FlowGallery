@@ -64,11 +64,12 @@ import com.flowgallery.app.data.model.SortMode
 import com.flowgallery.app.ui.components.WaterfallGrid
 import com.flowgallery.app.viewmodel.GalleryViewModel
 
-/** Main gallery screen: tab strip + stats bar + waterfall grid + FAB. */
+/** Main gallery screen: dropdown selector + stats bar + waterfall grid + FAB. */
 @Composable
 fun HomeScreen(
     viewModel: GalleryViewModel,
     onOpenFolderModal: () -> Unit,
+    onOpenSearch: () -> Unit,
     onImageClick: (ImageItem) -> Unit,
     onRemoveFolder: (Folder) -> Unit
 ) {
@@ -92,7 +93,7 @@ fun HomeScreen(
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.weight(1f)
                 )
-                IconButton(onClick = {}) {
+                IconButton(onClick = onOpenSearch) {
                     Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.cd_search), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 // Sort menu (deep-style dropdown matching the app language)
@@ -110,12 +111,11 @@ fun HomeScreen(
                 }
             }
 
-            // Folder selector: dropdown (All / Favorites / folders / subfolders)
+            // Folder selector: dropdown (All / folders / subfolders)
             FolderDropdown(
                 folders = selectedFolders,
                 currentFilter = state.currentFilter,
                 currentSubFolderId = state.currentSubFolderId,
-                favoritesCount = favorites.size,
                 totalCount = state.dedupedIds.size,
                 onSelectFolder = viewModel::selectFilter,
                 onSelectSubFolder = viewModel::selectSubFolder
@@ -176,13 +176,12 @@ fun HomeScreen(
     } // Box
 }
 
-/** Dropdown folder selector — All / Favorites / root folders / subfolders. */
+/** Dropdown folder selector — All / root folders / subfolders. */
 @Composable
 private fun FolderDropdown(
     folders: List<Folder>,
     currentFilter: Long?,
     currentSubFolderId: Long?,
-    favoritesCount: Int,
     totalCount: Int,
     onSelectFolder: (Long?) -> Unit,
     onSelectSubFolder: (Long) -> Unit
@@ -190,7 +189,7 @@ private fun FolderDropdown(
     val scheme = MaterialTheme.colorScheme
     var expanded by remember { mutableStateOf(false) }
 
-    // Current selection label: "All" / "Favorites" / "Folder" / "Folder › Sub"
+    // Current selection label: "All" / "Folder" / "Folder › Sub"
     val currentLabel: String
     val currentIcon: androidx.compose.ui.graphics.vector.ImageVector
     val currentCount: Int
@@ -199,11 +198,6 @@ private fun FolderDropdown(
             currentLabel = stringResource(R.string.all)
             currentIcon = Icons.Filled.GridView
             currentCount = totalCount
-        }
-        currentFilter == HomeFilter.FAVORITES -> {
-            currentLabel = stringResource(R.string.favorites)
-            currentIcon = Icons.Filled.Favorite
-            currentCount = favoritesCount
         }
         else -> {
             val folder = folders.find { it.id == currentFilter }
@@ -279,12 +273,6 @@ private fun FolderDropdown(
                 text = { Text(stringResource(R.string.all), color = scheme.onSurface, fontSize = 15.sp) },
                 leadingIcon = { Icon(Icons.Filled.GridView, contentDescription = null, tint = scheme.primary) },
                 onClick = { onSelectFolder(null); expanded = false },
-                colors = menuItemColors(scheme)
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.favorites), color = scheme.onSurface, fontSize = 15.sp) },
-                leadingIcon = { Icon(Icons.Filled.Favorite, contentDescription = null, tint = Color(0xFFEF4444)) },
-                onClick = { onSelectFolder(HomeFilter.FAVORITES); expanded = false },
                 colors = menuItemColors(scheme)
             )
             folders.forEach { folder ->

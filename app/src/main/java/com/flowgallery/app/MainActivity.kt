@@ -12,15 +12,21 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -34,6 +40,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -44,6 +51,7 @@ import com.flowgallery.app.R
 import com.flowgallery.app.ui.components.FolderSelectionModal
 import com.flowgallery.app.ui.components.FolderTypeDialog
 import com.flowgallery.app.ui.components.ImageViewer
+import com.flowgallery.app.ui.screens.FavoritesScreen
 import com.flowgallery.app.ui.screens.HomeScreen
 import com.flowgallery.app.ui.screens.SearchScreen
 import com.flowgallery.app.ui.screens.SettingsScreen
@@ -134,6 +142,7 @@ private fun MainScaffold(
     var showFolderModal by remember { mutableStateOf(false) }
     var folderToRemove by remember { mutableStateOf<Folder?>(null) }
     var folderToEditType by remember { mutableStateOf<Folder?>(null) }
+    var showSearch by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -159,6 +168,7 @@ private fun MainScaffold(
                 GalleryTab.Home -> HomeScreen(
                     viewModel = viewModel,
                     onOpenFolderModal = { showFolderModal = true },
+                    onOpenSearch = { showSearch = true },
                     onImageClick = { img ->
                         val idx = viewModel.visibleImages(state).indexOfFirst { it.id == img.id }
                         if (idx >= 0) viewModel.openViewer(idx)
@@ -168,7 +178,7 @@ private fun MainScaffold(
                         folderToRemove = folder
                     }
                 )
-                GalleryTab.Search -> SearchScreen(
+                GalleryTab.Favorites -> FavoritesScreen(
                     viewModel = viewModel,
                     onImageClick = { img ->
                         val idx = viewModel.visibleImages(state).indexOfFirst { it.id == img.id }
@@ -185,8 +195,11 @@ private fun MainScaffold(
         }
     }
 
-    // Back handling: viewer → close viewer; folder modal → close modal
-    if (state.viewer.isOpen) {
+    // Back handling: search overlay → close; viewer → close viewer;
+    // folder modal → close modal
+    if (showSearch) {
+        BackHandler { showSearch = false }
+    } else if (state.viewer.isOpen) {
         BackHandler { viewModel.closeViewer() }
     } else if (showFolderModal) {
         BackHandler { showFolderModal = false }
@@ -302,17 +315,46 @@ private fun MainScaffold(
             onDismiss = { folderToEditType = null }
         )
     }
+
+    // Search overlay — fullscreen over Home, entered via the Home search icon
+    if (showSearch) {
+        androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
+            SearchScreen(
+                viewModel = viewModel,
+                onImageClick = { img ->
+                    val idx = viewModel.visibleImages(state).indexOfFirst { it.id == img.id }
+                    if (idx >= 0) viewModel.openViewer(idx)
+                }
+            )
+            // Back button (top-left, consistent with viewer chrome)
+            IconButton(
+                onClick = { showSearch = false },
+                modifier = Modifier
+                    .align(androidx.compose.ui.Alignment.TopStart)
+                    .padding(8.dp)
+                    .size(44.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Icon(
+                    Icons.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.cd_back),
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
 }
 
 private fun tabIcon(tab: GalleryTab): ImageVector = when (tab) {
     GalleryTab.Home -> Icons.Filled.Home
-    GalleryTab.Search -> Icons.Filled.Search
+    GalleryTab.Favorites -> Icons.Filled.Favorite
     GalleryTab.Settings -> Icons.Filled.Settings
 }
 
 @Composable
 private fun tabLabel(tab: GalleryTab): String = when (tab) {
     GalleryTab.Home -> stringResource(R.string.tab_home)
-    GalleryTab.Search -> stringResource(R.string.tab_search)
+    GalleryTab.Favorites -> stringResource(R.string.tab_favorites)
     GalleryTab.Settings -> stringResource(R.string.tab_settings)
 }

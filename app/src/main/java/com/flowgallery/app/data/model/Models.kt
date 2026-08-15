@@ -88,7 +88,7 @@ data class ViewerState(
 /** Bottom navigation destinations. */
 enum class GalleryTab(val label: String) {
     Home("Home"),
-    Search("Search"),
+    Favorites("Favorites"),
     Settings("Settings")
 }
 
