@@ -120,8 +120,9 @@ fun ImageViewer(
     var showDuplicates by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
     // Landscape pure-play fullscreen for videos (no browsing chrome).
-    // rememberSaveable so a config change (rotation) preserves the state.
-    var videoFullscreen by rememberSaveable(currentIndex) { mutableStateOf(false) }
+    // NO key: swiping to the next video while fullscreen keeps it fullscreen
+    // (a currentIndex key would reset it on every page change).
+    var videoFullscreen by rememberSaveable { mutableStateOf(false) }
 
     // HorizontalPager: items are laid out side by side; dragging moves them
     // together (ViewPager feel), vertical drags never navigate.
@@ -136,6 +137,11 @@ fun ImageViewer(
     val currentItem = images[pagerCurrent]
     val isVideo = currentItem.type.isVideo
     val duplicates = remember(currentItem.id) { currentItem.duplicates }
+
+    // Swiping from a video to an image exits video fullscreen automatically.
+    androidx.compose.runtime.LaunchedEffect(isVideo) {
+        if (!isVideo) videoFullscreen = false
+    }
 
     // External navigation (arrows / thumbnails / subfolder crossing) syncs
     // the pager to the new current index.
@@ -165,16 +171,16 @@ fun ImageViewer(
         }.collect { (page, fraction) ->
             val cb = onNavigateDelta
             if (cb == null) return@collect
-            if (kotlin.math.abs(fraction) < 0.3f) {
+            if (kotlin.math.abs(fraction) < 0.25f) {
                 boundaryFired = false
                 return@collect
             }
             if (boundaryFired) return@collect
             val last = images.lastIndex
-            if (page == 0 && fraction < -0.5f) {
+            if (page == 0 && fraction < -0.35f) {
                 boundaryFired = true
                 cb(-1)
-            } else if (page == last && fraction > 0.5f) {
+            } else if (page == last && fraction > 0.35f) {
                 boundaryFired = true
                 cb(1)
             }
@@ -228,8 +234,8 @@ fun ImageViewer(
             state = pagerState,
             key = { images[it].id },
             beyondViewportPageCount = 1,
-            // Video fullscreen = pure play: no page swiping.
-            userScrollEnabled = !videoFullscreen,
+            // Swiping works in video fullscreen too — it's the only way to
+            // move between videos (and across subfolders) there.
             modifier = Modifier.fillMaxSize()
         ) { page ->
             val item = images[page]
@@ -1031,10 +1037,18 @@ private fun ZoomableImage(
                 }
             }
     ) {
+        // Direction-aware fit: fill the height for tall images, the width
+        // for wide ones — at least one dimension fills the screen, so there
+        // is no obvious letterboxing band.
+        val fitScale = if (resolvedH >= resolvedW) {
+            androidx.compose.ui.layout.ContentScale.FillHeight
+        } else {
+            androidx.compose.ui.layout.ContentScale.FillWidth
+        }
         SubcomposeAsyncImage(
             model = item.uriString,
             contentDescription = item.name,
-            contentScale = ContentScale.Fit,
+            contentScale = fitScale,
             onSuccess = { state ->
                 val d = state.result.drawable
                 if (d.intrinsicWidth > 0 && d.intrinsicHeight > 0) {
