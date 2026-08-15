@@ -571,15 +571,21 @@ private fun VideoPlayerView(
         // IMPORTANT: PlayerView must NOT consume touches, otherwise the
         // Compose swipe/tap gestures above never fire. SurfaceView renders
         // independently, so playback is unaffected by touch passthrough.
+        // The factory runs once; `update` re-binds the player whenever the
+        // uri changes (swipe to another video) — without it the view keeps
+        // showing the old, already-released player (frozen frame, dead
+        // controls).
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     useController = false
-                    this.player = exoPlayer
                     isClickable = false
                     isFocusable = false
                     setOnTouchListener { _, _ -> false }
                 }
+            },
+            update = { view ->
+                view.player = exoPlayer
             },
             modifier = Modifier.fillMaxSize()
         )

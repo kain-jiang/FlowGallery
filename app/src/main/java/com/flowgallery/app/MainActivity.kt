@@ -319,36 +319,14 @@ private fun MainScaffold(
 
     // Search overlay — fullscreen over Home, entered via the Home search icon
     if (showSearch) {
-        androidx.compose.foundation.layout.Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-        ) {
-            SearchScreen(
-                viewModel = viewModel,
-                onImageClick = { img ->
-                    val idx = viewModel.visibleImages(state).indexOfFirst { it.id == img.id }
-                    if (idx >= 0) viewModel.openViewer(idx)
-                }
-            )
-            // Back button (top-left, below the status bar)
-            IconButton(
-                onClick = { showSearch = false },
-                modifier = Modifier
-                    .align(androidx.compose.ui.Alignment.TopStart)
-                    .statusBarsPadding()
-                    .padding(8.dp)
-                    .size(44.dp)
-                    .clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Icon(
-                    Icons.Filled.ArrowBack,
-                    contentDescription = stringResource(R.string.cd_back),
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
+        SearchScreen(
+            viewModel = viewModel,
+            onImageClick = { img ->
+                val idx = viewModel.visibleImages(state).indexOfFirst { it.id == img.id }
+                if (idx >= 0) viewModel.openViewer(idx)
+            },
+            onBack = { showSearch = false }
+        )
     }
 }
 
