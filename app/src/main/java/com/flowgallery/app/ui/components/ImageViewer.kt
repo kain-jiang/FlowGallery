@@ -58,6 +58,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -82,6 +83,7 @@ import com.flowgallery.app.R
 import com.flowgallery.app.data.model.ImageItem
 import com.flowgallery.app.data.model.MediaType
 import com.flowgallery.app.ui.theme.Surface2
+import kotlinx.coroutines.launch
 
 /**
  * Full-screen viewer: static image zoom/pan, animated GIF/WebP autoplay,
@@ -157,6 +159,32 @@ fun ImageViewer(
         swipeAccum = 0f
     }
 
+    // Double-tap zoom: images only. First double-tap zooms to 2x (centered),
+    // second restores 1x. Uses an animated transition for a smooth feel.
+    val doubleTapScope = rememberCoroutineScope()
+    fun handleDoubleTap() {
+        if (isVideo || videoFullscreen) return
+        doubleTapScope.launch {
+            if (scale <= 1f) {
+                androidx.compose.animation.core.animate(
+                    initialValue = 1f,
+                    targetValue = 2f,
+                    animationSpec = androidx.compose.animation.core.tween(220)
+                ) { value, _ -> scale = value }
+            } else {
+                androidx.compose.animation.core.animate(
+                    initialValue = scale,
+                    targetValue = 1f,
+                    animationSpec = androidx.compose.animation.core.tween(220)
+                ) { value, _ ->
+                    scale = value
+                    offsetX = 0f
+                    offsetY = 0f
+                }
+            }
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -165,8 +193,12 @@ fun ImageViewer(
             .pointerInput(currentIndex, videoFullscreen) {
                 // Tap toggles the chrome (control bar) for images and videos
                 // — including in video fullscreen, so the progress bar can be
-                // hidden/shown while watching.
-                detectTapGestures { chromeVisible = !chromeVisible }
+                // hidden/shown while watching. Double-tap (images only) zooms
+                // in to 2x / restores 1x instead of toggling the chrome.
+                detectTapGestures(
+                    onDoubleTap = { handleDoubleTap() },
+                    onTap = { chromeVisible = !chromeVisible }
+                )
             }
             .pointerInput(currentIndex, videoFullscreen) {
                 // Swipe navigation is disabled in video fullscreen (pure play).
