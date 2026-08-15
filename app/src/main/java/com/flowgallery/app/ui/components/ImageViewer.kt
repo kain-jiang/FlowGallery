@@ -597,6 +597,8 @@ private fun VideoPlayerView(
     var isPlaying by remember { mutableStateOf(false) }
     var position by remember { mutableStateOf(0L) }
     var duration by remember { mutableStateOf(0L) }
+    /** non-null while the user is dragging the seek bar (immediate feedback) */
+    var dragValue by remember { mutableStateOf<Float?>(null) }
 
     // Reset playback state whenever the video changes (swipe navigation).
     // Without this, the previous video's isPlaying/duration linger and the
@@ -605,6 +607,7 @@ private fun VideoPlayerView(
         isPlaying = false
         position = 0L
         duration = 0L
+        dragValue = null
     }
 
     DisposableEffect(exoPlayer) {
@@ -717,8 +720,17 @@ private fun VideoPlayerView(
                     fontSize = 11.sp
                 )
                 Slider(
-                    value = position.toFloat().coerceIn(0f, duration.coerceAtLeast(1L).toFloat()),
-                    onValueChange = { exoPlayer.seekTo(it.toLong()) },
+                    // While dragging, show the finger position immediately
+                    // (dragValue); commit the seek on release. Otherwise the
+                    // thumb lags behind because position only updates every
+                    // 250ms poll.
+                    value = (dragValue ?: position.toFloat())
+                        .coerceIn(0f, duration.coerceAtLeast(1L).toFloat()),
+                    onValueChange = { dragValue = it },
+                    onValueChangeFinished = {
+                        dragValue?.let { exoPlayer.seekTo(it.toLong()) }
+                        dragValue = null
+                    },
                     valueRange = 0f..duration.coerceAtLeast(1L).toFloat(),
                     modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
                 )
