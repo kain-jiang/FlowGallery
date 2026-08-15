@@ -25,7 +25,9 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.HighQuality
@@ -267,35 +269,31 @@ fun SettingsScreen(
                             modifier = Modifier.weight(1f, fill = false)
                         )
                         Spacer(Modifier.width(8.dp))
-                        // Folder type badge (Normal / Pack) — tap to change
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(
-                                    if (folder.type == com.flowgallery.app.data.model.FolderType.PACK) {
-                                        MaterialTheme.colorScheme.primaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.surfaceVariant
-                                    }
-                                )
-                                .clickable { onEditType(folder) }
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        // Folder type icon: Folder = normal, Collections = pack.
+                        // Tap the icon to toggle the type.
+                        IconButton(
+                            onClick = { onEditType(folder) },
+                            modifier = Modifier.size(28.dp)
                         ) {
-                            Text(
-                                text = stringResource(
+                            Icon(
+                                if (folder.type == com.flowgallery.app.data.model.FolderType.PACK) {
+                                    Icons.Filled.Collections
+                                } else {
+                                    Icons.Filled.Folder
+                                },
+                                contentDescription = stringResource(
                                     if (folder.type == com.flowgallery.app.data.model.FolderType.PACK) {
-                                        R.string.folder_type_pack_short
+                                        R.string.folder_type_pack
                                     } else {
-                                        R.string.folder_type_normal_short
+                                        R.string.folder_type_normal
                                     }
                                 ),
-                                color = if (folder.type == com.flowgallery.app.data.model.FolderType.PACK) {
+                                tint = if (folder.type == com.flowgallery.app.data.model.FolderType.PACK) {
                                     MaterialTheme.colorScheme.primary
                                 } else {
                                     MaterialTheme.colorScheme.onSurfaceVariant
                                 },
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Medium
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
