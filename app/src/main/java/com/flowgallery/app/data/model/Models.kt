@@ -15,7 +15,7 @@ data class Folder(
     val id: Long,
     val name: String,
     val uriString: String,
-    val type: FolderType = FolderType.PACK,
+    val type: FolderType = FolderType.NORMAL,
     val imageCount: Int = 0,
     val isSelected: Boolean = true,
     val subFolders: List<SubFolder> = emptyList()

@@ -77,11 +77,23 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Add a folder from SAF picker result, persist permission + scan it. */
-    fun addFolder(uri: Uri, displayName: String, type: FolderType = FolderType.PACK) {
+    /** Add a folder from SAF picker result with an explicit type. */
+    fun addFolder(uri: Uri, displayName: String, type: FolderType) {
         viewModelScope.launch {
             val added = repository.addFolder(uri, displayName, type)
             if (added) refreshFolders()
+        }
+    }
+
+    /** Change an existing folder's type (Normal ↔ Pack), then rescan. */
+    fun updateFolderType(id: Long, type: FolderType) {
+        viewModelScope.launch {
+            val folders = _uiState.value.folders.map {
+                if (it.id == id) it.copy(type = type, subFolders = emptyList()) else it
+            }
+            repository.saveFolders(folders)
+            _uiState.update { it.copy(folders = folders) }
+            rescan()
         }
     }
 

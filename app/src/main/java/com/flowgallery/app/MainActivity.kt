@@ -91,7 +91,12 @@ class MainActivity : ComponentActivity() {
                     pendingFolderUri = pendingFolder?.uri,
                     pendingFolderName = pendingFolder?.name,
                     pendingTrigger = pendingFolderTrigger.value,
-                    onPendingConsumed = { pendingFolder = null }
+                    onPendingConsumed = {
+                        pendingFolder = null
+                        // bump trigger so Compose recomposes and the dialog
+                        // actually disappears (params are read at composition)
+                        pendingFolderTrigger.value = pendingFolderTrigger.value + 1
+                    }
                 )
             }
         }
@@ -128,6 +133,7 @@ private fun MainScaffold(
 
     var showFolderModal by remember { mutableStateOf(false) }
     var folderToRemove by remember { mutableStateOf<Folder?>(null) }
+    var folderToEditType by remember { mutableStateOf<Folder?>(null) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -173,7 +179,8 @@ private fun MainScaffold(
                 GalleryTab.Settings -> SettingsScreen(
                     viewModel = viewModel,
                     onAddFolder = onPickFolder,
-                    onRemoveFolder = { folder -> folderToRemove = folder }
+                    onRemoveFolder = { folder -> folderToRemove = folder },
+                    onEditType = { folder -> folderToEditType = folder }
                 )
             }
         }
@@ -283,6 +290,19 @@ private fun MainScaffold(
                 onPendingConsumed()
             },
             onDismiss = { onPendingConsumed() }
+        )
+    }
+
+    // Edit existing folder's type from settings (badge tap)
+    folderToEditType?.let { folder ->
+        FolderTypeDialog(
+            folderName = folder.name,
+            recommended = folder.type,
+            onConfirm = { type ->
+                viewModel.updateFolderType(folder.id, type)
+                folderToEditType = null
+            },
+            onDismiss = { folderToEditType = null }
         )
     }
 }

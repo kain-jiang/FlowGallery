@@ -173,7 +173,8 @@ private fun CenteredHint(icon: ImageVector, title: String, desc: String) {
 fun SettingsScreen(
     viewModel: GalleryViewModel,
     onAddFolder: () -> Unit,
-    onRemoveFolder: (Folder) -> Unit
+    onRemoveFolder: (Folder) -> Unit,
+    onEditType: (Folder) -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
 
@@ -227,7 +228,7 @@ fun SettingsScreen(
                             modifier = Modifier.weight(1f, fill = false)
                         )
                         Spacer(Modifier.width(8.dp))
-                        // Folder type badge (Normal / Pack)
+                        // Folder type badge (Normal / Pack) — tap to change
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
@@ -238,6 +239,7 @@ fun SettingsScreen(
                                         MaterialTheme.colorScheme.surfaceVariant
                                     }
                                 )
+                                .clickable { onEditType(folder) }
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
                             Text(

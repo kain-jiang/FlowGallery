@@ -48,9 +48,9 @@ class ImageRepository(private val context: Context) {
                     id = o.getLong("id"),
                     name = o.getString("name"),
                     uriString = o.getString("uri"),
-                    type = runCatching {
-                        FolderType.valueOf(o.optString("type", "PACK"))
-                    }.getOrDefault(FolderType.PACK),
+                    type = o.optString("type").takeIf { it.isNotBlank() }?.let { t ->
+                        runCatching { FolderType.valueOf(t) }.getOrNull()
+                    } ?: FolderType.NORMAL,
                     imageCount = o.optInt("count", 0),
                     isSelected = o.optBoolean("selected", true),
                     subFolders = subList
@@ -120,7 +120,7 @@ class ImageRepository(private val context: Context) {
     }
 
     /** Add a folder with an explicit type, dedup by URI. */
-    fun addFolder(uri: Uri, displayName: String, type: FolderType = FolderType.PACK): Boolean {
+    fun addFolder(uri: Uri, displayName: String, type: FolderType): Boolean {
         val folders = loadFolders().toMutableList()
         if (folders.any { it.uriString == uri.toString() }) return false
 
