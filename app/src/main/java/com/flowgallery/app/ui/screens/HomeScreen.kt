@@ -19,13 +19,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -55,6 +60,7 @@ import com.flowgallery.app.data.model.GalleryTab
 import com.flowgallery.app.data.model.HomeFilter
 import com.flowgallery.app.data.model.ImageItem
 import com.flowgallery.app.data.model.MediaType
+import com.flowgallery.app.data.model.SortMode
 import com.flowgallery.app.ui.components.WaterfallGrid
 import com.flowgallery.app.viewmodel.GalleryViewModel
 
@@ -89,6 +95,11 @@ fun HomeScreen(
                 IconButton(onClick = {}) {
                     Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.cd_search), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                // Sort menu (deep-style dropdown matching the app language)
+                SortMenuButton(
+                    current = state.sortMode,
+                    onSelect = viewModel::setSortMode
+                )
                 // Grid density toggle 2<->3 columns (FR-1 decision #3)
                 IconButton(onClick = viewModel::toggleColumns) {
                     Icon(
@@ -137,7 +148,8 @@ fun HomeScreen(
                         favoriteIds = favorites,
                         onImageClick = onImageClick,
                         onToggleFavorite = viewModel::toggleFavorite,
-                        columnCount = if (state.threeColumns) 3 else 2
+                        columnCount = if (state.threeColumns) 3 else 2,
+                        sortMode = state.sortMode
                     )
                 }
             }
@@ -334,6 +346,73 @@ private fun menuItemColors(scheme: androidx.compose.material3.ColorScheme)
         disabledTextColor = scheme.onSurfaceVariant,
         disabledLeadingIconColor = scheme.onSurfaceVariant
     )
+}
+
+/** Sort-mode dropdown button, styled like the folder selector menu. */
+@Composable
+private fun SortMenuButton(
+    current: SortMode,
+    onSelect: (SortMode) -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    var expanded by remember { mutableStateOf(false) }
+
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(
+                Icons.Filled.Sort,
+                contentDescription = stringResource(R.string.cd_sort),
+                tint = if (current != SortMode.DEFAULT) scheme.primary else scheme.onSurfaceVariant
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.clip(RoundedCornerShape(16.dp)),
+            containerColor = scheme.surface,
+            shape = RoundedCornerShape(16.dp),
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp
+        ) {
+            SortMode.entries.forEach { mode ->
+                val label = when (mode) {
+                    SortMode.DEFAULT -> stringResource(R.string.sort_default)
+                    SortMode.LATEST -> stringResource(R.string.sort_latest)
+                    SortMode.OLDEST -> stringResource(R.string.sort_oldest)
+                    SortMode.LARGEST -> stringResource(R.string.sort_largest)
+                    SortMode.SMALLEST -> stringResource(R.string.sort_smallest)
+                    SortMode.QUALITY -> stringResource(R.string.sort_quality)
+                }
+                val icon = when (mode) {
+                    SortMode.DEFAULT -> Icons.Filled.Sort
+                    SortMode.LATEST -> Icons.Filled.Schedule
+                    SortMode.OLDEST -> Icons.Filled.Schedule
+                    SortMode.LARGEST -> Icons.Filled.ExpandMore
+                    SortMode.SMALLEST -> Icons.Filled.ExpandLess
+                    SortMode.QUALITY -> Icons.Filled.HighQuality
+                }
+                DropdownMenuItem(
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(label, color = scheme.onSurface, fontSize = 15.sp, modifier = Modifier.weight(1f, fill = false))
+                            if (mode == current) {
+                                Spacer(Modifier.width(10.dp))
+                                Icon(
+                                    Icons.Filled.Check,
+                                    contentDescription = null,
+                                    tint = scheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    },
+                    leadingIcon = { Icon(icon, contentDescription = null, tint = scheme.primary) },
+                    onClick = { onSelect(mode); expanded = false },
+                    colors = menuItemColors(scheme)
+                )
+            }
+        }
+    }
 }
 
 @Composable

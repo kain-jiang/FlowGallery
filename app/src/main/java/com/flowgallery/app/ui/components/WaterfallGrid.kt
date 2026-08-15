@@ -42,6 +42,7 @@ import coil.compose.SubcomposeAsyncImage
 import com.flowgallery.app.R
 import com.flowgallery.app.data.model.ImageItem
 import com.flowgallery.app.data.model.MediaType
+import com.flowgallery.app.data.model.SortMode
 import com.flowgallery.app.ui.theme.Success
 import com.flowgallery.app.ui.theme.Warning
 
@@ -59,6 +60,7 @@ fun WaterfallGrid(
     onToggleFavorite: (Long) -> Unit,
     modifier: Modifier = Modifier,
     columnCount: Int = 2,
+    sortMode: SortMode = SortMode.DEFAULT,
     contentPadding: PaddingValues = PaddingValues(12.dp)
 ) {
     LazyVerticalStaggeredGrid(
@@ -76,6 +78,7 @@ fun WaterfallGrid(
             WaterfallCard(
                 image = img,
                 isFavorite = img.id in favoriteIds,
+                sortMode = sortMode,
                 onClick = { onImageClick(img) },
                 onToggleFavorite = { onToggleFavorite(img.id) }
             )
@@ -87,6 +90,7 @@ fun WaterfallGrid(
 private fun WaterfallCard(
     image: ImageItem,
     isFavorite: Boolean,
+    sortMode: SortMode,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
@@ -151,6 +155,30 @@ private fun WaterfallCard(
             )
         }
 
+        // Sort-value display (bottom-right): shows the value the grid is
+        // currently sorted by — time or size. Quality mode reuses the badge.
+        val sortValue = when (sortMode) {
+            SortMode.LATEST, SortMode.OLDEST ->
+                if (image.modifiedTime > 0) formatTimeShort(image.modifiedTime) else null
+            SortMode.LARGEST, SortMode.SMALLEST ->
+                if (image.sizeBytes > 0) formatSize(image.sizeBytes) else null
+            else -> null
+        }
+        if (sortValue != null) {
+            Text(
+                text = sortValue,
+                color = Color.White.copy(alpha = 0.9f),
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .padding(horizontal = 6.dp, vertical = 3.dp)
+            )
+        }
+
         // Media type badge (GIF / WEBP / video play icon) — top-left, FR-10
         if (image.type != MediaType.STATIC_IMAGE) {
             TypeBadge(image.type, Modifier.align(Alignment.TopStart))
@@ -210,4 +238,34 @@ private fun TypeBadge(type: MediaType, modifier: Modifier = Modifier) {
             )
         }
     }
+}
+
+/** Short file-time label, e.g. "08-14" or "2025-08-14". */
+private fun formatTimeShort(ms: Long): String {
+    return try {
+        val cal = java.util.Calendar.getInstance().apply { timeInMillis = ms }
+        val now = java.util.Calendar.getInstance()
+        val sameYear = cal.get(java.util.Calendar.YEAR) == now.get(java.util.Calendar.YEAR)
+        val fmt = java.text.SimpleDateFormat(
+            if (sameYear) "MM-dd" else "yyyy-MM-dd",
+            java.util.Locale.getDefault()
+        )
+        fmt.format(java.util.Date(ms))
+    } catch (e: Exception) {
+        ""
+    }
+}
+
+/** Human-readable file size, e.g. "2.3 MB". */
+private fun formatSize(bytes: Long): String {
+    if (bytes <= 0) return ""
+    val units = arrayOf("B", "KB", "MB", "GB", "TB")
+    var value = bytes.toDouble()
+    var unit = 0
+    while (value >= 1024 && unit < units.lastIndex) {
+        value /= 1024
+        unit++
+    }
+    return if (unit == 0) "${bytes} B"
+    else String.format(java.util.Locale.US, "%.1f %s", value, units[unit])
 }

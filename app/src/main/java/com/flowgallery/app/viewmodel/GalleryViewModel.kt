@@ -8,6 +8,7 @@ import com.flowgallery.app.data.model.Folder
 import com.flowgallery.app.data.model.GalleryTab
 import com.flowgallery.app.data.model.HomeFilter
 import com.flowgallery.app.data.model.ImageItem
+import com.flowgallery.app.data.model.SortMode
 import com.flowgallery.app.data.model.ViewerState
 import com.flowgallery.app.data.repository.ImageRepository
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +31,8 @@ data class GalleryUiState(
     val error: String? = null,
     /** true = 3 columns, false = 2 columns (FR-1 decision #3) */
     val threeColumns: Boolean = false,
+    /** home grid sort mode */
+    val sortMode: SortMode = SortMode.DEFAULT,
     /** type filter for search: null = all, else MediaType name */
     val mediaTypeFilter: String? = null
 )
@@ -45,7 +48,15 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     val favorites: StateFlow<Set<Long>> = _favorites.asStateFlow()
 
     init {
-        _uiState.update { it.copy(threeColumns = prefs.getBoolean(KEY_THREE_COLUMNS, false)) }
+        val savedSort = prefs.getString(KEY_SORT_MODE, null)?.let { name ->
+            runCatching { SortMode.valueOf(name) }.getOrNull()
+        } ?: SortMode.DEFAULT
+        _uiState.update {
+            it.copy(
+                threeColumns = prefs.getBoolean(KEY_THREE_COLUMNS, false),
+                sortMode = savedSort
+            )
+        }
         refreshFolders()
     }
 
@@ -177,6 +188,12 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     fun setMediaTypeFilter(type: String?) =
         _uiState.update { it.copy(mediaTypeFilter = type) }
 
+    /** Set home grid sort mode (persisted). */
+    fun setSortMode(mode: SortMode) {
+        prefs.edit().putString(KEY_SORT_MODE, mode.name).apply()
+        _uiState.update { it.copy(sortMode = mode) }
+    }
+
     // ------------------------------------------------------------------ viewer
 
     fun openViewer(index: Int) = _uiState.update { it.copy(viewer = ViewerState(isOpen = true, index = index)) }
@@ -211,7 +228,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     // ------------------------------------------------------------------ derived
 
-    /** Images visible under the current tab + filter. */
+    /** Images visible under the current tab + filter, sorted by the active mode. */
     fun visibleImages(state: GalleryUiState = _uiState.value): List<ImageItem> {
         var list = state.images
         when (state.currentFilter) {
@@ -225,7 +242,22 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
-        return list
+        return applySort(list, state.sortMode)
+    }
+
+    private fun applySort(list: List<ImageItem>, mode: SortMode): List<ImageItem> = when (mode) {
+        SortMode.DEFAULT -> list
+        SortMode.LATEST -> list.sortedByDescending { it.modifiedTime }
+        SortMode.OLDEST -> list.sortedBy { it.modifiedTime }
+        SortMode.LARGEST -> list.sortedByDescending { it.sizeBytes }
+        SortMode.SMALLEST -> list.sortedBy { it.sizeBytes }
+        SortMode.QUALITY -> list.sortedByDescending {
+            when {
+                it.type.isVideo -> 0
+                it.isHd -> 2
+                else -> 1
+            }
+        }
     }
 
     private val prefs get() = getApplication<Application>().getSharedPreferences("flowgallery", android.content.Context.MODE_PRIVATE)
@@ -233,5 +265,6 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     private companion object {
         const val KEY_FAVORITES = "favorites"
         const val KEY_THREE_COLUMNS = "three_columns"
+        const val KEY_SORT_MODE = "sort_mode"
     }
 }

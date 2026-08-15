@@ -19,6 +19,7 @@
     <string name="cd_search">搜索</string>
     <string name="cd_grid_toggle">切换网格视图</string>
     <string name="cd_add_folder">添加文件夹</string>
+    <string name="cd_sort">排序</string>
     <string name="default_folder_name">文件夹</string>
 
     <!-- Folder modal -->
@@ -64,6 +65,16 @@
     <string name="setting_cache_desc">释放缩略图缓存</string>
     <string name="setting_about">瀑布画廊</string>
     <string name="setting_version">版本 1.0.0</string>
+
+    <!-- Sort modes -->
+    <string name="sort_default">默认</string>
+    <string name="sort_latest">最新优先</string>
+    <string name="sort_oldest">最旧优先</string>
+    <string name="sort_largest">文件最大</string>
+    <string name="sort_smallest">文件最小</string>
+    <string name="sort_quality">画质优先（HD）</string>
+    <string name="sort_value_time">%1$s</string>
+    <string name="sort_value_size">%1$s</string>
 
     <!-- Remove folder -->
     <string name="remove_folder_title">移出文件夹</string>

@@ -19,6 +19,7 @@
     <string name="cd_search">Search</string>
     <string name="cd_grid_toggle">Grid toggle</string>
     <string name="cd_add_folder">Add folder</string>
+    <string name="cd_sort">Sort</string>
     <string name="default_folder_name">Folder</string>
 
     <!-- Folder modal -->
@@ -64,6 +65,16 @@
     <string name="setting_cache_desc">Release cached thumbnails</string>
     <string name="setting_about">FlowGallery</string>
     <string name="setting_version">Version 1.0.0</string>
+
+    <!-- Sort modes -->
+    <string name="sort_default">Default</string>
+    <string name="sort_latest">Newest first</string>
+    <string name="sort_oldest">Oldest first</string>
+    <string name="sort_largest">Largest first</string>
+    <string name="sort_smallest">Smallest first</string>
+    <string name="sort_quality">Quality (HD first)</string>
+    <string name="sort_value_time">%1$s</string>
+    <string name="sort_value_size">%1$s</string>
 
     <!-- Remove folder -->
     <string name="remove_folder_title">Remove Folder</string>

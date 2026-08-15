@@ -52,6 +52,7 @@ data class ImageItem(
     val width: Int = 0,
     val height: Int = 0,
     val sizeBytes: Long = 0L,
+    val modifiedTime: Long = 0L,
     val durationMs: Long? = null,
     val isFavorite: Boolean = false,
     val contentHash: String? = null,
@@ -75,6 +76,16 @@ enum class GalleryTab(val label: String) {
     Home("Home"),
     Search("Search"),
     Settings("Settings")
+}
+
+/** Gallery sort modes (home grid). */
+enum class SortMode {
+    DEFAULT,   // scan order
+    LATEST,    // modified time, newest first
+    OLDEST,    // modified time, oldest first
+    LARGEST,   // file size, biggest first
+    SMALLEST,  // file size, smallest first
+    QUALITY    // HD first
 }
 
 /** Special home-tab filters that are not real folders. */

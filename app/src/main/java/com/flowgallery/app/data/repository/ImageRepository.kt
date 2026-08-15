@@ -204,7 +204,7 @@ class ImageRepository(private val context: Context) {
             out: MutableList<ImageItem>
         ) {
             val children = resolver.getChildDocuments(dirUri) ?: return
-            for ((childUri, childName, mime, size) in children) {
+            for ((childUri, childName, mime, size, modified) in children) {
                 if (isImageName(childName) || isVideoName(childName)) {
                     // No content IO during scan — classify by extension only
                     // (dimensions are filled in lazily by the UI via Coil).
@@ -220,7 +220,8 @@ class ImageRepository(private val context: Context) {
                             type = classify(childName),
                             width = 0,
                             height = 0,
-                            sizeBytes = size
+                            sizeBytes = size,
+                            modifiedTime = modified
                         )
                     )
                 } else {
@@ -235,7 +236,7 @@ class ImageRepository(private val context: Context) {
         // Root pass: direct files + first-level subfolders
         val rootChildren = resolver.getChildDocuments(rootUri) ?: emptyList()
         val subGroups = LinkedHashMap<String, Pair<SubFolder, List<ImageItem>>>()
-        for ((childUri, childName, mime, size) in rootChildren) {
+        for ((childUri, childName, mime, size, modified) in rootChildren) {
             if (isImageName(childName) || isVideoName(childName)) {
                 allItems.add(
                     ImageItem(
@@ -247,7 +248,8 @@ class ImageRepository(private val context: Context) {
                         type = classify(childName),
                         width = 0,
                         height = 0,
-                        sizeBytes = size
+                        sizeBytes = size,
+                        modifiedTime = modified
                     )
                 )
             } else {
@@ -367,7 +369,8 @@ class ImageRepository(private val context: Context) {
                     android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID,
                     android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME,
                     android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE,
-                    android.provider.DocumentsContract.Document.COLUMN_SIZE
+                    android.provider.DocumentsContract.Document.COLUMN_SIZE,
+                    android.provider.DocumentsContract.Document.COLUMN_LAST_MODIFIED
                 ),
                 null, null, null
             )?.use { c ->
@@ -379,17 +382,21 @@ class ImageRepository(private val context: Context) {
                     android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE)
                 val sizeCol = c.getColumnIndex(
                     android.provider.DocumentsContract.Document.COLUMN_SIZE)
+                val modCol = c.getColumnIndex(
+                    android.provider.DocumentsContract.Document.COLUMN_LAST_MODIFIED)
                 while (c.moveToNext()) {
                     val docIdChild = c.getString(idCol)
                     val name = c.getString(nameCol) ?: "unknown"
                     val mime = c.getString(mimeCol) ?: ""
                     val size = if (sizeCol >= 0 && !c.isNull(sizeCol)) c.getLong(sizeCol) else 0L
+                    val modified = if (modCol >= 0 && !c.isNull(modCol)) c.getLong(modCol) else 0L
                     list.add(
                         Quad(
                             android.provider.DocumentsContract.buildDocumentUriUsingTree(parentUri, docIdChild),
                             name,
                             mime,
-                            size
+                            size,
+                            modified
                         )
                     )
                 }
@@ -400,12 +407,13 @@ class ImageRepository(private val context: Context) {
         }
     }
 
-    /** (uri, displayName, mimeType, sizeBytes) */
+    /** (uri, displayName, mimeType, sizeBytes, lastModifiedMs) */
     private data class Quad(
         val uri: Uri,
         val name: String,
         val mime: String,
-        val size: Long
+        val size: Long,
+        val modified: Long
     )
 
     private fun android.content.ContentResolver.isDirectory(uri: Uri): Boolean {
