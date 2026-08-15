@@ -35,9 +35,11 @@ data class GalleryUiState(
     val viewer: ViewerState = ViewerState(),
     val isRefreshing: Boolean = false,
     val error: String? = null,
-    /** Default grid columns (2/3/4), set in Settings via a picker (FR-1). */
-    val columnCount: Int = 2,
-    /** Force single-column layout (top-bar toggle, overrides columnCount). */
+    /** Default portrait grid columns (2/3/4), set in Settings (FR-1). */
+    val portraitColumns: Int = 2,
+    /** Default landscape grid columns (2/3/4), set in Settings (FR-1). */
+    val landscapeColumns: Int = 3,
+    /** Force single-column layout (top-bar toggle, overrides both). */
     val singleColumn: Boolean = false,
     /** home grid sort mode */
     val sortMode: SortMode = SortMode.DEFAULT,
@@ -63,7 +65,8 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         } ?: SortMode.DEFAULT
         _uiState.update {
             it.copy(
-                columnCount = prefs.getInt(KEY_COLUMN_COUNT, 2).coerceIn(2, 4),
+                portraitColumns = prefs.getInt(KEY_PORTRAIT_COLUMNS, 2).coerceIn(2, 4),
+                landscapeColumns = prefs.getInt(KEY_LANDSCAPE_COLUMNS, 3).coerceIn(2, 4),
                 singleColumn = prefs.getBoolean(KEY_SINGLE_COLUMN, false),
                 sortMode = savedSort,
                 hdThumbnails = prefs.getBoolean(KEY_HD_THUMBNAILS, true)
@@ -215,11 +218,18 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update { it.copy(singleColumn = newVal) }
     }
 
-    /** Set default grid columns (Settings picker), persisted. */
-    fun setColumnCount(count: Int) {
+    /** Set default portrait grid columns (Settings picker), persisted. */
+    fun setPortraitColumns(count: Int) {
         val c = count.coerceIn(2, 4)
-        prefs.edit().putInt(KEY_COLUMN_COUNT, c).apply()
-        _uiState.update { it.copy(columnCount = c) }
+        prefs.edit().putInt(KEY_PORTRAIT_COLUMNS, c).apply()
+        _uiState.update { it.copy(portraitColumns = c) }
+    }
+
+    /** Set default landscape grid columns (Settings picker), persisted. */
+    fun setLandscapeColumns(count: Int) {
+        val c = count.coerceIn(2, 4)
+        prefs.edit().putInt(KEY_LANDSCAPE_COLUMNS, c).apply()
+        _uiState.update { it.copy(landscapeColumns = c) }
     }
 
     /** Toggle HD thumbnails (FR-8), persisted. */
@@ -390,7 +400,8 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     private companion object {
         const val KEY_FAVORITES = "favorites"
-        const val KEY_COLUMN_COUNT = "column_count"
+        const val KEY_PORTRAIT_COLUMNS = "portrait_columns"
+        const val KEY_LANDSCAPE_COLUMNS = "landscape_columns"
         const val KEY_SINGLE_COLUMN = "single_column"
         const val KEY_SORT_MODE = "sort_mode"
         const val KEY_HD_THUMBNAILS = "hd_thumbnails"

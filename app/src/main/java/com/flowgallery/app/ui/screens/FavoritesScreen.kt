@@ -99,7 +99,7 @@ fun FavoritesScreen(
                 images = favImages,
                 favoriteIds = favorites,
                 onImageClick = onImageClick,
-                columnCount = if (state.singleColumn) 1 else state.columnCount,
+                columnCount = effectiveColumnCount(state),
                 onToggleFavorite = viewModel::toggleFavorite
             )
         }

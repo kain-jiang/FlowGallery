@@ -126,7 +126,7 @@ fun HomeScreen(
                     favoriteIds = favorites,
                     onImageClick = onImageClick,
                     onToggleFavorite = viewModel::toggleFavorite,
-                    columnCount = if (state.singleColumn) 1 else state.columnCount,
+                    columnCount = effectiveColumnCount(state),
                     sortMode = state.sortMode,
                     header = {
                         Column {
@@ -663,6 +663,16 @@ private fun EmptyState(onAddFolder: () -> Unit, modifier: Modifier = Modifier) {
                 .padding(horizontal = 20.dp, vertical = 10.dp)
         )
     }
+}
+
+/** Effective grid columns: single-column toggle wins; otherwise the
+ *  portrait/landscape default configured in Settings applies. */
+@Composable
+fun effectiveColumnCount(state: com.flowgallery.app.viewmodel.GalleryUiState): Int {
+    if (state.singleColumn) return 1
+    val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
+        android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    return if (isLandscape) state.landscapeColumns else state.portraitColumns
 }
 
 /** Short label of the current filter for the compact selector pill. */
