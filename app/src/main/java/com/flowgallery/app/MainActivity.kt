@@ -19,12 +19,16 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
@@ -210,7 +214,10 @@ private fun MainScaffold(
             if (isLandscape) {
                 NavigationRail(
                     containerColor = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.fillMaxHeight()
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        // Keep the rail clear of the punch-hole cutout too
+                        .windowInsetsPadding(WindowInsets.displayCutout)
                 ) {
                     androidx.compose.foundation.layout.Spacer(
                         Modifier.height(12.dp)
@@ -229,6 +236,9 @@ private fun MainScaffold(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
+                    // In landscape, keep clear of the punch-hole camera cutout
+                    // (the cutout sits on the left/right in landscape).
+                    .windowInsetsPadding(if (isLandscape) WindowInsets.displayCutout else WindowInsets(0, 0, 0, 0))
                     .padding(
                         top = innerPadding.calculateTopPadding(),
                         bottom = innerPadding.calculateBottomPadding(),
