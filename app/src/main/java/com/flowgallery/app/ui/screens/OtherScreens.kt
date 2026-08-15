@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
@@ -35,6 +36,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -52,6 +54,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,7 +65,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.flowgallery.app.BuildConfig
 import com.flowgallery.app.R
+import com.flowgallery.app.data.Updater
 import com.flowgallery.app.data.model.Folder
 import com.flowgallery.app.data.model.ImageItem
 import com.flowgallery.app.data.model.MediaType
@@ -74,6 +79,7 @@ import com.flowgallery.app.ui.theme.Muted
 import com.flowgallery.app.ui.theme.Surface
 import com.flowgallery.app.ui.theme.Surface2
 import com.flowgallery.app.viewmodel.GalleryViewModel
+import kotlinx.coroutines.launch
 
 /** Search screen: filters the current library by filename. */
 @Composable
@@ -552,11 +558,16 @@ fun SettingsScreen(
             )
         }
         item {
+            // About — real version from BuildConfig (matches the APK)
             SettingsItem(
                 icon = Icons.Filled.Info,
                 name = stringResource(R.string.setting_about),
-                desc = stringResource(R.string.setting_version)
+                desc = stringResource(R.string.setting_version_name, BuildConfig.VERSION_NAME)
             )
+        }
+        item {
+            // Check for updates (GitHub Releases self-update)
+            UpdateCheckItem()
         }
     }
 }
@@ -765,4 +776,210 @@ private fun SearchTypeChip(
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp)
     )
+}
+
+/**
+ * "Check for updates" settings row: queries the GitHub latest release,
+ * and if newer, prompts to download + install the APK.
+ */
+@Composable
+private fun UpdateCheckItem() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    val scope = rememberCoroutineScope()
+
+    var state by remember { mutableStateOf("idle") } // idle | checking | update | upToDate | downloading | error
+    var updateInfo by remember { mutableStateOf<Updater.UpdateInfo?>(null) }
+    var progress by remember { mutableStateOf(0f) }
+    var showDownloadDialog by remember { mutableStateOf(false) }
+
+    val statusText = when (state) {
+        "checking" -> stringResource(R.string.update_checking)
+        "update" -> stringResource(R.string.update_available, updateInfo?.versionName ?: "")
+        "upToDate" -> stringResource(R.string.update_up_to_date)
+        "downloading" -> stringResource(R.string.update_downloading, (progress * 100).toInt())
+        "error" -> stringResource(R.string.update_error)
+        else -> stringResource(R.string.update_check)
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(scheme.surface)
+            .clickable(enabled = state != "checking" && state != "downloading") {
+                scope.launch {
+                    state = "checking"
+                    val info = Updater.checkForUpdate(BuildConfig.VERSION_CODE)
+                    if (info == null) {
+                        // null also covers failures — retryable
+                        state = "upToDate"
+                    } else {
+                        updateInfo = info
+                        state = "update"
+                        showDownloadDialog = true
+                    }
+                }
+            }
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(scheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                if (state == "downloading") Icons.Filled.Download else Icons.Filled.SystemUpdate,
+                contentDescription = null,
+                tint = scheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                stringResource(R.string.setting_update),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = scheme.onSurface
+            )
+            Text(
+                statusText,
+                fontSize = 12.sp,
+                color = if (state == "update") scheme.primary else scheme.onSurfaceVariant
+            )
+        }
+    }
+
+    // New-version dialog → download → install (custom app-styled dialog)
+    if (showDownloadDialog) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { showDownloadDialog = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(scheme.surface)
+                    .padding(24.dp)
+            ) {
+                // Drag handle
+                Box(
+                    modifier = Modifier
+                        .size(width = 40.dp, height = 4.dp)
+                        .align(Alignment.CenterHorizontally)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(scheme.outline)
+                )
+                Spacer(Modifier.height(20.dp))
+
+                // Icon chip
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(scheme.primary.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Filled.SystemUpdate,
+                        contentDescription = null,
+                        tint = scheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+
+                Text(
+                    text = stringResource(R.string.update_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = scheme.onSurface
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = stringResource(
+                        R.string.update_prompt,
+                        updateInfo?.versionName ?: "", BuildConfig.VERSION_NAME
+                    ),
+                    color = scheme.onSurfaceVariant,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp
+                )
+
+                Spacer(Modifier.height(24.dp))
+
+                // Confirm (primary) + cancel row — app-style buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Cancel — subtle outline button
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(scheme.surfaceVariant)
+                            .clickable { showDownloadDialog = false }
+                            .padding(vertical = 14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.cancel),
+                            color = scheme.onSurfaceVariant,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    // Download — primary filled button
+                    Box(
+                        modifier = Modifier
+                            .weight(1.4f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(scheme.primary)
+                            .clickable {
+                                showDownloadDialog = false
+                                val info = updateInfo ?: return@clickable
+                                scope.launch {
+                                    state = "downloading"
+                                    val apk = java.io.File(context.cacheDir, "shared/flowgallery-update.apk")
+                                    val ok = Updater.downloadApk(info.apkUrl, apk)
+                                    if (ok) {
+                                        state = "idle"
+                                        installApk(context, apk)
+                                    } else {
+                                        state = "error"
+                                    }
+                                }
+                            }
+                            .padding(vertical = 14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.update_download),
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Kick off the system package installer for the downloaded APK. */
+private fun installApk(context: android.content.Context, apk: java.io.File) {
+    val uri = androidx.core.content.FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        apk
+    )
+    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, "application/vnd.android.package-archive")
+        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    runCatching { context.startActivity(intent) }
 }
