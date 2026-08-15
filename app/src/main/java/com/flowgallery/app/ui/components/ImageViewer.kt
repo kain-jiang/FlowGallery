@@ -691,15 +691,13 @@ private fun VideoPlayerView(
         }
 
         // Control bar: play/pause + progress + time — hidden with the chrome.
-        // Padded up so it never overlaps the thumbnail strip below (unless
-        // fullscreen, where there is no strip).
+        // No background scrim — clean overlay on the video.
         if (chromeVisible) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
                     .padding(bottom = if (fullscreen) 8.dp else 150.dp)
-                    .background(Color.Black.copy(alpha = 0.55f))
                     .padding(horizontal = 12.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
