@@ -250,10 +250,10 @@ fun ImageViewer(
                     .align(Alignment.CenterStart)
                     .padding(start = 14.dp)
                     .size(48.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.4f))
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
             ) {
-                Icon(Icons.Filled.ChevronLeft, contentDescription = stringResource(R.string.cd_prev), tint = Color.White)
+                Icon(Icons.Filled.ChevronLeft, contentDescription = stringResource(R.string.cd_prev), tint = MaterialTheme.colorScheme.primary)
             }
         }
         if (chromeVisible && !videoFullscreen && currentIndex < images.lastIndex) {
@@ -263,10 +263,10 @@ fun ImageViewer(
                     .align(Alignment.CenterEnd)
                     .padding(end = 14.dp)
                     .size(48.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.4f))
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
             ) {
-                Icon(Icons.Filled.ChevronRight, contentDescription = stringResource(R.string.cd_next), tint = Color.White)
+                Icon(Icons.Filled.ChevronRight, contentDescription = stringResource(R.string.cd_next), tint = MaterialTheme.colorScheme.primary)
             }
         }
 
@@ -286,43 +286,43 @@ fun ImageViewer(
                     onClick = onClose,
                     modifier = Modifier
                         .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.4f))
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
                 ) {
-                    Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back), tint = Color.White)
+                    Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back), tint = MaterialTheme.colorScheme.primary)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     IconButton(
                         onClick = { onToggleFavorite(image.id) },
                         modifier = Modifier
                             .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.4f))
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
                     ) {
                         Icon(
                             imageVector = if (image.id in favoriteIds) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                             contentDescription = stringResource(R.string.cd_favorite),
-                            tint = if (image.id in favoriteIds) Color(0xFFEF4444) else Color.White
+                            tint = if (image.id in favoriteIds) Color(0xFFEF4444) else MaterialTheme.colorScheme.primary
                         )
                     }
                     IconButton(
                         onClick = { onShare?.invoke(image) },
                         modifier = Modifier
                             .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.4f))
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
                     ) {
-                        Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.cd_share), tint = Color.White)
+                        Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.cd_share), tint = MaterialTheme.colorScheme.primary)
                     }
                     Box {
                         IconButton(
                             onClick = { showMoreMenu = true },
                             modifier = Modifier
                                 .size(40.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.4f))
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
                         ) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more), tint = Color.White)
+                            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more), tint = MaterialTheme.colorScheme.primary)
                         }
                         // More menu: save to gallery
                         DropdownMenu(
@@ -714,13 +714,13 @@ private fun VideoPlayerView(
                 modifier = Modifier
                     .align(Alignment.Center)
                     .size(56.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.45f))
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
             ) {
                 Icon(
                     Icons.Filled.PlayArrow,
                     contentDescription = stringResource(R.string.cd_play),
-                    tint = Color.White,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(32.dp)
                 )
             }
@@ -734,22 +734,23 @@ private fun VideoPlayerView(
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
                     .padding(bottom = if (fullscreen) 8.dp else 150.dp)
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
                     onClick = { if (isPlaying) exoPlayer.pause() else exoPlayer.play() },
                     modifier = Modifier
                         .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.35f))
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
                 ) {
                     Icon(
                         imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                         contentDescription = if (isPlaying) stringResource(R.string.cd_pause) else stringResource(R.string.cd_play),
-                        tint = Color.White
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
+                Spacer(Modifier.width(10.dp))
                 Text(
                     text = formatTime(position),
                     color = Color.White.copy(alpha = 0.8f),
@@ -787,13 +788,13 @@ private fun VideoPlayerView(
                     onClick = onToggleFullscreen,
                     modifier = Modifier
                         .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.35f))
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
                 ) {
                     Icon(
                         imageVector = if (fullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
                         contentDescription = stringResource(R.string.cd_fullscreen),
-                        tint = Color.White
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
