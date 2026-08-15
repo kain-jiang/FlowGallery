@@ -108,13 +108,8 @@ fun ImageViewer(
     onSaveToGallery: ((ImageItem) -> Unit)? = null
 ) {
     if (images.isEmpty()) return
-    val image = images[currentIndex]
-    val isVideo = image.type.isVideo
 
     var chromeVisible by remember { mutableStateOf(true) }
-    // Real dimensions resolved lazily from the loaded drawable (zero-IO scan).
-    var resolvedWidth by remember(image.uriString) { mutableStateOf(image.width) }
-    var resolvedHeight by remember(image.uriString) { mutableStateOf(image.height) }
     // Thumbnail strip scroll state — auto-centers the current item.
     val thumbListState = androidx.compose.foundation.lazy.rememberLazyListState()
     LaunchedEffect(currentIndex) {
@@ -124,7 +119,6 @@ fun ImageViewer(
     // Duplicate files dialog state (content-dedup copies of this item).
     var showDuplicates by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
-    val duplicates = remember(image.id) { image.duplicates }
     // Landscape pure-play fullscreen for videos (no browsing chrome).
     // rememberSaveable so a config change (rotation) preserves the state.
     var videoFullscreen by rememberSaveable(currentIndex) { mutableStateOf(false) }
@@ -132,14 +126,22 @@ fun ImageViewer(
     // HorizontalPager: items are laid out side by side; dragging moves them
     // together (ViewPager feel), vertical drags never navigate.
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(
-        initialPage = currentIndex
+        initialPage = currentIndex.coerceIn(0, (images.size - 1).coerceAtLeast(0))
     ) { images.size }
+
+    // Single source of truth for "what's on screen" — used by the top bar,
+    // info row and thumbnail highlight so everything updates instantly
+    // while swiping (the external currentIndex syncs asynchronously).
+    val pagerCurrent = pagerState.currentPage.coerceIn(0, images.lastIndex)
+    val currentItem = images[pagerCurrent]
+    val isVideo = currentItem.type.isVideo
+    val duplicates = remember(currentItem.id) { currentItem.duplicates }
 
     // External navigation (arrows / thumbnails / subfolder crossing) syncs
     // the pager to the new current index.
     LaunchedEffect(currentIndex) {
         if (pagerState.currentPage != currentIndex) {
-            pagerState.scrollToPage(currentIndex)
+            pagerState.scrollToPage(currentIndex.coerceIn(0, (images.size - 1).coerceAtLeast(0)))
         }
     }
 
@@ -154,16 +156,26 @@ fun ImageViewer(
 
     // Subfolder-boundary crossing: at the first/last page, dragging further
     // past the threshold jumps into the adjacent subfolder (delta callback).
+    // boundaryFired prevents repeat firing while the fraction stays past the
+    // threshold (would otherwise call navigateViewer every frame).
+    var boundaryFired by remember { mutableStateOf(false) }
     LaunchedEffect(pagerState, images.size) {
         androidx.compose.runtime.snapshotFlow {
             pagerState.currentPage to pagerState.currentPageOffsetFraction
         }.collect { (page, fraction) ->
             val cb = onNavigateDelta
             if (cb == null) return@collect
+            if (kotlin.math.abs(fraction) < 0.3f) {
+                boundaryFired = false
+                return@collect
+            }
+            if (boundaryFired) return@collect
             val last = images.lastIndex
             if (page == 0 && fraction < -0.5f) {
+                boundaryFired = true
                 cb(-1)
             } else if (page == last && fraction > 0.5f) {
+                boundaryFired = true
                 cb(1)
             }
         }
@@ -197,13 +209,16 @@ fun ImageViewer(
             .fillMaxSize()
             .background(Color.Black)
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .pointerInput(currentIndex, videoFullscreen) {
-                // Tap toggles the chrome (control bar) — including in video
-                // fullscreen so the progress bar can be hidden/shown. Zoom &
-                // double-tap live inside each page (ZoomableImage).
-                detectTapGestures(
-                    onTap = { chromeVisible = !chromeVisible }
-                )
+            .pointerInput(currentIndex, videoFullscreen, pagerState.currentPage) {
+                // Tap toggles the chrome. For IMAGE pages the tap is handled
+                // inside ZoomableImage (onTap → chrome toggle) — registering
+                // here too would double-toggle (on and back off). Only VIDEOS
+                // (and video fullscreen) use this outer tap handler.
+                if (currentItem.type.isVideo) {
+                    detectTapGestures(
+                        onTap = { chromeVisible = !chromeVisible }
+                    )
+                }
             }
     ) {
         // Main media — HorizontalPager: items sit side by side, dragging
@@ -241,10 +256,10 @@ fun ImageViewer(
         }
 
         // Prev / Next arrows — shown when navigation is possible in that
-        // direction (currentIndex > 0 / < last). At the subfolder boundary
+        // direction (pagerCurrent > 0 / < last). At the subfolder boundary
         // the delta callback crosses into the adjacent subfolder. Hidden in
         // video fullscreen (pure play).
-        if (chromeVisible && !videoFullscreen && currentIndex > 0) {
+        if (chromeVisible && !videoFullscreen && pagerCurrent > 0) {
             IconButton(
                 onClick = { navigateBy(-1) },
                 modifier = Modifier
@@ -268,7 +283,7 @@ fun ImageViewer(
                 )
             }
         }
-        if (chromeVisible && !videoFullscreen && currentIndex < images.lastIndex) {
+        if (chromeVisible && !videoFullscreen && pagerCurrent < images.lastIndex) {
             IconButton(
                 onClick = { navigateBy(1) },
                 modifier = Modifier
@@ -326,13 +341,13 @@ fun ImageViewer(
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     IconButton(
-                        onClick = { onToggleFavorite(image.id) },
+                        onClick = { onToggleFavorite(currentItem.id) },
                         modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
-                            imageVector = if (image.id in favoriteIds) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                            imageVector = if (currentItem.id in favoriteIds) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                             contentDescription = stringResource(R.string.cd_favorite),
-                            tint = if (image.id in favoriteIds) Color(0xFFEF4444) else Color.White,
+                            tint = if (currentItem.id in favoriteIds) Color(0xFFEF4444) else Color.White,
                             modifier = Modifier
                                 .size(22.dp)
                                 .shadow(
@@ -345,7 +360,7 @@ fun ImageViewer(
                         )
                     }
                     IconButton(
-                        onClick = { onShare?.invoke(image) },
+                        onClick = { onShare?.invoke(currentItem) },
                         modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
@@ -403,7 +418,7 @@ fun ImageViewer(
                                 },
                                 onClick = {
                                     showMoreMenu = false
-                                    onSaveToGallery?.invoke(image)
+                                    onSaveToGallery?.invoke(currentItem)
                                 }
                             )
                         }
@@ -415,10 +430,7 @@ fun ImageViewer(
         // Bottom area — filename row + thumbnail strip for BOTH images and
         // videos (consistent browsing experience). The video control bar
         // lives inside the frame, padded above this area. Hidden in video
-        // fullscreen. Bound to the pager's current page so it updates
-        // instantly while swiping (no reliance on the external index sync).
-        val pagerCurrent = pagerState.currentPage.coerceIn(0, images.lastIndex)
-        val currentItem = images[pagerCurrent]
+        // fullscreen. Uses pagerCurrent/currentItem (defined above).
         val curResolvedW = remember(currentItem.uriString) { mutableIntStateOf(currentItem.width) }
         val curResolvedH = remember(currentItem.uriString) { mutableIntStateOf(currentItem.height) }
         if (chromeVisible && !videoFullscreen) {
@@ -578,7 +590,7 @@ fun ImageViewer(
                 Spacer(Modifier.height(16.dp))
 
                 // Current file first
-                DuplicateRow(item = image, isCurrent = true)
+                DuplicateRow(item = currentItem, isCurrent = true)
                 duplicates.forEach { dup ->
                     Spacer(Modifier.height(8.dp))
                     DuplicateRow(item = dup, isCurrent = false)
