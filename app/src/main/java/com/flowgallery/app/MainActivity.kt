@@ -205,7 +205,6 @@ private fun MainScaffold(
     } else if (showFolderModal) {
         BackHandler { showFolderModal = false }
     }
-
     // Folder selection modal
     if (showFolderModal) {
         FolderSelectionModal(

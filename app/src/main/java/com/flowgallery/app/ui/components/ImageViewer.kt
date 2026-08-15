@@ -1,5 +1,6 @@
 package com.flowgallery.app.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -32,6 +33,8 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
@@ -107,6 +110,24 @@ fun ImageViewer(
     val duplicates = remember(image.id) { image.duplicates }
     // Horizontal swipe accumulator for cross-media navigation.
     var swipeAccum by remember(currentIndex) { mutableFloatStateOf(0f) }
+    // Landscape pure-play fullscreen for videos (no browsing chrome).
+    var videoFullscreen by remember(currentIndex) { mutableStateOf(false) }
+
+    // Fullscreen: rotate the activity to landscape while in this mode.
+    if (isVideo && videoFullscreen) {
+        val activity = androidx.compose.ui.platform.LocalContext.current
+            as? android.app.Activity
+        DisposableEffect(Unit) {
+            activity?.requestedOrientation =
+                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            onDispose {
+                activity?.requestedOrientation =
+                    android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            }
+        }
+        // Back exits fullscreen instead of closing the whole viewer.
+        BackHandler { videoFullscreen = false }
+    }
 
     /** Navigate by a relative delta; prefers the delta callback so boundary
      *  crossings can jump to adjacent subfolders. */
@@ -128,11 +149,15 @@ fun ImageViewer(
             .fillMaxSize()
             .background(Color.Black)
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .pointerInput(currentIndex) {
-                // Tap toggles the chrome for both images and videos.
-                detectTapGestures { chromeVisible = !chromeVisible }
+            .pointerInput(currentIndex, videoFullscreen) {
+                // Tap toggles the chrome for both images and videos —
+                // except in video fullscreen (pure play).
+                if (!videoFullscreen) {
+                    detectTapGestures { chromeVisible = !chromeVisible }
+                }
             }
-            .pointerInput(currentIndex) {
+            .pointerInput(currentIndex, videoFullscreen) {
+                if (videoFullscreen) return@pointerInput
                 if (isVideo) {
                     // Videos: horizontal swipe navigates (no zoom).
                     detectHorizontalDragGestures { change, dragAmount ->
@@ -166,11 +191,19 @@ fun ImageViewer(
                 }
             }
     ) {
-        // Main media: video player / animated image / static image
+        // Main media — fullscreen mode renders ONLY the player (pure play,
+        // no browsing chrome: no arrows, thumbnails, favorites, swipe nav).
         when {
+            isVideo && videoFullscreen -> VideoPlayerView(
+                uriString = image.uriString,
+                chromeVisible = true,
+                fullscreen = true,
+                onToggleFullscreen = { videoFullscreen = false }
+            )
             image.type.isVideo -> VideoPlayerView(
                 uriString = image.uriString,
-                chromeVisible = chromeVisible
+                chromeVisible = chromeVisible,
+                onToggleFullscreen = { videoFullscreen = true }
             )
             else -> SubcomposeAsyncImage(
                 model = image.uriString,
@@ -196,8 +229,9 @@ fun ImageViewer(
 
         // Prev / Next arrows — shown when navigation is possible in that
         // direction (currentIndex > 0 / < last). At the subfolder boundary
-        // the delta callback crosses into the adjacent subfolder.
-        if (chromeVisible && currentIndex > 0) {
+        // the delta callback crosses into the adjacent subfolder. Hidden in
+        // video fullscreen (pure play).
+        if (chromeVisible && !videoFullscreen && currentIndex > 0) {
             IconButton(
                 onClick = { navigateBy(-1) },
                 modifier = Modifier
@@ -210,7 +244,7 @@ fun ImageViewer(
                 Icon(Icons.Filled.ChevronLeft, contentDescription = stringResource(R.string.cd_prev), tint = Color.White)
             }
         }
-        if (chromeVisible && currentIndex < images.lastIndex) {
+        if (chromeVisible && !videoFullscreen && currentIndex < images.lastIndex) {
             IconButton(
                 onClick = { navigateBy(1) },
                 modifier = Modifier
@@ -224,8 +258,10 @@ fun ImageViewer(
             }
         }
 
-        // Top bar — back button on the left, action group on the right
-        if (chromeVisible) {
+        // Top bar — back button on the left, action group on the right.
+        // Hidden in video fullscreen (pure play; back = exit fullscreen via
+        // the player's own control bar).
+        if (chromeVisible && !videoFullscreen) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -281,8 +317,9 @@ fun ImageViewer(
 
         // Bottom area — filename row + thumbnail strip for BOTH images and
         // videos (consistent browsing experience). The video control bar
-        // lives inside the frame, padded above this area.
-        if (chromeVisible) {
+        // lives inside the frame, padded above this area. Hidden in video
+        // fullscreen.
+        if (chromeVisible && !videoFullscreen) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -363,7 +400,19 @@ fun ImageViewer(
                                 .clickable { onNavigate(idx) }
                         ) {
                             SubcomposeAsyncImage(
-                                model = img.uriString,
+                                model = coil.request.ImageRequest.Builder(
+                                    androidx.compose.ui.platform.LocalContext.current
+                                )
+                                    .data(img.uriString)
+                                    .apply {
+                                        if (img.type.isVideo) {
+                                            setParameter(
+                                                com.flowgallery.app.data.SmartVideoFrameDecoder.KEY_VIDEO_URI,
+                                                img.uriString
+                                            )
+                                        }
+                                    }
+                                    .build(),
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
@@ -528,7 +577,9 @@ private fun DuplicateRow(item: ImageItem, isCurrent: Boolean) {
 @Composable
 private fun VideoPlayerView(
     uriString: String,
-    chromeVisible: Boolean
+    chromeVisible: Boolean,
+    fullscreen: Boolean = false,
+    onToggleFullscreen: () -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val exoPlayer = remember(uriString) {
@@ -602,7 +653,13 @@ private fun VideoPlayerView(
         // First-frame cover while paused (renders a real preview image).
         if (!isPlaying) {
             SubcomposeAsyncImage(
-                model = uriString,
+                model = coil.request.ImageRequest.Builder(context)
+                    .data(uriString)
+                    .setParameter(
+                        com.flowgallery.app.data.SmartVideoFrameDecoder.KEY_VIDEO_URI,
+                        uriString
+                    )
+                    .build(),
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize()
@@ -629,13 +686,14 @@ private fun VideoPlayerView(
         }
 
         // Control bar: play/pause + progress + time — hidden with the chrome.
-        // Padded up so it never overlaps the thumbnail strip below.
+        // Padded up so it never overlaps the thumbnail strip below (unless
+        // fullscreen, where there is no strip).
         if (chromeVisible) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 150.dp)
+                    .padding(bottom = if (fullscreen) 8.dp else 150.dp)
                     .background(Color.Black.copy(alpha = 0.55f))
                     .padding(horizontal = 12.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -666,6 +724,17 @@ private fun VideoPlayerView(
                     color = Color.White.copy(alpha = 0.8f),
                     fontSize = 11.sp
                 )
+                // Fullscreen toggle (rotate into landscape pure-play view)
+                IconButton(
+                    onClick = onToggleFullscreen,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = if (fullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
+                        contentDescription = stringResource(R.string.cd_fullscreen),
+                        tint = Color.White
+                    )
+                }
             }
         }
     }

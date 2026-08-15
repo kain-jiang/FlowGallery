@@ -53,6 +53,7 @@
     <string name="cd_more">More</string>
     <string name="cd_play">Play</string>
     <string name="cd_pause">Pause</string>
+    <string name="cd_fullscreen">Fullscreen</string>
 
     <!-- Duplicate files -->
     <string name="duplicate_files">%1$d copies of this file</string>
