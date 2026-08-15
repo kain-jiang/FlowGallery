@@ -68,20 +68,20 @@ fun WaterfallGrid(
     onScrollDirection: ((Boolean) -> Unit)? = null
 ) {
     val gridState = androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState()
-    var lastPos by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    var lastIndex by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
 
-    // Track the list position (index*100000 + offset) to detect direction
-    // reliably — NestedScroll deltas are unreliable here.
+    // Detect direction via firstVisibleItemIndex only — the scroll offset
+    // jumps when the staggered grid crosses items, which made the old
+    // position-based math misreport upward scrolls as downward.
     androidx.compose.runtime.LaunchedEffect(gridState) {
-        androidx.compose.runtime.snapshotFlow {
-            gridState.firstVisibleItemIndex * 100_000 +
-                gridState.firstVisibleItemScrollOffset
-        }.collect { pos ->
-            if (pos != lastPos) {
-                onScrollDirection?.invoke(pos > lastPos)
-                lastPos = pos
+        androidx.compose.runtime.snapshotFlow { gridState.firstVisibleItemIndex }
+            .collect { index ->
+                if (index != lastIndex) {
+                    // Reaching the top always restores the chrome.
+                    onScrollDirection?.invoke(if (index == 0) false else index > lastIndex)
+                    lastIndex = index
+                }
             }
-        }
     }
 
     LazyVerticalStaggeredGrid(
