@@ -12,8 +12,11 @@ android {
         applicationId = "com.flowgallery.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        // Version comes from CI env (git tag) when releasing; local dev
+        // builds fall back to defaults. Tag v1.2.3 → versionName 1.2.3,
+        // versionCode 10203 (semver → int).
+        versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
+        versionName = System.getenv("VERSION_NAME") ?: "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

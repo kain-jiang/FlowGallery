@@ -60,7 +60,20 @@ jobs:
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-        run: ./gradlew assembleRelease --no-daemon --stacktrace
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            export VERSION_NAME="dev"
+            export VERSION_CODE=9999
+          else
+            TAG="${GITHUB_REF_NAME#v}"
+            export VERSION_NAME="$TAG"
+            # semver "x.y.z" -> 10000*x + 100*y + z
+            IFS='.' read -r MAJ MIN PAT <<< "$TAG"
+            MAJ=${MAJ:-0}; MIN=${MIN:-0}; PAT=${PAT:-0}
+            export VERSION_CODE=$((MAJ * 10000 + MIN * 100 + PAT))
+          fi
+          echo "Building v$VERSION_NAME (code $VERSION_CODE)"
+          ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Rename APK with version
         id: apk
