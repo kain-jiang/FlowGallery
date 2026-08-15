@@ -728,7 +728,14 @@ private fun VideoPlayerView(
                         .coerceIn(0f, duration.coerceAtLeast(1L).toFloat()),
                     onValueChange = { dragValue = it },
                     onValueChangeFinished = {
-                        dragValue?.let { exoPlayer.seekTo(it.toLong()) }
+                        val target = dragValue
+                        if (target != null) {
+                            exoPlayer.seekTo(target.toLong())
+                            // Sync the displayed position immediately so the
+                            // thumb doesn't flash back to the old spot before
+                            // the next poll updates it.
+                            position = target.toLong()
+                        }
                         dragValue = null
                     },
                     valueRange = 0f..duration.coerceAtLeast(1L).toFloat(),
