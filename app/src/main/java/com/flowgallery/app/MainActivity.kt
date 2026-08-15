@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -330,11 +331,12 @@ private fun MainScaffold(
                     if (idx >= 0) viewModel.openViewer(idx)
                 }
             )
-            // Back button (top-left, consistent with viewer chrome)
+            // Back button (top-left, below the status bar)
             IconButton(
                 onClick = { showSearch = false },
                 modifier = Modifier
                     .align(androidx.compose.ui.Alignment.TopStart)
+                    .statusBarsPadding()
                     .padding(8.dp)
                     .size(44.dp)
                     .clip(androidx.compose.foundation.shape.CircleShape)
