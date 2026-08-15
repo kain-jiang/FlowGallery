@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -157,7 +158,7 @@ fun HomeScreen(
                                 // default columns set in Settings)
                                 IconButton(onClick = viewModel::toggleSingleColumn) {
                                     Icon(
-                                        Icons.Filled.GridView,
+                                        Icons.Filled.ViewAgenda,
                                         contentDescription = stringResource(R.string.cd_grid_toggle),
                                         tint = if (state.singleColumn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )

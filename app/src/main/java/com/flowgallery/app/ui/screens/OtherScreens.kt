@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -465,14 +466,17 @@ fun SettingsScreen(
             GridColumnsSetting(
                 title = stringResource(R.string.setting_grid_columns_portrait),
                 current = state.portraitColumns,
+                options = listOf(2, 3, 4),
                 onChange = viewModel::setPortraitColumns
             )
         }
         item {
-            // Landscape grid columns — picker (2 / 3 / 4)
+            // Landscape grid columns — picker (wider range: 2-6 columns,
+            // landscape screens have room for more)
             GridColumnsSetting(
                 title = stringResource(R.string.setting_grid_columns_landscape),
                 current = state.landscapeColumns,
+                options = listOf(2, 3, 4, 5, 6),
                 onChange = viewModel::setLandscapeColumns
             )
         }
@@ -539,14 +543,29 @@ private fun SettingsItem(icon: ImageVector, name: String, desc: String) {
     }
 }
 
-/** Settings row with a grid-column picker (2 / 3 / 4), check-marked. */
+/** Settings row with a grid-column picker, check-marked. */
 @Composable
 private fun GridColumnsSetting(
     title: String,
     current: Int,
+    options: List<Int>,
     onChange: (Int) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
+        android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
+    @Composable
+    fun labelOf(count: Int): String = stringResource(
+        when (count) {
+            4 -> R.string.setting_grid_4
+            3 -> R.string.setting_grid_3
+            6 -> R.string.setting_grid_6
+            5 -> R.string.setting_grid_5
+            else -> R.string.setting_grid_2
+        }
+    )
+
     Box {
         Row(
             modifier = Modifier
@@ -581,13 +600,7 @@ private fun GridColumnsSetting(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    stringResource(
-                        when (current) {
-                            4 -> R.string.setting_grid_4
-                            3 -> R.string.setting_grid_3
-                            else -> R.string.setting_grid_2
-                        }
-                    ),
+                    labelOf(current),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -602,24 +615,22 @@ private fun GridColumnsSetting(
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.clip(RoundedCornerShape(16.dp)),
+            modifier = Modifier
+                // Landscape: wider menu so the picker is easy to hit;
+                // portrait: keep it compact.
+                .widthIn(min = if (isLandscape) 360.dp else 220.dp)
+                .clip(RoundedCornerShape(16.dp)),
             containerColor = MaterialTheme.colorScheme.surface,
             shape = RoundedCornerShape(16.dp),
             tonalElevation = 0.dp,
             shadowElevation = 0.dp
         ) {
-            listOf(2, 3, 4).forEach { count ->
+            options.forEach { count ->
                 DropdownMenuItem(
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                stringResource(
-                                    when (count) {
-                                        4 -> R.string.setting_grid_4
-                                        3 -> R.string.setting_grid_3
-                                        else -> R.string.setting_grid_2
-                                    }
-                                ),
+                                labelOf(count),
                                 color = MaterialTheme.colorScheme.onSurface,
                                 fontSize = 15.sp,
                                 modifier = Modifier.weight(1f, fill = false)

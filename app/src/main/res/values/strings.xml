@@ -90,6 +90,8 @@
     <string name="setting_grid_2">2 columns</string>
     <string name="setting_grid_3">3 columns</string>
     <string name="setting_grid_4">4 columns</string>
+    <string name="setting_grid_5">5 columns</string>
+    <string name="setting_grid_6">6 columns</string>
 
     <!-- Sort modes -->
     <string name="sort_default">Default</string>

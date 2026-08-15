@@ -66,7 +66,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update {
             it.copy(
                 portraitColumns = prefs.getInt(KEY_PORTRAIT_COLUMNS, 2).coerceIn(2, 4),
-                landscapeColumns = prefs.getInt(KEY_LANDSCAPE_COLUMNS, 3).coerceIn(2, 4),
+                landscapeColumns = prefs.getInt(KEY_LANDSCAPE_COLUMNS, 3).coerceIn(2, 6),
                 singleColumn = prefs.getBoolean(KEY_SINGLE_COLUMN, false),
                 sortMode = savedSort,
                 hdThumbnails = prefs.getBoolean(KEY_HD_THUMBNAILS, true)
@@ -225,9 +225,10 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update { it.copy(portraitColumns = c) }
     }
 
-    /** Set default landscape grid columns (Settings picker), persisted. */
+    /** Set default landscape grid columns (Settings picker), persisted.
+     *  Landscape screens allow a wider range (2-6 columns). */
     fun setLandscapeColumns(count: Int) {
-        val c = count.coerceIn(2, 4)
+        val c = count.coerceIn(2, 6)
         prefs.edit().putInt(KEY_LANDSCAPE_COLUMNS, c).apply()
         _uiState.update { it.copy(landscapeColumns = c) }
     }

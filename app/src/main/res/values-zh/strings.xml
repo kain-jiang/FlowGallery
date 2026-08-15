@@ -90,6 +90,8 @@
     <string name="setting_grid_2">2 列</string>
     <string name="setting_grid_3">3 列</string>
     <string name="setting_grid_4">4 列</string>
+    <string name="setting_grid_5">5 列</string>
+    <string name="setting_grid_6">6 列</string>
 
     <!-- Sort modes -->
     <string name="sort_default">默认</string>
