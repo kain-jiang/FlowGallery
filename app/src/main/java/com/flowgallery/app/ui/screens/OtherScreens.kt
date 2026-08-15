@@ -566,6 +566,18 @@ private fun GridColumnsSetting(
         }
     )
 
+    androidx.compose.foundation.layout.BoxWithConstraints(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        // Menu width; anchored to the right edge (with margin) so it never
+        // hugs the left screen edge.
+        val menuWidth = if (isLandscape) 360.dp else 220.dp
+        val rightMargin = 16.dp
+        val menuOffset = androidx.compose.ui.unit.DpOffset(
+            x = maxWidth - menuWidth - rightMargin,
+            y = 0.dp
+        )
+
     Box {
         Row(
             modifier = Modifier
@@ -615,10 +627,9 @@ private fun GridColumnsSetting(
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
+            offset = menuOffset,
             modifier = Modifier
-                // Landscape: wider menu so the picker is easy to hit;
-                // portrait: keep it compact.
-                .widthIn(min = if (isLandscape) 360.dp else 220.dp)
+                .widthIn(min = menuWidth)
                 .clip(RoundedCornerShape(16.dp)),
             containerColor = MaterialTheme.colorScheme.surface,
             shape = RoundedCornerShape(16.dp),
@@ -660,5 +671,6 @@ private fun GridColumnsSetting(
                 )
             }
         }
-    }
+    } // Box (anchor)
+    } // BoxWithConstraints
 }
