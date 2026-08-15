@@ -152,13 +152,13 @@ fun ImageViewer(
             .background(Color.Black)
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .pointerInput(currentIndex, videoFullscreen) {
-                // Tap toggles the chrome for both images and videos —
-                // except in video fullscreen (pure play).
-                if (!videoFullscreen) {
-                    detectTapGestures { chromeVisible = !chromeVisible }
-                }
+                // Tap toggles the chrome (control bar) for images and videos
+                // — including in video fullscreen, so the progress bar can be
+                // hidden/shown while watching.
+                detectTapGestures { chromeVisible = !chromeVisible }
             }
             .pointerInput(currentIndex, videoFullscreen) {
+                // Swipe navigation is disabled in video fullscreen (pure play).
                 if (videoFullscreen) return@pointerInput
                 if (isVideo) {
                     // Videos: horizontal swipe navigates (no zoom).
@@ -193,19 +193,22 @@ fun ImageViewer(
                 }
             }
     ) {
-        // Main media — fullscreen mode renders ONLY the player (pure play,
-        // no browsing chrome: no arrows, thumbnails, favorites, swipe nav).
+        // Main media — the SAME VideoPlayerView composable is used in both
+        // normal and fullscreen modes so the ExoPlayer instance (and playback
+        // position) survives the toggle. Fullscreen hides all browsing chrome
+        // via the !videoFullscreen guards below.
         when {
-            isVideo && videoFullscreen -> VideoPlayerView(
-                uriString = image.uriString,
-                chromeVisible = true,
-                fullscreen = true,
-                onToggleFullscreen = { videoFullscreen = false }
-            )
             image.type.isVideo -> VideoPlayerView(
                 uriString = image.uriString,
                 chromeVisible = chromeVisible,
-                onToggleFullscreen = { videoFullscreen = true }
+                fullscreen = videoFullscreen,
+                onToggleFullscreen = {
+                    if (videoFullscreen) {
+                        // exiting fullscreen: make sure browsing chrome is back
+                        chromeVisible = true
+                    }
+                    videoFullscreen = !videoFullscreen
+                }
             )
             else -> SubcomposeAsyncImage(
                 model = image.uriString,
