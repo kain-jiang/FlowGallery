@@ -276,6 +276,7 @@ private fun MainScaffold(
                     GalleryTab.Settings -> SettingsScreen(
                         viewModel = viewModel,
                         onAddFolder = onPickFolder,
+                        onAddSmb = { showSmbDialog = true },
                         onRemoveFolder = { folder -> folderToRemove = folder },
                         onEditType = { folder -> folderToEditType = folder }
                     )
