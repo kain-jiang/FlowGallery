@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -65,34 +64,30 @@ fun WaterfallGrid(
     columnCount: Int = 2,
     sortMode: SortMode = SortMode.DEFAULT,
     contentPadding: PaddingValues = PaddingValues(12.dp),
-    /** Reports scroll direction: positive = scrolling down, negative = up. */
+    /** Reports scroll direction: true = scrolling down (browsing deeper), false = up. */
     onScrollDirection: ((Boolean) -> Unit)? = null
 ) {
-    var lastDelta by androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    val gridState = androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState()
+    var lastPos by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
 
-    // Listen to scroll delta to detect direction (used to auto-hide chrome).
-    val scrollConnection = remember {
-        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
-            override fun onPostScroll(
-                consumed: androidx.compose.ui.geometry.Offset,
-                available: androidx.compose.ui.geometry.Offset,
-                source: androidx.compose.ui.input.nestedscroll.NestedScrollSource
-            ): androidx.compose.ui.geometry.Offset {
-                val delta = consumed.y + available.y
-                if (delta != 0f) {
-                    lastDelta = delta
-                    onScrollDirection?.invoke(delta > 0f)
-                }
-                return androidx.compose.ui.geometry.Offset.Zero
+    // Track the list position (index*100000 + offset) to detect direction
+    // reliably — NestedScroll deltas are unreliable here.
+    androidx.compose.runtime.LaunchedEffect(gridState) {
+        androidx.compose.runtime.snapshotFlow {
+            gridState.firstVisibleItemIndex * 100_000 +
+                gridState.firstVisibleItemScrollOffset
+        }.collect { pos ->
+            if (pos != lastPos) {
+                onScrollDirection?.invoke(pos > lastPos)
+                lastPos = pos
             }
         }
     }
 
     LazyVerticalStaggeredGrid(
         columns = StaggeredGridCells.Fixed(columnCount),
-        modifier = modifier
-            .fillMaxSize()
-            .nestedScroll(scrollConnection),
+        state = gridState,
+        modifier = modifier.fillMaxSize(),
         verticalItemSpacing = 10.dp,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = contentPadding

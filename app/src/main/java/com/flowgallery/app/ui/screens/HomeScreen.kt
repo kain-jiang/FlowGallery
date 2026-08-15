@@ -97,11 +97,11 @@ fun HomeScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Header — slides away when scrolling down
+            // Header — slides up & away when scrolling down
             AnimatedVisibility(
                 visible = chromeVisible,
-                enter = fadeIn() + slideInVertically { -it },
-                exit = fadeOut() + slideOutVertically { -it }
+                enter = fadeIn() + slideInVertically { -it / 2 },
+                exit = fadeOut() + slideOutVertically { -it / 2 }
             ) {
                 Column {
                     Row(

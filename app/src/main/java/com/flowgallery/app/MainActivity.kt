@@ -10,6 +10,8 @@ import androidx.activity.result.launch
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -157,8 +159,8 @@ private fun MainScaffold(
             AnimatedVisibility(
                 // Home hides with scroll; other tabs always show the bar
                 visible = state.currentTab != GalleryTab.Home || bottomBarVisible,
-                enter = fadeIn(),
-                exit = fadeOut()
+                enter = fadeIn() + slideInVertically { it },
+                exit = fadeOut() + slideOutVertically { it }
             ) {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                     GalleryTab.entries.forEach { tab ->
