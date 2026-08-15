@@ -116,7 +116,7 @@ fun HomeScreen(
                 currentFilter = state.currentFilter,
                 currentSubFolderId = state.currentSubFolderId,
                 favoritesCount = favorites.size,
-                totalCount = state.images.size,
+                totalCount = state.dedupedIds.size,
                 onSelectFolder = viewModel::selectFilter,
                 onSelectSubFolder = viewModel::selectSubFolder
             )

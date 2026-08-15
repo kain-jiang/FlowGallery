@@ -20,7 +20,12 @@ import kotlinx.coroutines.launch
 
 data class GalleryUiState(
     val folders: List<Folder> = emptyList(),
+    /** FULL set of scanned media — subfolder/folder views must keep every
+     *  item even if it duplicates one elsewhere (dedup applies ONLY to the
+     *  "All" view via [dedupedIds]). */
     val images: List<ImageItem> = emptyList(),
+    /** ids kept after content-dedup — used exclusively by the All view */
+    val dedupedIds: Set<Long> = emptySet(),
     val currentTab: GalleryTab = GalleryTab.Home,
     /** null = All, HomeFilter.FAVORITES = favorites, else root folder id */
     val currentFilter: Long? = null,
@@ -117,13 +122,8 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             val selected = _uiState.value.folders.filter { it.isSelected }
             val result = runCatching { repository.scanAll(selected) }
             result.onSuccess { scanResults ->
-                // Merge all items, then dedup: (1) fast URI-level pass,
-                // (2) content-level pass (size + MD5) for files that still
-                // share a size — catches duplicates across different folders
-                // or differently-added copies of the same media.
-                val merged = scanResults.flatMap { it.items }
-                val uriDeduped = merged.distinctBy { it.uriString }
-                val images = repository.dedupByContent(uriDeduped)
+                // Keep the FULL set — dedup applies only to the All view.
+                val images = scanResults.flatMap { it.items }
                 // Update per-folder counts and subfolder breakdowns in one pass
                 for (res in scanResults) {
                     repository.updateFolderSubFolders(res.folderId, res.subFolders, res.items.size)
@@ -140,9 +140,21 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                 // stats and masonry ratios become accurate (zero-IO scan
                 // leaves width/height at 0).
                 resolveDimensionsInBackground(images)
+                // Compute All-view dedup ids in the background.
+                computeDedupInBackground(images)
             }.onFailure { e ->
                 _uiState.update { it.copy(isRefreshing = false, error = e.message) }
             }
+        }
+    }
+
+    /** Background content-dedup for the All view (size + MD5). */
+    private fun computeDedupInBackground(images: List<ImageItem>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val uriDeduped = images.distinctBy { it.uriString }
+            val deduped = repository.dedupByContent(uriDeduped)
+            val ids = deduped.map { it.id }.toSet()
+            _uiState.update { it.copy(dedupedIds = ids) }
         }
     }
 
@@ -228,11 +240,12 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     // ------------------------------------------------------------------ derived
 
-    /** Images visible under the current tab + filter, sorted by the active mode. */
+    /** Images visible under the current tab + filter, sorted by the active mode.
+     *  Dedup applies ONLY to the All view; folder/subfolder views keep full set. */
     fun visibleImages(state: GalleryUiState = _uiState.value): List<ImageItem> {
         var list = state.images
         when (state.currentFilter) {
-            null -> {} // All
+            null -> list = list.filter { it.id in state.dedupedIds } // All: deduped
             HomeFilter.FAVORITES -> list = list.filter { it.id in _favorites.value }
             else -> {
                 list = if (state.currentSubFolderId != null) {
