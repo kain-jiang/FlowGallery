@@ -160,8 +160,7 @@ private fun MainScaffold(
                     viewModel = viewModel,
                     onOpenFolderModal = { showFolderModal = true },
                     onImageClick = { img ->
-                        val seq = viewModel.viewerSequence(state)
-                        val idx = seq.indexOfFirst { it.id == img.id }
+                        val idx = viewModel.visibleImages(state).indexOfFirst { it.id == img.id }
                         if (idx >= 0) viewModel.openViewer(idx)
                     },
                     onRemoveFolder = { folder ->
@@ -206,19 +205,13 @@ private fun MainScaffold(
         )
     }
 
-    // Full-screen viewer — browse sequence supports cross-subfolder chaining:
-    // from Home it uses viewerSequence (subfolder chains wrap around), from
-    // Search it stays within the search results.
-    val viewerImages = if (state.currentTab == GalleryTab.Home) {
-        viewModel.viewerSequence(state)
-    } else {
-        viewModel.visibleImages(state)
-    }
+    // Full-screen viewer — shows ONLY the current subfolder's media; the
+    // thumbnail strip stays within it, and boundary navigation crosses to
+    // adjacent subfolders (currentSubFolderId syncs so returning to Home
+    // lands on the subfolder being browsed).
+    val viewerImages = viewModel.viewerImages(state)
     if (state.viewer.isOpen && viewerImages.isNotEmpty()) {
-        // Wrap-around navigation: past the last item → first; before the
-        // first → last (cross-subfolder continuous browsing).
-        val size = viewerImages.size
-        val index = ((state.viewer.index % size) + size) % size
+        val index = state.viewer.index.coerceIn(0, viewerImages.lastIndex)
         // Immersive mode: hide status bar + nav bar while viewing
         val view = LocalView.current
         DisposableEffect(view) {
@@ -241,8 +234,12 @@ private fun MainScaffold(
             currentIndex = index,
             favoriteIds = favorites,
             onNavigate = { newIdx ->
-                // Keep raw index; ImageViewer already wraps within the list.
+                // absolute index (thumbnail taps): just move within current list
                 viewModel.openViewer(newIdx)
+            },
+            onNavigateDelta = { delta ->
+                // relative move (arrows / swipe): cross subfolder at boundaries
+                viewModel.navigateViewer(delta)
             },
             onClose = viewModel::closeViewer,
             onToggleFavorite = viewModel::toggleFavorite

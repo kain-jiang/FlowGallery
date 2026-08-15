@@ -80,7 +80,9 @@ data class ImageItem(
 /** UI state for the full-screen viewer. */
 data class ViewerState(
     val isOpen: Boolean = false,
-    val index: Int = 0
+    val index: Int = 0,
+    /** subfolder currently being browsed in the viewer (null = root level) */
+    val subFolderId: Long? = null
 )
 
 /** Bottom navigation destinations. */

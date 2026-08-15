@@ -81,6 +81,7 @@ fun ImageViewer(
     currentIndex: Int,
     favoriteIds: Set<Long>,
     onNavigate: (Int) -> Unit,
+    onNavigateDelta: ((Int) -> Unit)? = null,
     onClose: () -> Unit,
     onToggleFavorite: (Long) -> Unit
 ) {
@@ -107,6 +108,13 @@ fun ImageViewer(
     // Horizontal swipe accumulator for cross-media navigation.
     var swipeAccum by remember(currentIndex) { mutableFloatStateOf(0f) }
 
+    /** Navigate by a relative delta; prefers the delta callback so boundary
+     *  crossings can jump to adjacent subfolders. */
+    fun navigateBy(delta: Int) {
+        val cb = onNavigateDelta
+        if (cb != null) cb(delta) else onNavigate(currentIndex + delta)
+    }
+
     // Reset transform when switching images
     LaunchedEffect(currentIndex) {
         scale = 1f
@@ -131,7 +139,7 @@ fun ImageViewer(
                         change.consume()
                         swipeAccum += dragAmount
                         if (kotlin.math.abs(swipeAccum) > 90f) {
-                            onNavigate(currentIndex + if (swipeAccum < 0) 1 else -1)
+                            navigateBy(if (swipeAccum < 0) 1 else -1)
                             swipeAccum = 0f
                         }
                     }
@@ -143,7 +151,7 @@ fun ImageViewer(
                             // At 1x: horizontal drags navigate instead of pan.
                             swipeAccum += pan.x
                             if (kotlin.math.abs(swipeAccum) > 90f) {
-                                onNavigate(currentIndex + if (swipeAccum < 0) 1 else -1)
+                                navigateBy(if (swipeAccum < 0) 1 else -1)
                                 swipeAccum = 0f
                             }
                             scale = 1f
@@ -186,11 +194,12 @@ fun ImageViewer(
             )
         }
 
-        // Prev / Next arrows — always shown for both images and videos;
-        // navigation wraps around (last → first, first → last).
-        if (chromeVisible) {
+        // Prev / Next arrows — shown when navigation is possible in that
+        // direction (currentIndex > 0 / < last). At the subfolder boundary
+        // the delta callback crosses into the adjacent subfolder.
+        if (chromeVisible && currentIndex > 0) {
             IconButton(
-                onClick = { onNavigate(currentIndex - 1) },
+                onClick = { navigateBy(-1) },
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .padding(12.dp)
@@ -201,9 +210,9 @@ fun ImageViewer(
                 Icon(Icons.Filled.ChevronLeft, contentDescription = stringResource(R.string.cd_prev), tint = Color.White)
             }
         }
-        if (chromeVisible) {
+        if (chromeVisible && currentIndex < images.lastIndex) {
             IconButton(
-                onClick = { onNavigate(currentIndex + 1) },
+                onClick = { navigateBy(1) },
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(12.dp)

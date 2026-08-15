@@ -221,16 +221,59 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     // ------------------------------------------------------------------ viewer
 
-    fun openViewer(index: Int) = _uiState.update { it.copy(viewer = ViewerState(isOpen = true, index = index)) }
+    /** Open the viewer at [index] within the currently selected subfolder. */
+    fun openViewer(index: Int) {
+        _uiState.update {
+            it.copy(
+                viewer = ViewerState(
+                    isOpen = true,
+                    index = index,
+                    subFolderId = it.currentSubFolderId
+                )
+            )
+        }
+    }
 
     fun closeViewer() = _uiState.update { it.copy(viewer = ViewerState()) }
 
+    /**
+     * Navigate by [delta] (±1). At the first/last item of the current
+     * subfolder, cross into the adjacent subfolder: forward → next
+     * subfolder's first item; backward → previous subfolder's last item.
+     * At the very first/last subfolder of the pack, stop (no wrapping).
+     * Non-subfolder views simply clamp at the ends (no wrapping).
+     */
     fun navigateViewer(delta: Int) {
         _uiState.update { st ->
-            val count = visibleImages(st).size
-            if (count == 0) return@update st
-            val next = (st.viewer.index + delta).coerceIn(0, count - 1)
-            st.copy(viewer = st.viewer.copy(index = next))
+            val images = viewerImages(st)
+            if (images.isEmpty()) return@update st
+
+            val newIndex = st.viewer.index + delta
+            if (newIndex in images.indices) {
+                return@update st.copy(viewer = st.viewer.copy(index = newIndex))
+            }
+
+            // Boundary reached: attempt to cross to adjacent subfolder.
+            val subId = st.viewer.subFolderId ?: return@update st // root view: clamp
+            val subs = orderedSubs(st)
+            val pos = subs.indexOfFirst { it.id == subId }
+            if (pos < 0) return@update st
+
+            val targetPos = pos + delta
+            if (targetPos !in subs.indices) return@update st // no wrapping
+
+            val targetSub = subs[targetPos]
+            val targetImages = st.images.filter { it.subFolderUri == targetSub.uriString }
+            if (targetImages.isEmpty()) return@update st
+
+            val targetIndex = if (delta > 0) 0 else targetImages.lastIndex
+            st.copy(
+                currentSubFolderId = targetSub.id,
+                viewer = st.viewer.copy(
+                    index = targetIndex,
+                    subFolderId = targetSub.id
+                )
+            )
         }
     }
 
@@ -281,30 +324,28 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Full-screen browse sequence.
-     *
-     * Normal views: same as [visibleImages]. In a subfolder view the
-     * sequence chains EVERY subfolder of the current root folder (starting
-     * with the active one, in order), so swiping past the last media enters
-     * the next subfolder's first media, and swiping back before the first
-     * wraps to the previous subfolder's last media — continuous cross-folder
-     * browsing without leaving the viewer.
+     * Full-screen browse list: ONLY the subfolder currently being viewed
+     * (thumbnails strip shows just this subfolder). When the user reaches the
+     * first/last item and keeps navigating, the viewer jumps to the adjacent
+     * subfolder via [openViewer] boundary handling — no eager loading of
+     * other subfolders, no wrapping around within a subfolder.
      */
-    fun viewerSequence(state: GalleryUiState = _uiState.value): List<ImageItem> {
-        if (state.currentSubFolderId == null) return visibleImages(state)
-        val rootFolder = state.folders.find { it.id == state.currentFilter }
-            ?: return visibleImages(state)
-        val subs = rootFolder.subFolders.filter { it.imageCount > 0 }
-        if (subs.isEmpty()) return visibleImages(state)
+    fun viewerImages(state: GalleryUiState = _uiState.value): List<ImageItem> {
+        val subId = state.viewer.subFolderId ?: return visibleImages(state)
+        val activeSub = state.folders
+            .flatMap { it.subFolders }
+            .find { it.id == subId }
+        return if (activeSub != null) {
+            state.images.filter { it.subFolderUri == activeSub.uriString }
+        } else {
+            state.images.filter { it.subFolderId == subId }
+        }
+    }
 
-        // Order subfolders starting from the active one, wrapping around.
-        val activeIdx = subs.indexOfFirst { it.id == state.currentSubFolderId }
-            .let { if (it < 0) 0 else it }
-        val ordered = subs.drop(activeIdx) + subs.take(activeIdx)
-
-        // Group by stable subfolder URI.
-        val bySub = state.images.groupBy { it.subFolderUri }
-        return ordered.flatMap { sub -> bySub[sub.uriString].orEmpty() }
+    /** Ordered subfolders of the current root folder (non-empty only). */
+    private fun orderedSubs(state: GalleryUiState): List<com.flowgallery.app.data.model.SubFolder> {
+        val rootFolder = state.folders.find { it.id == state.currentFilter } ?: return emptyList()
+        return rootFolder.subFolders.filter { it.imageCount > 0 }
     }
 
     private fun applySort(list: List<ImageItem>, mode: SortMode): List<ImageItem> = when (mode) {
