@@ -76,6 +76,10 @@
     <string name="search_empty_desc">Find images by name, folder, date, or tags</string>
     <string name="search_no_results">No results</string>
     <string name="search_no_results_desc">Try a different keyword</string>
+    <string name="search_type_all">All</string>
+    <string name="search_type_image">Images</string>
+    <string name="search_type_animated">Animated</string>
+    <string name="search_type_video">Videos</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>

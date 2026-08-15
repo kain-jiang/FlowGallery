@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.sp
 import com.flowgallery.app.R
 import com.flowgallery.app.data.model.Folder
 import com.flowgallery.app.data.model.ImageItem
+import com.flowgallery.app.data.model.MediaType
 import com.flowgallery.app.ui.components.WaterfallGrid
 import com.flowgallery.app.ui.theme.Accent
 import com.flowgallery.app.ui.theme.Border
@@ -89,6 +90,14 @@ fun SearchScreen(
     } else {
         viewModel.visibleImages(state).filter {
             it.name.contains(query, ignoreCase = true)
+        }.filter { item ->
+            when (state.mediaTypeFilter) {
+                null -> true
+                "IMAGE" -> item.type == MediaType.STATIC_IMAGE
+                "ANIMATED" -> item.type.isAnimated
+                "VIDEO" -> item.type.isVideo
+                else -> true
+            }
         }
     }
 
@@ -155,6 +164,36 @@ fun SearchScreen(
             )
         }
         Spacer(Modifier.height(8.dp))
+
+        // Media-type filter row: All / Images / Animated / Videos
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SearchTypeChip(
+                label = stringResource(R.string.search_type_all),
+                selected = state.mediaTypeFilter == null,
+                onClick = { viewModel.setMediaTypeFilter(null) }
+            )
+            SearchTypeChip(
+                label = stringResource(R.string.search_type_image),
+                selected = state.mediaTypeFilter == "IMAGE",
+                onClick = { viewModel.setMediaTypeFilter("IMAGE") }
+            )
+            SearchTypeChip(
+                label = stringResource(R.string.search_type_animated),
+                selected = state.mediaTypeFilter == "ANIMATED",
+                onClick = { viewModel.setMediaTypeFilter("ANIMATED") }
+            )
+            SearchTypeChip(
+                label = stringResource(R.string.search_type_video),
+                selected = state.mediaTypeFilter == "VIDEO",
+                onClick = { viewModel.setMediaTypeFilter("VIDEO") }
+            )
+        }
+        Spacer(Modifier.height(10.dp))
 
         Box(modifier = Modifier.weight(1f)) {
             when {
@@ -655,4 +694,25 @@ private fun GridColumnsSetting(
         }
     } // Box (anchor)
     } // BoxWithConstraints
+}
+
+/** Small filter chip for the search type row. */
+@Composable
+private fun SearchTypeChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    Text(
+        text = label,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Medium,
+        color = if (selected) scheme.onPrimary else scheme.onSurfaceVariant,
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (selected) scheme.primary else scheme.surface)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    )
 }
