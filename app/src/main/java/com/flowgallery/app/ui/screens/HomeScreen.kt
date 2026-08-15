@@ -131,7 +131,14 @@ fun HomeScreen(
             )
 
             // Waterfall grid or empty state
-            Box(modifier = Modifier.weight(1f)) {
+            // fillMaxWidth: without it the Box collapses to its content
+            // width inside the Column, so align(Center) centers within a
+            // narrow box and the spinner / empty state appear off-center.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
                 if (state.isRefreshing && visible.isEmpty()) {
                     CircularProgressIndicator(
                         modifier = Modifier.align(Alignment.Center),
@@ -468,7 +475,9 @@ private fun StatItem(icon: androidx.compose.ui.graphics.vector.ImageVector, valu
 private fun EmptyState(onAddFolder: () -> Unit, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     Column(
-        modifier = modifier.padding(40.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(40.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
@@ -496,7 +505,8 @@ private fun EmptyState(onAddFolder: () -> Unit, modifier: Modifier = Modifier) {
         Text(
             text = stringResource(R.string.empty_desc),
             color = scheme.onSurfaceVariant,
-            fontSize = 14.sp
+            fontSize = 14.sp,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
         Spacer(Modifier.height(16.dp))
         Text(
