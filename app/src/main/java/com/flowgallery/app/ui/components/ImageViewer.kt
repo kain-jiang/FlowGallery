@@ -249,10 +249,9 @@ fun ImageViewer(
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .padding(start = 14.dp)
-                    .size(52.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
-                    .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                    .background(Color.Black.copy(alpha = 0.4f))
             ) {
                 Icon(Icons.Filled.ChevronLeft, contentDescription = stringResource(R.string.cd_prev), tint = Color.White)
             }
@@ -263,10 +262,9 @@ fun ImageViewer(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 14.dp)
-                    .size(52.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
-                    .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                    .background(Color.Black.copy(alpha = 0.4f))
             ) {
                 Icon(Icons.Filled.ChevronRight, contentDescription = stringResource(R.string.cd_next), tint = Color.White)
             }
@@ -289,8 +287,7 @@ fun ImageViewer(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
-                        .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                        .background(Color.Black.copy(alpha = 0.4f))
                 ) {
                     Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back), tint = Color.White)
                 }
@@ -300,8 +297,7 @@ fun ImageViewer(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
-                            .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                            .background(Color.Black.copy(alpha = 0.4f))
                     ) {
                         Icon(
                             imageVector = if (image.id in favoriteIds) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
@@ -314,8 +310,7 @@ fun ImageViewer(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
-                            .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                            .background(Color.Black.copy(alpha = 0.4f))
                     ) {
                         Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.cd_share), tint = Color.White)
                     }
@@ -325,8 +320,7 @@ fun ImageViewer(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
-                                .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                                .background(Color.Black.copy(alpha = 0.4f))
                         ) {
                             Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more), tint = Color.White)
                         }
@@ -719,16 +713,15 @@ private fun VideoPlayerView(
                 onClick = { exoPlayer.play() },
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .size(72.dp)
+                    .size(56.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.9f))
-                    .border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape)
+                    .background(Color.Black.copy(alpha = 0.45f))
             ) {
                 Icon(
                     Icons.Filled.PlayArrow,
                     contentDescription = stringResource(R.string.cd_play),
                     tint = Color.White,
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier.size(32.dp)
                 )
             }
         }
@@ -749,13 +742,12 @@ private fun VideoPlayerView(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
-                        .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                        .background(Color.Black.copy(alpha = 0.35f))
                 ) {
                     Icon(
                         imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                         contentDescription = if (isPlaying) stringResource(R.string.cd_pause) else stringResource(R.string.cd_play),
-                        tint = if (isPlaying) MaterialTheme.colorScheme.primary else Color.White
+                        tint = Color.White
                     )
                 }
                 Text(
@@ -796,13 +788,12 @@ private fun VideoPlayerView(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
-                        .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                        .background(Color.Black.copy(alpha = 0.35f))
                 ) {
                     Icon(
                         imageVector = if (fullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
                         contentDescription = stringResource(R.string.cd_fullscreen),
-                        tint = if (fullscreen) MaterialTheme.colorScheme.primary else Color.White
+                        tint = Color.White
                     )
                 }
             }
