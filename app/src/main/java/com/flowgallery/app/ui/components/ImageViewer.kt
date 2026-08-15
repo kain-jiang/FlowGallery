@@ -31,17 +31,16 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -369,61 +368,126 @@ fun ImageViewer(
     // Duplicate files dialog: lists every copy's folder path, file name and
     // content hash, so users can see where else the same media lives.
     if (showDuplicates && duplicates.isNotEmpty()) {
-        AlertDialog(
-            onDismissRequest = { showDuplicates = false },
-            title = { Text(stringResource(R.string.duplicate_title)) },
-            text = {
-                androidx.compose.foundation.layout.Column(
+        androidx.compose.ui.window.Dialog(onDismissRequest = { showDuplicates = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(24.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // Drag handle
+                Box(
+                    modifier = Modifier
+                        .size(width = 40.dp, height = 4.dp)
+                        .align(Alignment.CenterHorizontally)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(MaterialTheme.colorScheme.outline)
+                )
+                Spacer(Modifier.height(20.dp))
+
+                Text(
+                    text = stringResource(R.string.duplicate_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(16.dp))
+
+                // Current file first
+                DuplicateRow(item = image, isCurrent = true)
+                duplicates.forEach { dup ->
+                    Spacer(Modifier.height(8.dp))
+                    DuplicateRow(item = dup, isCurrent = false)
+                }
+
+                Spacer(Modifier.height(20.dp))
+                // Close action — full-width tinted button, matching the
+                // "Add New Folder" button style from the folder modal.
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .clickable { showDuplicates = false }
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Current file first
-                    DuplicateRow(item = image, isCurrent = true)
-                    duplicates.forEach { dup ->
-                        DuplicateRow(item = dup, isCurrent = false)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showDuplicates = false }) {
-                    Text(stringResource(R.string.duplicate_close))
+                    Text(
+                        text = stringResource(R.string.duplicate_close),
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
-        )
+        }
     }
 }
 
 @Composable
 private fun DuplicateRow(item: ImageItem, isCurrent: Boolean) {
-    androidx.compose.foundation.layout.Column(modifier = Modifier.padding(vertical = 4.dp)) {
-        Text(
-            text = item.name,
-            color = Color.White,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = "${item.folderName}${item.subFolderName?.let { " / $it" } ?: ""}",
-            color = Color.White.copy(alpha = 0.7f),
-            fontSize = 12.sp
-        )
-        item.contentHash?.let { hash ->
-            Text(
-                text = "MD5: $hash",
-                color = Color.White.copy(alpha = 0.5f),
-                fontSize = 10.sp,
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (isCurrent) scheme.primaryContainer else scheme.surfaceVariant)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // File icon in a tinted container (matches folder modal icon style)
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(if (isCurrent) scheme.primary else scheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Filled.Image,
+                contentDescription = null,
+                tint = if (isCurrent) Color.White else scheme.primary,
+                modifier = Modifier.size(20.dp)
             )
         }
-        if (isCurrent) {
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = stringResource(R.string.duplicate_current),
-                color = MaterialTheme.colorScheme.primary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium
+                text = item.name,
+                color = scheme.onSurface,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold
             )
+            Text(
+                text = "${item.folderName}${item.subFolderName?.let { " / $it" } ?: ""}",
+                color = scheme.onSurfaceVariant,
+                fontSize = 12.sp
+            )
+            item.contentHash?.let { hash ->
+                Text(
+                    text = "MD5: $hash",
+                    color = scheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    fontSize = 10.sp,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                )
+            }
+        }
+        if (isCurrent) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(scheme.primaryContainer)
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.duplicate_current),
+                    color = scheme.primary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
     }
 }
