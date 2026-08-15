@@ -2,6 +2,7 @@ package com.flowgallery.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -103,12 +104,15 @@ fun ImageViewer(
     // Duplicate files dialog state (content-dedup copies of this item).
     var showDuplicates by remember { mutableStateOf(false) }
     val duplicates = remember(image.id) { image.duplicates }
+    // Horizontal swipe accumulator for cross-media navigation.
+    var swipeAccum by remember(currentIndex) { mutableFloatStateOf(0f) }
 
     // Reset transform when switching images
     LaunchedEffect(currentIndex) {
         scale = 1f
         offsetX = 0f
         offsetY = 0f
+        swipeAccum = 0f
     }
 
     Box(
@@ -121,16 +125,34 @@ fun ImageViewer(
                 detectTapGestures { chromeVisible = !chromeVisible }
             }
             .pointerInput(currentIndex) {
-                // Pinch-zoom/pan applies to still/animated images only.
-                if (!isVideo) {
+                if (isVideo) {
+                    // Videos: horizontal swipe navigates (no zoom).
+                    detectHorizontalDragGestures { change, dragAmount ->
+                        change.consume()
+                        swipeAccum += dragAmount
+                        if (kotlin.math.abs(swipeAccum) > 90f) {
+                            onNavigate(currentIndex + if (swipeAccum < 0) 1 else -1)
+                            swipeAccum = 0f
+                        }
+                    }
+                } else {
+                    // Images: pinch-zoom/pan, and swipe to navigate at 1x.
                     detectTransformGestures { _, pan, zoom, _ ->
-                        scale = (scale * zoom).coerceIn(1f, 4f)
-                        if (scale > 1f) {
-                            offsetX += pan.x
-                            offsetY += pan.y
-                        } else {
+                        val newScale = (scale * zoom).coerceIn(1f, 4f)
+                        if (newScale <= 1f) {
+                            // At 1x: horizontal drags navigate instead of pan.
+                            swipeAccum += pan.x
+                            if (kotlin.math.abs(swipeAccum) > 90f) {
+                                onNavigate(currentIndex + if (swipeAccum < 0) 1 else -1)
+                                swipeAccum = 0f
+                            }
+                            scale = 1f
                             offsetX = 0f
                             offsetY = 0f
+                        } else {
+                            scale = newScale
+                            offsetX += pan.x
+                            offsetY += pan.y
                         }
                     }
                 }
@@ -164,8 +186,9 @@ fun ImageViewer(
             )
         }
 
-        // Prev / Next arrows (shown for both images and videos)
-        if (chromeVisible && currentIndex > 0) {
+        // Prev / Next arrows — always shown for both images and videos;
+        // navigation wraps around (last → first, first → last).
+        if (chromeVisible) {
             IconButton(
                 onClick = { onNavigate(currentIndex - 1) },
                 modifier = Modifier
@@ -178,7 +201,7 @@ fun ImageViewer(
                 Icon(Icons.Filled.ChevronLeft, contentDescription = stringResource(R.string.cd_prev), tint = Color.White)
             }
         }
-        if (chromeVisible && currentIndex < images.lastIndex) {
+        if (chromeVisible) {
             IconButton(
                 onClick = { onNavigate(currentIndex + 1) },
                 modifier = Modifier

@@ -245,6 +245,32 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         return applySort(list, state.sortMode)
     }
 
+    /**
+     * Full-screen browse sequence.
+     *
+     * Normal views: same as [visibleImages]. In a subfolder view the
+     * sequence chains EVERY subfolder of the current root folder (starting
+     * with the active one, in order), so swiping past the last media enters
+     * the next subfolder's first media, and swiping back before the first
+     * wraps to the previous subfolder's last media — continuous cross-folder
+     * browsing without leaving the viewer.
+     */
+    fun viewerSequence(state: GalleryUiState = _uiState.value): List<ImageItem> {
+        if (state.currentSubFolderId == null) return visibleImages(state)
+        val rootFolder = state.folders.find { it.id == state.currentFilter }
+            ?: return visibleImages(state)
+        val subs = rootFolder.subFolders.filter { it.imageCount > 0 }
+        if (subs.isEmpty()) return visibleImages(state)
+
+        // Order subfolders starting from the active one, wrapping around.
+        val activeIdx = subs.indexOfFirst { it.id == state.currentSubFolderId }
+            .let { if (it < 0) 0 else it }
+        val ordered = subs.drop(activeIdx) + subs.take(activeIdx)
+
+        val bySub = state.images.groupBy { it.subFolderId }
+        return ordered.flatMap { sub -> bySub[sub.id].orEmpty() }
+    }
+
     private fun applySort(list: List<ImageItem>, mode: SortMode): List<ImageItem> = when (mode) {
         SortMode.DEFAULT -> list
         SortMode.LATEST -> list.sortedByDescending { it.modifiedTime }

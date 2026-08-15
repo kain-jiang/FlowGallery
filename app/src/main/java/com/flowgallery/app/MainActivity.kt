@@ -114,8 +114,6 @@ private fun MainScaffold(
     var showFolderModal by remember { mutableStateOf(false) }
     var folderToRemove by remember { mutableStateOf<Folder?>(null) }
 
-    val visibleImages = viewModel.visibleImages(state)
-
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
@@ -141,7 +139,8 @@ private fun MainScaffold(
                     viewModel = viewModel,
                     onOpenFolderModal = { showFolderModal = true },
                     onImageClick = { img ->
-                        val idx = visibleImages.indexOfFirst { it.id == img.id }
+                        val seq = viewModel.viewerSequence(state)
+                        val idx = seq.indexOfFirst { it.id == img.id }
                         if (idx >= 0) viewModel.openViewer(idx)
                     },
                     onRemoveFolder = { folder ->
@@ -185,9 +184,19 @@ private fun MainScaffold(
         )
     }
 
-    // Full-screen viewer
-    if (state.viewer.isOpen && visibleImages.isNotEmpty()) {
-        val index = state.viewer.index.coerceIn(0, visibleImages.lastIndex)
+    // Full-screen viewer — browse sequence supports cross-subfolder chaining:
+    // from Home it uses viewerSequence (subfolder chains wrap around), from
+    // Search it stays within the search results.
+    val viewerImages = if (state.currentTab == GalleryTab.Home) {
+        viewModel.viewerSequence(state)
+    } else {
+        viewModel.visibleImages(state)
+    }
+    if (state.viewer.isOpen && viewerImages.isNotEmpty()) {
+        // Wrap-around navigation: past the last item → first; before the
+        // first → last (cross-subfolder continuous browsing).
+        val size = viewerImages.size
+        val index = ((state.viewer.index % size) + size) % size
         // Immersive mode: hide status bar + nav bar while viewing
         val view = LocalView.current
         DisposableEffect(view) {
@@ -206,10 +215,11 @@ private fun MainScaffold(
             }
         }
         ImageViewer(
-            images = visibleImages,
+            images = viewerImages,
             currentIndex = index,
             favoriteIds = favorites,
             onNavigate = { newIdx ->
+                // Keep raw index; ImageViewer already wraps within the list.
                 viewModel.openViewer(newIdx)
             },
             onClose = viewModel::closeViewer,
