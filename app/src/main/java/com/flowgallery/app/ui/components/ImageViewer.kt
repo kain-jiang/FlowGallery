@@ -74,6 +74,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -160,29 +162,32 @@ fun ImageViewer(
             }
     }
 
-    // Subfolder-boundary crossing: at the first/last page, dragging further
-    // past the threshold jumps into the adjacent subfolder (delta callback).
-    // boundaryFired prevents repeat firing while the fraction stays past the
-    // threshold (would otherwise call navigateViewer every frame).
-    var boundaryFired by remember { mutableStateOf(false) }
-    LaunchedEffect(pagerState, images.size) {
-        androidx.compose.runtime.snapshotFlow {
-            pagerState.currentPage to pagerState.currentPageOffsetFraction
-        }.collect { (page, fraction) ->
-            val cb = onNavigateDelta
-            if (cb == null) return@collect
-            if (kotlin.math.abs(fraction) < 0.25f) {
-                boundaryFired = false
-                return@collect
-            }
-            if (boundaryFired) return@collect
-            val last = images.lastIndex
-            if (page == 0 && fraction < -0.35f) {
-                boundaryFired = true
-                cb(-1)
-            } else if (page == last && fraction > 0.35f) {
-                boundaryFired = true
-                cb(1)
+    // Subfolder-boundary crossing via nested scroll. Uses onPreScroll: at the
+    // first/last page, an incoming drag towards the boundary is caught BEFORE
+    // the pager's built-in overscroll effect consumes it (onPostScroll only
+    // sees the already-consumed stretch, so it never fires here).
+    var lastCrossTime by remember { mutableStateOf(0L) }
+    val crossConnection = remember(pagerState, images.size) {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            override fun onPreScroll(
+                available: androidx.compose.ui.geometry.Offset,
+                source: androidx.compose.ui.input.nestedscroll.NestedScrollSource
+            ): androidx.compose.ui.geometry.Offset {
+                val cb = onNavigateDelta ?: return androidx.compose.ui.geometry.Offset.Zero
+                if (available.x == 0f) return androidx.compose.ui.geometry.Offset.Zero
+                val page = pagerState.currentPage
+                val last = images.lastIndex
+                val crossing = when {
+                    page == last && available.x > 0f -> 1
+                    page == 0 && available.x < 0f -> -1
+                    else -> 0
+                }
+                if (crossing == 0) return androidx.compose.ui.geometry.Offset.Zero
+                val now = System.currentTimeMillis()
+                if (now - lastCrossTime < 800) return androidx.compose.ui.geometry.Offset.Zero
+                lastCrossTime = now
+                cb(crossing)
+                return androidx.compose.ui.geometry.Offset.Zero
             }
         }
     }
@@ -234,9 +239,10 @@ fun ImageViewer(
             state = pagerState,
             key = { images[it].id },
             beyondViewportPageCount = 1,
-            // Swiping works in video fullscreen too — it's the only way to
-            // move between videos (and across subfolders) there.
-            modifier = Modifier.fillMaxSize()
+            // Detect boundary overscroll to cross into adjacent subfolders.
+            modifier = Modifier
+                .fillMaxSize()
+                .nestedScroll(crossConnection)
         ) { page ->
             val item = images[page]
             if (item.type.isVideo) {
@@ -959,7 +965,26 @@ private fun ZoomableImage(
     var offsetY by remember { mutableFloatStateOf(0f) }
     var resolvedW by remember(item.uriString) { mutableIntStateOf(item.width) }
     var resolvedH by remember(item.uriString) { mutableIntStateOf(item.height) }
+    var viewportW by remember { mutableFloatStateOf(1f) }
+    var viewportH by remember { mutableFloatStateOf(1f) }
     val scope = rememberCoroutineScope()
+
+    // Minimum zoom that covers the whole viewport (no black band). At 1x the
+    // image is Fit (complete view); this returns the scale that fills BOTH
+    // dimensions, floored at 2x for a sensible double-tap.
+    fun coverScale(): Float {
+        if (resolvedW <= 0 || resolvedH <= 0 || viewportW <= 0f || viewportH <= 0f) return 2f
+        val scaleX = viewportW / resolvedW.toFloat()
+        val scaleY = viewportH / resolvedH.toFloat()
+        val fit = kotlin.math.min(scaleX, scaleY) // Fit's actual zoom
+        val displayW = resolvedW.toFloat() * fit
+        val displayH = resolvedH.toFloat() * fit
+        val need = kotlin.math.max(
+            viewportW / displayW,
+            viewportH / displayH
+        )
+        return kotlin.math.max(2f, need)
+    }
 
     fun animateTo(targetScale: Float) {
         scope.launch {
@@ -980,10 +1005,14 @@ private fun ZoomableImage(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .onSizeChanged { size ->
+                viewportW = size.width.toFloat()
+                viewportH = size.height.toFloat()
+            }
             .pointerInput(item.id) {
                 detectTapGestures(
                     onDoubleTap = {
-                        animateTo(if (scale <= 1f) 2f else 1f)
+                        animateTo(if (scale <= 1f) coverScale() else 1f)
                     },
                     onTap = { onTap() }
                 )
@@ -1028,18 +1057,12 @@ private fun ZoomableImage(
                 }
             }
     ) {
-        // Direction-aware fit: fill the height for tall images, the width
-        // for wide ones — at least one dimension fills the screen, so there
-        // is no obvious letterboxing band.
-        val fitScale = if (resolvedH >= resolvedW) {
-            androidx.compose.ui.layout.ContentScale.FillHeight
-        } else {
-            androidx.compose.ui.layout.ContentScale.FillWidth
-        }
+        // Keep 1x as a complete Fit view (no cropping). Double-tap zooms to
+        // coverScale() which fills the whole viewport (no black band).
         SubcomposeAsyncImage(
             model = item.uriString,
             contentDescription = item.name,
-            contentScale = fitScale,
+            contentScale = ContentScale.Fit,
             onSuccess = { state ->
                 val d = state.result.drawable
                 if (d.intrinsicWidth > 0 && d.intrinsicHeight > 0) {
