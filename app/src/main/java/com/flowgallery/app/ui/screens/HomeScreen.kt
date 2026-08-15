@@ -482,13 +482,17 @@ private fun FolderDropdown(
         }
     }
 
-    Box(modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 16.dp)
+    androidx.compose.foundation.layout.BoxWithConstraints(
+        modifier = Modifier.fillMaxWidth()
     ) {
+        // The dropdown must match the selector's exact width and alignment:
+        // same 16dp inset on both sides.
+        val menuWidth = maxWidth - 32.dp
+        val menuOffset = androidx.compose.ui.unit.DpOffset(16.dp, 0.dp)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(horizontal = 16.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(scheme.surface)
                 .clickable { expanded = true }
@@ -529,8 +533,9 @@ private fun FolderDropdown(
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
+            offset = menuOffset,
             modifier = Modifier
-                .fillMaxWidth(0.92f)
+                .width(menuWidth)
                 .clip(RoundedCornerShape(20.dp)),
             containerColor = scheme.surface,
             shape = RoundedCornerShape(20.dp),
@@ -597,7 +602,7 @@ private fun FolderDropdown(
                     }
             }
         }
-    }
+    } // BoxWithConstraints
 }
 
 @Composable
