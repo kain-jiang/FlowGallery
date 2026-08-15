@@ -126,7 +126,7 @@ fun HomeScreen(
                     favoriteIds = favorites,
                     onImageClick = onImageClick,
                     onToggleFavorite = viewModel::toggleFavorite,
-                    columnCount = adaptiveColumnCount(state.threeColumns),
+                    columnCount = if (state.singleColumn) 1 else state.columnCount,
                     sortMode = state.sortMode,
                     header = {
                         Column {
@@ -153,12 +153,13 @@ fun HomeScreen(
                                     current = state.sortMode,
                                     onSelect = viewModel::setSortMode
                                 )
-                                // Grid density toggle 2<->3 columns (FR-1 decision #3)
-                                IconButton(onClick = viewModel::toggleColumns) {
+                                // Single-column force toggle (overrides the
+                                // default columns set in Settings)
+                                IconButton(onClick = viewModel::toggleSingleColumn) {
                                     Icon(
                                         Icons.Filled.GridView,
                                         contentDescription = stringResource(R.string.cd_grid_toggle),
-                                        tint = if (state.threeColumns) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                        tint = if (state.singleColumn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
@@ -661,23 +662,6 @@ private fun EmptyState(onAddFolder: () -> Unit, modifier: Modifier = Modifier) {
                 .clickable(onClick = onAddFolder)
                 .padding(horizontal = 20.dp, vertical = 10.dp)
         )
-    }
-}
-
-/**
- * Adaptive grid column count (decision #1):
- * - wide screens (>=840dp) → 4 columns
- * - large screens (>=600dp, e.g. landscape phones) → 3 columns
- * - phones → user toggle (2 or 3 columns)
- */
-@Composable
-private fun adaptiveColumnCount(threeColumns: Boolean): Int {
-    val config = LocalConfiguration.current
-    val width = config.screenWidthDp
-    return when {
-        width >= 840 -> 4
-        width >= 600 -> 3
-        else -> if (threeColumns) 3 else 2
     }
 }
 

@@ -20,6 +20,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -30,9 +32,12 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
@@ -165,22 +170,10 @@ fun SearchScreen(
                     favoriteIds = favorites,
                     onImageClick = onImageClick,
                     onToggleFavorite = viewModel::toggleFavorite,
-                    columnCount = searchAdaptiveColumns()
+                    columnCount = if (state.singleColumn) 1 else state.columnCount
                 )
             }
         }
-    }
-}
-
-/** Search grid follows the same adaptive columns as Home. */
-@Composable
-private fun searchAdaptiveColumns(): Int {
-    val config = androidx.compose.ui.platform.LocalConfiguration.current
-    val width = config.screenWidthDp
-    return when {
-        width >= 840 -> 4
-        width >= 600 -> 3
-        else -> 2
     }
 }
 
@@ -468,53 +461,110 @@ fun SettingsScreen(
             }
         }
         item {
-            // Grid columns toggle (2 <-> 3)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surface)
-                    .clickable { viewModel.toggleColumns() }
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
+            // Default grid columns — picker (2 / 3 / 4)
+            var gridMenuExpanded by remember { mutableStateOf(false) }
+            Box {
+                Row(
                     modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                        .clickable { gridMenuExpanded = true }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Filled.GridView,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            stringResource(R.string.setting_grid_columns),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            stringResource(
+                                when (state.columnCount) {
+                                    4 -> R.string.setting_grid_4
+                                    3 -> R.string.setting_grid_3
+                                    else -> R.string.setting_grid_2
+                                }
+                            ),
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     Icon(
-                        Icons.Filled.GridView,
+                        Icons.Filled.ArrowDropDown,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )
                 }
-                Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        stringResource(R.string.setting_grid_columns),
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        stringResource(
-                            if (state.threeColumns) R.string.setting_grid_3 else R.string.setting_grid_2
-                        ),
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                DropdownMenu(
+                    expanded = gridMenuExpanded,
+                    onDismissRequest = { gridMenuExpanded = false },
+                    modifier = Modifier.clip(RoundedCornerShape(16.dp)),
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(16.dp),
+                    tonalElevation = 0.dp,
+                    shadowElevation = 0.dp
+                ) {
+                    listOf(2, 3, 4).forEach { count ->
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        stringResource(
+                                            when (count) {
+                                                4 -> R.string.setting_grid_4
+                                                3 -> R.string.setting_grid_3
+                                                else -> R.string.setting_grid_2
+                                            }
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontSize = 15.sp,
+                                        modifier = Modifier.weight(1f, fill = false)
+                                    )
+                                    if (state.columnCount == count) {
+                                        Spacer(Modifier.width(10.dp))
+                                        Icon(
+                                            Icons.Filled.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            },
+                            leadingIcon = { Icon(Icons.Filled.GridView, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                            onClick = {
+                                gridMenuExpanded = false
+                                viewModel.setColumnCount(count)
+                            },
+                            colors = MenuDefaults.itemColors(
+                                textColor = MaterialTheme.colorScheme.onSurface,
+                                leadingIconColor = MaterialTheme.colorScheme.primary,
+                                disabledTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
+                    }
                 }
-                Icon(
-                    Icons.Filled.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
             }
         }
         item {

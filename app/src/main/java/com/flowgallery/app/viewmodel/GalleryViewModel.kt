@@ -35,8 +35,10 @@ data class GalleryUiState(
     val viewer: ViewerState = ViewerState(),
     val isRefreshing: Boolean = false,
     val error: String? = null,
-    /** true = 3 columns, false = 2 columns (FR-1 decision #3) */
-    val threeColumns: Boolean = false,
+    /** Default grid columns (2/3/4), set in Settings via a picker (FR-1). */
+    val columnCount: Int = 2,
+    /** Force single-column layout (top-bar toggle, overrides columnCount). */
+    val singleColumn: Boolean = false,
     /** home grid sort mode */
     val sortMode: SortMode = SortMode.DEFAULT,
     /** HD thumbnail toggle (FR-8) */
@@ -61,7 +63,8 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         } ?: SortMode.DEFAULT
         _uiState.update {
             it.copy(
-                threeColumns = prefs.getBoolean(KEY_THREE_COLUMNS, false),
+                columnCount = prefs.getInt(KEY_COLUMN_COUNT, 2).coerceIn(2, 4),
+                singleColumn = prefs.getBoolean(KEY_SINGLE_COLUMN, false),
                 sortMode = savedSort,
                 hdThumbnails = prefs.getBoolean(KEY_HD_THUMBNAILS, true)
             )
@@ -205,11 +208,18 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     fun selectSubFolder(subId: Long) =
         _uiState.update { it.copy(currentSubFolderId = subId) }
 
-    /** Toggle grid density 2<->3 columns (FR-1 decision #3), persisted. */
-    fun toggleColumns() {
-        val newVal = !_uiState.value.threeColumns
-        prefs.edit().putBoolean(KEY_THREE_COLUMNS, newVal).apply()
-        _uiState.update { it.copy(threeColumns = newVal) }
+    /** Toggle single-column layout (top-bar button), persisted. */
+    fun toggleSingleColumn() {
+        val newVal = !_uiState.value.singleColumn
+        prefs.edit().putBoolean(KEY_SINGLE_COLUMN, newVal).apply()
+        _uiState.update { it.copy(singleColumn = newVal) }
+    }
+
+    /** Set default grid columns (Settings picker), persisted. */
+    fun setColumnCount(count: Int) {
+        val c = count.coerceIn(2, 4)
+        prefs.edit().putInt(KEY_COLUMN_COUNT, c).apply()
+        _uiState.update { it.copy(columnCount = c) }
     }
 
     /** Toggle HD thumbnails (FR-8), persisted. */
@@ -380,7 +390,8 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     private companion object {
         const val KEY_FAVORITES = "favorites"
-        const val KEY_THREE_COLUMNS = "three_columns"
+        const val KEY_COLUMN_COUNT = "column_count"
+        const val KEY_SINGLE_COLUMN = "single_column"
         const val KEY_SORT_MODE = "sort_mode"
         const val KEY_HD_THUMBNAILS = "hd_thumbnails"
     }
