@@ -61,6 +61,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -250,10 +252,15 @@ fun ImageViewer(
                     .align(Alignment.CenterStart)
                     .padding(start = 14.dp)
                     .size(48.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
             ) {
-                Icon(Icons.Filled.ChevronLeft, contentDescription = stringResource(R.string.cd_prev), tint = MaterialTheme.colorScheme.primary)
+                Icon(
+                    Icons.Filled.ChevronLeft,
+                    contentDescription = stringResource(R.string.cd_prev),
+                    tint = Color.White,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .shadow(6.dp, CircleShape, clip = false)
+                )
             }
         }
         if (chromeVisible && !videoFullscreen && currentIndex < images.lastIndex) {
@@ -263,10 +270,15 @@ fun ImageViewer(
                     .align(Alignment.CenterEnd)
                     .padding(end = 14.dp)
                     .size(48.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
             ) {
-                Icon(Icons.Filled.ChevronRight, contentDescription = stringResource(R.string.cd_next), tint = MaterialTheme.colorScheme.primary)
+                Icon(
+                    Icons.Filled.ChevronRight,
+                    contentDescription = stringResource(R.string.cd_next),
+                    tint = Color.White,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .shadow(6.dp, CircleShape, clip = false)
+                )
             }
         }
 
@@ -284,45 +296,57 @@ fun ImageViewer(
             ) {
                 IconButton(
                     onClick = onClose,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
+                    modifier = Modifier.size(40.dp)
                 ) {
-                    Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back), tint = MaterialTheme.colorScheme.primary)
+                    Icon(
+                        Icons.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.cd_back),
+                        tint = Color.White,
+                        modifier = Modifier
+                            .size(22.dp)
+                            .shadow(5.dp, CircleShape, clip = false)
+                    )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     IconButton(
                         onClick = { onToggleFavorite(image.id) },
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
+                        modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
                             imageVector = if (image.id in favoriteIds) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                             contentDescription = stringResource(R.string.cd_favorite),
-                            tint = if (image.id in favoriteIds) Color(0xFFEF4444) else MaterialTheme.colorScheme.primary
+                            tint = if (image.id in favoriteIds) Color(0xFFEF4444) else Color.White,
+                            modifier = Modifier
+                                .size(22.dp)
+                                .shadow(5.dp, CircleShape, clip = false)
                         )
                     }
                     IconButton(
                         onClick = { onShare?.invoke(image) },
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
+                        modifier = Modifier.size(40.dp)
                     ) {
-                        Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.cd_share), tint = MaterialTheme.colorScheme.primary)
+                        Icon(
+                            Icons.Filled.Share,
+                            contentDescription = stringResource(R.string.cd_share),
+                            tint = Color.White,
+                            modifier = Modifier
+                                .size(22.dp)
+                                .shadow(5.dp, CircleShape, clip = false)
+                        )
                     }
                     Box {
                         IconButton(
                             onClick = { showMoreMenu = true },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
+                            modifier = Modifier.size(40.dp)
                         ) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more), tint = MaterialTheme.colorScheme.primary)
+                            Icon(
+                                Icons.Filled.MoreVert,
+                                contentDescription = stringResource(R.string.cd_more),
+                                tint = Color.White,
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .shadow(5.dp, CircleShape, clip = false)
+                            )
                         }
                         // More menu: save to gallery
                         DropdownMenu(
@@ -713,15 +737,15 @@ private fun VideoPlayerView(
                 onClick = { exoPlayer.play() },
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
+                    .size(64.dp)
             ) {
                 Icon(
                     Icons.Filled.PlayArrow,
                     contentDescription = stringResource(R.string.cd_play),
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier
+                        .size(44.dp)
+                        .shadow(8.dp, CircleShape, clip = false)
                 )
             }
         }
@@ -739,15 +763,15 @@ private fun VideoPlayerView(
             ) {
                 IconButton(
                     onClick = { if (isPlaying) exoPlayer.pause() else exoPlayer.play() },
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
+                    modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
                         imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                         contentDescription = if (isPlaying) stringResource(R.string.cd_pause) else stringResource(R.string.cd_play),
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = if (isPlaying) MaterialTheme.colorScheme.primary else Color.White,
+                        modifier = Modifier
+                            .size(22.dp)
+                            .shadow(5.dp, CircleShape, clip = false)
                     )
                 }
                 Spacer(Modifier.width(10.dp))
@@ -786,15 +810,15 @@ private fun VideoPlayerView(
                 // Fullscreen toggle (rotate into landscape pure-play view)
                 IconButton(
                     onClick = onToggleFullscreen,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
+                    modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
                         imageVector = if (fullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
                         contentDescription = stringResource(R.string.cd_fullscreen),
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = if (fullscreen) MaterialTheme.colorScheme.primary else Color.White,
+                        modifier = Modifier
+                            .size(22.dp)
+                            .shadow(5.dp, CircleShape, clip = false)
                     )
                 }
             }
