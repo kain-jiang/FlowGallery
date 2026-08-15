@@ -13,9 +13,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -83,7 +82,7 @@ fun FolderTypeDialog(
 
             // NORMAL option
             TypeOption(
-                icon = Icons.Filled.Folder,
+                icon = Icons.Filled.FolderOpen,
                 title = stringResource(R.string.folder_type_normal),
                 desc = stringResource(R.string.folder_type_normal_desc),
                 isSelected = selected == FolderType.NORMAL,
@@ -94,7 +93,7 @@ fun FolderTypeDialog(
 
             // PACK option
             TypeOption(
-                icon = Icons.Filled.Layers,
+                icon = Icons.Filled.Collections,
                 title = stringResource(R.string.folder_type_pack),
                 desc = stringResource(R.string.folder_type_pack_desc),
                 isSelected = selected == FolderType.PACK,
@@ -116,7 +115,7 @@ fun FolderTypeDialog(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = stringResource(R.string.folder_type_confirm),
+                    text = stringResource(R.string.folder_type_ok),
                     color = scheme.primary,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold

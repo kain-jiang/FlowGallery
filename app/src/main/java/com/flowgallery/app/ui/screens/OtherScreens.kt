@@ -266,11 +266,7 @@ fun SettingsScreen(
                                 R.string.folder_type_normal
                             }
                         ),
-                        tint = if (folder.type == com.flowgallery.app.data.model.FolderType.PACK) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)
                     )
                 }

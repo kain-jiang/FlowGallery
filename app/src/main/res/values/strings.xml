@@ -33,6 +33,7 @@
     <string name="folder_type_pack_desc">Subfolders indexed as separate entries</string>
     <string name="folder_type_recommended">Recommended</string>
     <string name="folder_type_confirm">Add Folder</string>
+    <string name="folder_type_ok">OK</string>
     <string name="folder_type_normal_short">Normal</string>
     <string name="folder_type_pack_short">Pack</string>
 

@@ -33,6 +33,7 @@
     <string name="folder_type_pack_desc">子文件夹单独索引为可浏览条目</string>
     <string name="folder_type_recommended">推荐</string>
     <string name="folder_type_confirm">添加文件夹</string>
+    <string name="folder_type_ok">确认</string>
     <string name="folder_type_normal_short">普通</string>
     <string name="folder_type_pack_short">图包</string>
 
