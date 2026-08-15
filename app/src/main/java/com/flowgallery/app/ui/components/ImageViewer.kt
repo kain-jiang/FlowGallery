@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Fullscreen
@@ -40,6 +41,8 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -87,7 +90,9 @@ fun ImageViewer(
     onNavigate: (Int) -> Unit,
     onNavigateDelta: ((Int) -> Unit)? = null,
     onClose: () -> Unit,
-    onToggleFavorite: (Long) -> Unit
+    onToggleFavorite: (Long) -> Unit,
+    onShare: ((ImageItem) -> Unit)? = null,
+    onSaveToGallery: ((ImageItem) -> Unit)? = null
 ) {
     if (images.isEmpty()) return
     val image = images[currentIndex]
@@ -108,6 +113,7 @@ fun ImageViewer(
     }
     // Duplicate files dialog state (content-dedup copies of this item).
     var showDuplicates by remember { mutableStateOf(false) }
+    var showMoreMenu by remember { mutableStateOf(false) }
     val duplicates = remember(image.id) { image.duplicates }
     // Horizontal swipe accumulator for cross-media navigation.
     var swipeAccum by remember(currentIndex) { mutableFloatStateOf(0f) }
@@ -299,7 +305,7 @@ fun ImageViewer(
                         )
                     }
                     IconButton(
-                        onClick = {},
+                        onClick = { onShare?.invoke(image) },
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
@@ -307,14 +313,40 @@ fun ImageViewer(
                     ) {
                         Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.cd_share), tint = Color.White)
                     }
-                    IconButton(
-                        onClick = {},
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.5f))
-                    ) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more), tint = Color.White)
+                    Box {
+                        IconButton(
+                            onClick = { showMoreMenu = true },
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.5f))
+                        ) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more), tint = Color.White)
+                        }
+                        // More menu: save to gallery
+                        DropdownMenu(
+                            expanded = showMoreMenu,
+                            onDismissRequest = { showMoreMenu = false },
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            shape = RoundedCornerShape(12.dp),
+                            tonalElevation = 0.dp,
+                            shadowElevation = 0.dp
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.save_to_gallery)) },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Filled.Download,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = {
+                                    showMoreMenu = false
+                                    onSaveToGallery?.invoke(image)
+                                }
+                            )
+                        }
                     }
                 }
             }

@@ -39,6 +39,8 @@ data class GalleryUiState(
     val threeColumns: Boolean = false,
     /** home grid sort mode */
     val sortMode: SortMode = SortMode.DEFAULT,
+    /** HD thumbnail toggle (FR-8) */
+    val hdThumbnails: Boolean = true,
     /** type filter for search: null = all, else MediaType name */
     val mediaTypeFilter: String? = null
 )
@@ -60,7 +62,8 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update {
             it.copy(
                 threeColumns = prefs.getBoolean(KEY_THREE_COLUMNS, false),
-                sortMode = savedSort
+                sortMode = savedSort,
+                hdThumbnails = prefs.getBoolean(KEY_HD_THUMBNAILS, true)
             )
         }
         refreshFolders()
@@ -207,6 +210,13 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         val newVal = !_uiState.value.threeColumns
         prefs.edit().putBoolean(KEY_THREE_COLUMNS, newVal).apply()
         _uiState.update { it.copy(threeColumns = newVal) }
+    }
+
+    /** Toggle HD thumbnails (FR-8), persisted. */
+    fun toggleHdThumbnails() {
+        val newVal = !_uiState.value.hdThumbnails
+        prefs.edit().putBoolean(KEY_HD_THUMBNAILS, newVal).apply()
+        _uiState.update { it.copy(hdThumbnails = newVal) }
     }
 
     /** Set search media-type filter (null = all). */
@@ -372,5 +382,6 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         const val KEY_FAVORITES = "favorites"
         const val KEY_THREE_COLUMNS = "three_columns"
         const val KEY_SORT_MODE = "sort_mode"
+        const val KEY_HD_THUMBNAILS = "hd_thumbnails"
     }
 }

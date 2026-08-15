@@ -51,6 +51,7 @@
     <string name="cd_unfavorite">Unfavorite</string>
     <string name="cd_share">Share</string>
     <string name="cd_more">More</string>
+    <string name="save_to_gallery">Save to Gallery</string>
     <string name="cd_play">Play</string>
     <string name="cd_pause">Pause</string>
     <string name="cd_fullscreen">Fullscreen</string>
@@ -80,6 +81,9 @@
     <string name="setting_cache_desc">Release cached thumbnails</string>
     <string name="setting_about">FlowGallery</string>
     <string name="setting_version">Version 1.0.0</string>
+    <string name="setting_grid_columns">Grid Columns</string>
+    <string name="setting_grid_2">2 columns</string>
+    <string name="setting_grid_3">3 columns</string>
 
     <!-- Sort modes -->
     <string name="sort_default">Default</string>

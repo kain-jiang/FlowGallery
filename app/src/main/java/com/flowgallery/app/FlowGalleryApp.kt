@@ -12,12 +12,17 @@ class FlowGalleryApp : Application(), ImageLoaderFactory {
         super.onCreate()
     }
 
-    /**
-     * Custom ImageLoader that registers SmartVideoFrameDecoder so video items
-     * render first-frame thumbnails — skipping pure-black first frames by
-     * sampling forward in the clip until visible content is found.
-     */
-    override fun newImageLoader(): ImageLoader =
+    /** Single shared ImageLoader — also used by "Clear Cache" in settings. */
+    private val loader by lazy { buildImageLoader() }
+
+    override fun newImageLoader(): ImageLoader = loader
+
+    fun clearImageCache() {
+        loader.memoryCache?.clear()
+        loader.diskCache?.clear()
+    }
+
+    private fun buildImageLoader(): ImageLoader =
         ImageLoader.Builder(this)
             .components {
                 // Smart decoder first (handles video/*), default as fallback

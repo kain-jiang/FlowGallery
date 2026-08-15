@@ -48,6 +48,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.flowgallery.app.data.model.Folder
 import com.flowgallery.app.data.model.FolderType
 import com.flowgallery.app.data.model.GalleryTab
+import com.flowgallery.app.data.model.ImageItem
 import com.flowgallery.app.R
 import com.flowgallery.app.ui.components.FolderSelectionModal
 import com.flowgallery.app.ui.components.FolderTypeDialog
@@ -225,6 +226,7 @@ private fun MainScaffold(
     val viewerImages = viewModel.viewerImages(state)
     if (state.viewer.isOpen && viewerImages.isNotEmpty()) {
         val index = state.viewer.index.coerceIn(0, viewerImages.lastIndex)
+        val mediaContext = androidx.compose.ui.platform.LocalContext.current
         // Immersive mode: hide status bar + nav bar while viewing
         val view = LocalView.current
         DisposableEffect(view) {
@@ -255,7 +257,9 @@ private fun MainScaffold(
                 viewModel.navigateViewer(delta)
             },
             onClose = viewModel::closeViewer,
-            onToggleFavorite = viewModel::toggleFavorite
+            onToggleFavorite = viewModel::toggleFavorite,
+            onShare = { img -> mediaContext.shareMedia(img) },
+            onSaveToGallery = { img -> mediaContext.saveMediaToGallery(img) }
         )
     }
 
@@ -326,6 +330,56 @@ private fun MainScaffold(
             },
             onBack = { showSearch = false }
         )
+    }
+}
+
+/**
+ * Share a media item via the system share sheet (ACTION_SEND + FileProvider).
+ * The SAF document is copied into the app cache so FileProvider can expose it.
+ */
+private fun android.content.Context.shareMedia(item: ImageItem) {
+    val uri = Uri.parse(item.uriString)
+    runCatching {
+        val outFile = java.io.File(cacheDir, "share_${System.currentTimeMillis()}_${item.name}")
+        contentResolver.openInputStream(uri)?.use { input ->
+            outFile.outputStream().use { output -> input.copyTo(output) }
+        }
+        val shareUri = androidx.core.content.FileProvider.getUriForFile(
+            this, "$packageName.fileprovider", outFile
+        )
+        val mime = if (item.type == com.flowgallery.app.data.model.MediaType.VIDEO) "video/*" else "image/*"
+        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = mime
+            putExtra(android.content.Intent.EXTRA_STREAM, shareUri)
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(android.content.Intent.createChooser(intent, null))
+    }
+}
+
+/**
+ * Save a media item into the system gallery (MediaStore, no permission needed
+ * on API 29+).
+ */
+private fun android.content.Context.saveMediaToGallery(item: ImageItem) {
+    val uri = Uri.parse(item.uriString)
+    val mime = if (item.type == com.flowgallery.app.data.model.MediaType.VIDEO) "video/mp4" else "image/jpeg"
+    runCatching {
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, item.name)
+            put(android.provider.MediaStore.Images.Media.MIME_TYPE, mime)
+            put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/FlowGallery")
+        }
+        val collection = android.provider.MediaStore.Images.Media.getContentUri(
+            android.provider.MediaStore.VOLUME_EXTERNAL_PRIMARY
+        )
+        contentResolver.insert(collection, values)?.let { dest ->
+            contentResolver.openInputStream(uri)?.use { input ->
+                contentResolver.openOutputStream(dest)?.use { output ->
+                    input.copyTo(output)
+                }
+            }
+        }
     }
 }
 
