@@ -46,6 +46,9 @@ data class ImageItem(
     val folderName: String,
     val subFolderId: Long? = null,
     val subFolderName: String? = null,
+    /** stable subfolder document URI — the reliable matching key (ids are
+     *  re-assigned each scan and can drift when folder contents change) */
+    val subFolderUri: String? = null,
     val name: String,
     val uriString: String,
     val type: MediaType = MediaType.STATIC_IMAGE,

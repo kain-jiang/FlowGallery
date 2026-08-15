@@ -200,6 +200,7 @@ class ImageRepository(private val context: Context) {
         fun collectRecursive(
             dirUri: Uri,
             subFolderId: Long?,
+            subFolderUri: String?,
             subFolderName: String?,
             out: MutableList<ImageItem>
         ) {
@@ -214,6 +215,7 @@ class ImageRepository(private val context: Context) {
                             folderId = folder.id,
                             folderName = folder.name,
                             subFolderId = subFolderId,
+                            subFolderUri = subFolderUri,
                             subFolderName = subFolderName,
                             name = childName,
                             uriString = childUri.toString(),
@@ -228,7 +230,7 @@ class ImageRepository(private val context: Context) {
                     // Not a media file — attempt recursion; if it's a plain
                     // file (not a directory) getChildDocuments returns null
                     // and we simply skip it. MIME alone is unreliable here.
-                    collectRecursive(childUri, subFolderId, subFolderName, out)
+                    collectRecursive(childUri, subFolderId, subFolderUri, subFolderName, out)
                 }
             }
         }
@@ -254,15 +256,17 @@ class ImageRepository(private val context: Context) {
                 )
             } else {
                 // first-level subfolder: recursive collect with tag.
-                // IMPORTANT: the SubFolder must reuse the SAME id that the
-                // items were tagged with, otherwise tab filtering never matches.
-                val subId = nextId++
+                // Stable id derived from the document URI (not a scan
+                // counter) so the persisted selection never drifts when
+                // folder contents change between scans.
+                val subUriStr = childUri.toString()
+                val subId = subUriStr.hashCode().toLong()
                 val subItems = mutableListOf<ImageItem>()
-                collectRecursive(childUri, subId, childName, subItems)
+                collectRecursive(childUri, subId, subUriStr, childName, subItems)
                 if (subItems.isNotEmpty() || resolver.isDirectory(childUri)) {
                     val subName = resolver.displayNameOf(childUri) ?: childName
-                    subGroups[childUri.toString()] =
-                        SubFolder(id = subId, name = subName, uriString = childUri.toString(), imageCount = subItems.size) to subItems
+                    subGroups[subUriStr] =
+                        SubFolder(id = subId, name = subName, uriString = subUriStr, imageCount = subItems.size) to subItems
                     allItems.addAll(subItems)
                 }
             }

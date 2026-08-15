@@ -236,7 +236,16 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             HomeFilter.FAVORITES -> list = list.filter { it.id in _favorites.value }
             else -> {
                 list = if (state.currentSubFolderId != null) {
-                    list.filter { it.subFolderId == state.currentSubFolderId }
+                    // Match by stable subfolder URI — ids drift between scans
+                    // when folder contents change, which broke the filter.
+                    val activeSub = state.folders
+                        .flatMap { it.subFolders }
+                        .find { it.id == state.currentSubFolderId }
+                    if (activeSub != null) {
+                        list.filter { it.subFolderUri == activeSub.uriString }
+                    } else {
+                        list.filter { it.subFolderId == state.currentSubFolderId }
+                    }
                 } else {
                     list.filter { it.folderId == state.currentFilter }
                 }
@@ -267,8 +276,9 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             .let { if (it < 0) 0 else it }
         val ordered = subs.drop(activeIdx) + subs.take(activeIdx)
 
-        val bySub = state.images.groupBy { it.subFolderId }
-        return ordered.flatMap { sub -> bySub[sub.id].orEmpty() }
+        // Group by stable subfolder URI.
+        val bySub = state.images.groupBy { it.subFolderUri }
+        return ordered.flatMap { sub -> bySub[sub.uriString].orEmpty() }
     }
 
     private fun applySort(list: List<ImageItem>, mode: SortMode): List<ImageItem> = when (mode) {
