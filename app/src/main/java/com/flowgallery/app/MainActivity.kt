@@ -244,7 +244,14 @@ private fun MainScaffold(
                     .windowInsetsPadding(if (isLandscape) WindowInsets.displayCutout else WindowInsets(0, 0, 0, 0))
                     .padding(
                         top = innerPadding.calculateTopPadding(),
-                        bottom = innerPadding.calculateBottomPadding(),
+                        // Animate the bottom inset so the home chrome (stats
+                        // pill / tap-to-top) glides smoothly when the bottom
+                        // nav bar hides or shows, instead of jumping.
+                        bottom = androidx.compose.animation.core.animateDpAsState(
+                            targetValue = innerPadding.calculateBottomPadding(),
+                            animationSpec = androidx.compose.animation.core.tween(250),
+                            label = "bottomInset"
+                        ).value,
                         start = if (isLandscape) 0.dp else innerPadding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
                         end = if (isLandscape) 0.dp else innerPadding.calculateRightPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)
                     )
@@ -359,6 +366,9 @@ private fun MainScaffold(
                 // relative move (arrows / swipe): cross subfolder at boundaries
                 viewModel.navigateViewer(delta)
             },
+            // Double-arrow affordance: only when an adjacent subfolder exists
+            canCrossBackward = viewModel.canCrossViewer(-1),
+            canCrossForward = viewModel.canCrossViewer(1),
             onClose = viewModel::closeViewer,
             onToggleFavorite = viewModel::toggleFavorite,
             onShare = { img -> mediaContext.shareMedia(img) },

@@ -17,12 +17,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
@@ -42,6 +46,8 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.KeyboardDoubleArrowLeft
+import androidx.compose.material.icons.filled.KeyboardDoubleArrowRight
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -104,6 +110,9 @@ fun ImageViewer(
     favoriteIds: Set<Long>,
     onNavigate: (Int) -> Unit,
     onNavigateDelta: ((Int) -> Unit)? = null,
+    /** true when an adjacent subfolder exists in that direction (double arrow) */
+    canCrossBackward: Boolean = false,
+    canCrossForward: Boolean = false,
     onClose: () -> Unit,
     onToggleFavorite: (Long) -> Unit,
     onShare: ((ImageItem) -> Unit)? = null,
@@ -162,36 +171,6 @@ fun ImageViewer(
             }
     }
 
-    // Subfolder-boundary crossing via nested scroll. Uses onPreScroll: at the
-    // first/last page, an incoming drag towards the boundary is caught BEFORE
-    // the pager's built-in overscroll effect consumes it (onPostScroll only
-    // sees the already-consumed stretch, so it never fires here).
-    var lastCrossTime by remember { mutableStateOf(0L) }
-    val crossConnection = remember(pagerState, images.size) {
-        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
-            override fun onPreScroll(
-                available: androidx.compose.ui.geometry.Offset,
-                source: androidx.compose.ui.input.nestedscroll.NestedScrollSource
-            ): androidx.compose.ui.geometry.Offset {
-                val cb = onNavigateDelta ?: return androidx.compose.ui.geometry.Offset.Zero
-                if (available.x == 0f) return androidx.compose.ui.geometry.Offset.Zero
-                val page = pagerState.currentPage
-                val last = images.lastIndex
-                val crossing = when {
-                    page == last && available.x > 0f -> 1
-                    page == 0 && available.x < 0f -> -1
-                    else -> 0
-                }
-                if (crossing == 0) return androidx.compose.ui.geometry.Offset.Zero
-                val now = System.currentTimeMillis()
-                if (now - lastCrossTime < 800) return androidx.compose.ui.geometry.Offset.Zero
-                lastCrossTime = now
-                cb(crossing)
-                return androidx.compose.ui.geometry.Offset.Zero
-            }
-        }
-    }
-
     // Fullscreen: rotate the activity to landscape while in this mode.
     if (isVideo && videoFullscreen) {
         val activity = androidx.compose.ui.platform.LocalContext.current
@@ -219,7 +198,10 @@ fun ImageViewer(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .windowInsetsPadding(WindowInsets.safeDrawing)
+            // NO safeDrawing padding here: the media canvas must fill the
+            // whole screen (a safe-area inset would leave a black band on
+            // top). The chrome (top bar / bottom strip) applies its own
+            // status/navigation insets individually.
             .pointerInput(currentIndex, videoFullscreen, pagerState.currentPage) {
                 // Tap toggles the chrome. For IMAGE pages the tap is handled
                 // inside ZoomableImage (onTap → chrome toggle) — registering
@@ -239,10 +221,7 @@ fun ImageViewer(
             state = pagerState,
             key = { images[it].id },
             beyondViewportPageCount = 1,
-            // Detect boundary overscroll to cross into adjacent subfolders.
-            modifier = Modifier
-                .fillMaxSize()
-                .nestedScroll(crossConnection)
+            modifier = Modifier.fillMaxSize()
         ) { page ->
             val item = images[page]
             if (item.type.isVideo) {
@@ -267,11 +246,11 @@ fun ImageViewer(
             }
         }
 
-        // Prev / Next arrows — shown when navigation is possible in that
-        // direction (pagerCurrent > 0 / < last). At the subfolder boundary
-        // the delta callback crosses into the adjacent subfolder. Hidden in
-        // video fullscreen (pure play).
-        if (chromeVisible && !videoFullscreen && pagerCurrent > 0) {
+        // Prev / Next arrows — single chevron = page within the current list;
+        // DOUBLE chevron = crossing into the adjacent subfolder at the
+        // boundary (only shown when such a neighbour actually exists).
+        // Hidden in video fullscreen (pure play).
+        if (chromeVisible && !videoFullscreen && (pagerCurrent > 0 || (pagerCurrent == 0 && canCrossBackward))) {
             IconButton(
                 onClick = { navigateBy(-1) },
                 modifier = Modifier
@@ -280,7 +259,11 @@ fun ImageViewer(
                     .size(48.dp)
             ) {
                 Icon(
-                    Icons.Filled.ChevronLeft,
+                    if (pagerCurrent == 0 && canCrossBackward) {
+                        Icons.Filled.KeyboardDoubleArrowLeft
+                    } else {
+                        Icons.Filled.ChevronLeft
+                    },
                     contentDescription = stringResource(R.string.cd_prev),
                     tint = Color.White,
                     modifier = Modifier
@@ -295,7 +278,7 @@ fun ImageViewer(
                 )
             }
         }
-        if (chromeVisible && !videoFullscreen && pagerCurrent < images.lastIndex) {
+        if (chromeVisible && !videoFullscreen && (pagerCurrent < images.lastIndex || (pagerCurrent == images.lastIndex && canCrossForward))) {
             IconButton(
                 onClick = { navigateBy(1) },
                 modifier = Modifier
@@ -304,7 +287,11 @@ fun ImageViewer(
                     .size(48.dp)
             ) {
                 Icon(
-                    Icons.Filled.ChevronRight,
+                    if (pagerCurrent == images.lastIndex && canCrossForward) {
+                        Icons.Filled.KeyboardDoubleArrowRight
+                    } else {
+                        Icons.Filled.ChevronRight
+                    },
                     contentDescription = stringResource(R.string.cd_next),
                     tint = Color.White,
                     modifier = Modifier
@@ -327,6 +314,11 @@ fun ImageViewer(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    // Clear status bar AND punch-hole cutout (canvas is
+                    // full-bleed, so the top chrome needs the full top inset)
+                    .windowInsetsPadding(
+                        WindowInsets.safeDrawing.only(WindowInsetsSides.Top)
+                    )
                     .padding(horizontal = 12.dp, vertical = 10.dp)
                     .align(Alignment.TopCenter),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -450,6 +442,8 @@ fun ImageViewer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
+                    // Clear the navigation bar (canvas is full-bleed)
+                    .navigationBarsPadding()
                     .background(
                         androidx.compose.ui.graphics.Brush.verticalGradient(
                             listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))
@@ -1038,10 +1032,21 @@ private fun ZoomableImage(
                         if (pressed) {
                             val multi = event.changes.size > 1
                             if (multi) {
-                                // Two fingers: pinch zoom + pan.
+                                // Two fingers: pinch zoom + pan. The zoom
+                                // floor is coverScale() so any zoomed-in view
+                                // fills the whole viewport (no black band) —
+                                // a plain 1f floor lets wide images show
+                                // letterboxing at 2x.
                                 val zoom = event.calculateZoom()
                                 val pan = event.calculatePan()
-                                val newScale = (scale * zoom).coerceIn(1f, 4f)
+                                val minScale = coverScale()
+                                // Pinch-out always reaches at least coverScale
+                                // (no letterboxing); pinch-in can return to 1x.
+                                val newScale = if (scale * zoom <= 1f) {
+                                    1f
+                                } else {
+                                    (scale * zoom).coerceIn(minScale, 4f)
+                                }
                                 if (newScale <= 1f) {
                                     scale = 1f
                                     offsetX = 0f
