@@ -238,6 +238,7 @@ fun HomeScreen(
             hdCount = visible.count { it.isHd },
             folders = selectedFolders,
             currentFilter = state.currentFilter,
+            currentSubFolderId = state.currentSubFolderId,
             onSelectFolder = viewModel::selectFilter,
             onSelectSubFolder = viewModel::selectSubFolder,
             modifier = Modifier.align(Alignment.BottomEnd)
@@ -253,6 +254,7 @@ private fun FloatingStats(
     hdCount: Int,
     folders: List<Folder>,
     currentFilter: Long?,
+    currentSubFolderId: Long?,
     onSelectFolder: (Long?) -> Unit,
     onSelectSubFolder: (Long) -> Unit,
     modifier: Modifier = Modifier
@@ -313,13 +315,25 @@ private fun FloatingStats(
                     currentFolder!!.subFolders.forEach { sub ->
                         DropdownMenuItem(
                             text = {
-                                Text(
-                                    sub.name,
-                                    color = scheme.onSurface,
-                                    fontSize = 15.sp,
-                                    maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        sub.name,
+                                        color = scheme.onSurface,
+                                        fontSize = 15.sp,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
+                                    )
+                                    if (currentSubFolderId == sub.id) {
+                                        Spacer(Modifier.width(10.dp))
+                                        Icon(
+                                            Icons.Filled.Check,
+                                            contentDescription = null,
+                                            tint = scheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
                             },
                             leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null, tint = scheme.primary) },
                             onClick = {
