@@ -318,7 +318,11 @@ private fun MainScaffold(
 
     // Search overlay — fullscreen over Home, entered via the Home search icon
     if (showSearch) {
-        androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
             SearchScreen(
                 viewModel = viewModel,
                 onImageClick = { img ->

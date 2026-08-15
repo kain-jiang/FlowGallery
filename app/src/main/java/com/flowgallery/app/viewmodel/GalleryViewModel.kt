@@ -263,7 +263,11 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             if (targetPos !in subs.indices) return@update st // no wrapping
 
             val targetSub = subs[targetPos]
-            val targetImages = st.images.filter { it.subFolderUri == targetSub.uriString }
+            // Keep the same sort order as the grid in the target subfolder.
+            val targetImages = applySort(
+                st.images.filter { it.subFolderUri == targetSub.uriString },
+                st.sortMode
+            )
             if (targetImages.isEmpty()) return@update st
 
             val targetIndex = if (delta > 0) 0 else targetImages.lastIndex
@@ -325,21 +329,20 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Full-screen browse list: ONLY the subfolder currently being viewed
-     * (thumbnails strip shows just this subfolder). When the user reaches the
-     * first/last item and keeps navigating, the viewer jumps to the adjacent
-     * subfolder via [openViewer] boundary handling — no eager loading of
-     * other subfolders, no wrapping around within a subfolder.
+     * (thumbnails strip shows just this subfolder), ordered by the SAME
+     * sort mode as the Home grid so viewer order matches the grid.
      */
     fun viewerImages(state: GalleryUiState = _uiState.value): List<ImageItem> {
         val subId = state.viewer.subFolderId ?: return visibleImages(state)
         val activeSub = state.folders
             .flatMap { it.subFolders }
             .find { it.id == subId }
-        return if (activeSub != null) {
+        val filtered = if (activeSub != null) {
             state.images.filter { it.subFolderUri == activeSub.uriString }
         } else {
             state.images.filter { it.subFolderId == subId }
         }
+        return applySort(filtered, state.sortMode)
     }
 
     /** Ordered subfolders of the current root folder (non-empty only). */
