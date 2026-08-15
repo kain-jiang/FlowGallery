@@ -82,7 +82,9 @@ data class ViewerState(
     val isOpen: Boolean = false,
     val index: Int = 0,
     /** subfolder currently being browsed in the viewer (null = root level) */
-    val subFolderId: Long? = null
+    val subFolderId: Long? = null,
+    /** true when opened from Favorites: browse ONLY favorited items */
+    val favoritesOnly: Boolean = false
 )
 
 /** Bottom navigation destinations. */

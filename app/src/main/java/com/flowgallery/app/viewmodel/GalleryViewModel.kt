@@ -41,6 +41,8 @@ data class GalleryUiState(
     val landscapeColumns: Int = 3,
     /** Force single-column layout (top-bar toggle, overrides both). */
     val singleColumn: Boolean = false,
+    /** Favorites tab's own single-column toggle (independent of Home). */
+    val favoritesSingleColumn: Boolean = false,
     /** home grid sort mode */
     val sortMode: SortMode = SortMode.DEFAULT,
     /** HD thumbnail toggle (FR-8) */
@@ -68,6 +70,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                 portraitColumns = prefs.getInt(KEY_PORTRAIT_COLUMNS, 2).coerceIn(2, 4),
                 landscapeColumns = prefs.getInt(KEY_LANDSCAPE_COLUMNS, 3).coerceIn(2, 6),
                 singleColumn = prefs.getBoolean(KEY_SINGLE_COLUMN, false),
+                favoritesSingleColumn = prefs.getBoolean(KEY_FAVORITES_SINGLE_COLUMN, false),
                 sortMode = savedSort,
                 hdThumbnails = prefs.getBoolean(KEY_HD_THUMBNAILS, true)
             )
@@ -229,6 +232,13 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update { it.copy(singleColumn = newVal) }
     }
 
+    /** Toggle the Favorites tab's single-column layout, persisted. */
+    fun toggleFavoritesSingleColumn() {
+        val newVal = !_uiState.value.favoritesSingleColumn
+        prefs.edit().putBoolean(KEY_FAVORITES_SINGLE_COLUMN, newVal).apply()
+        _uiState.update { it.copy(favoritesSingleColumn = newVal) }
+    }
+
     /** Set default portrait grid columns (Settings picker), persisted. */
     fun setPortraitColumns(count: Int) {
         val c = count.coerceIn(2, 4)
@@ -264,13 +274,14 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     // ------------------------------------------------------------------ viewer
 
     /** Open the viewer at [index] within the currently selected subfolder. */
-    fun openViewer(index: Int) {
+    fun openViewer(index: Int, favoritesOnly: Boolean = false) {
         _uiState.update {
             it.copy(
                 viewer = ViewerState(
                     isOpen = true,
                     index = index,
-                    subFolderId = it.currentSubFolderId
+                    subFolderId = it.currentSubFolderId,
+                    favoritesOnly = favoritesOnly
                 )
             )
         }
@@ -375,6 +386,11 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
      * sort mode as the Home grid so viewer order matches the grid.
      */
     fun viewerImages(state: GalleryUiState = _uiState.value): List<ImageItem> {
+        // Opened from Favorites: the browsing sequence is the favorites list
+        // only — never cross into non-favorited items.
+        if (state.viewer.favoritesOnly) {
+            return state.images.filter { it.id in _favorites.value }
+        }
         val subId = state.viewer.subFolderId ?: return visibleImages(state)
         val activeSub = state.folders
             .flatMap { it.subFolders }
@@ -415,6 +431,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         const val KEY_PORTRAIT_COLUMNS = "portrait_columns"
         const val KEY_LANDSCAPE_COLUMNS = "landscape_columns"
         const val KEY_SINGLE_COLUMN = "single_column"
+        const val KEY_FAVORITES_SINGLE_COLUMN = "favorites_single_column"
         const val KEY_SORT_MODE = "sort_mode"
         const val KEY_HD_THUMBNAILS = "hd_thumbnails"
     }

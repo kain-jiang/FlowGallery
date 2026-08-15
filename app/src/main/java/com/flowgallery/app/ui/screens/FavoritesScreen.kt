@@ -3,6 +3,7 @@ package com.flowgallery.app.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +15,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ViewAgenda
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,12 +49,27 @@ fun FavoritesScreen(
     val favImages = state.images.filter { it.id in favorites }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Text(
-            text = stringResource(R.string.tab_favorites),
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.tab_favorites),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            // Favorites' own single-column toggle (independent of Home)
+            IconButton(onClick = viewModel::toggleFavoritesSingleColumn) {
+                Icon(
+                    Icons.Filled.ViewAgenda,
+                    contentDescription = stringResource(R.string.cd_grid_toggle),
+                    tint = if (state.favoritesSingleColumn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
 
         if (favImages.isEmpty()) {
             Box(
@@ -99,7 +118,7 @@ fun FavoritesScreen(
                 images = favImages,
                 favoriteIds = favorites,
                 onImageClick = onImageClick,
-                columnCount = effectiveColumnCount(state),
+                columnCount = effectiveColumnCount(state, state.favoritesSingleColumn),
                 onToggleFavorite = viewModel::toggleFavorite
             )
         }

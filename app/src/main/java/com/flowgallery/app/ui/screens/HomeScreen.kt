@@ -728,11 +728,14 @@ private fun EmptyState(onAddFolder: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
-/** Effective grid columns: single-column toggle wins; otherwise the
+/** Effective grid columns: the given single-column flag wins; otherwise the
  *  portrait/landscape default configured in Settings applies. */
 @Composable
-fun effectiveColumnCount(state: com.flowgallery.app.viewmodel.GalleryUiState): Int {
-    if (state.singleColumn) return 1
+fun effectiveColumnCount(
+    state: com.flowgallery.app.viewmodel.GalleryUiState,
+    singleColumn: Boolean = state.singleColumn
+): Int {
+    if (singleColumn) return 1
     val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
         android.content.res.Configuration.ORIENTATION_LANDSCAPE
     return if (isLandscape) state.landscapeColumns else state.portraitColumns

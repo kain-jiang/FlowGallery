@@ -254,8 +254,10 @@ private fun MainScaffold(
                     GalleryTab.Favorites -> FavoritesScreen(
                         viewModel = viewModel,
                         onImageClick = { img ->
-                            val idx = viewModel.visibleImages(state).indexOfFirst { it.id == img.id }
-                            if (idx >= 0) viewModel.openViewer(idx)
+                            // Browse ONLY the favorited sequence in the viewer
+                            val favList = state.images.filter { it.id in favorites }
+                            val idx = favList.indexOfFirst { it.id == img.id }
+                            if (idx >= 0) viewModel.openViewer(idx, favoritesOnly = true)
                         }
                     )
                     GalleryTab.Settings -> SettingsScreen(
