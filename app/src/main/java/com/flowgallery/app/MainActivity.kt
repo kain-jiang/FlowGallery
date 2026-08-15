@@ -19,11 +19,14 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
@@ -36,6 +39,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -171,61 +176,95 @@ private fun MainScaffold(
         onDispose {}
     }
 
+    val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
+        android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            AnimatedVisibility(
-                // Home hides with scroll; other tabs always show the bar
-                visible = state.currentTab != GalleryTab.Home || bottomBarVisible,
-                enter = fadeIn() + slideInVertically { it },
-                exit = fadeOut() + slideOutVertically { it }
-            ) {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                    GalleryTab.entries.forEach { tab ->
-                        NavigationBarItem(
-                            selected = state.currentTab == tab,
-                            onClick = { viewModel.selectTab(tab) },
-                            icon = { Icon(tabIcon(tab), contentDescription = tabLabel(tab)) },
-                            label = { Text(tabLabel(tab)) }
-                        )
+            // Landscape/tablet: no bottom bar (side rail instead).
+            if (!isLandscape) {
+                AnimatedVisibility(
+                    // Home hides with scroll; other tabs always show the bar
+                    visible = state.currentTab != GalleryTab.Home || bottomBarVisible,
+                    enter = fadeIn() + slideInVertically { it },
+                    exit = fadeOut() + slideOutVertically { it }
+                ) {
+                    NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+                        GalleryTab.entries.forEach { tab ->
+                            NavigationBarItem(
+                                selected = state.currentTab == tab,
+                                onClick = { viewModel.selectTab(tab) },
+                                icon = { Icon(tabIcon(tab), contentDescription = tabLabel(tab)) },
+                                label = { Text(tabLabel(tab)) }
+                            )
+                        }
                     }
                 }
             }
         }
     ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            when (state.currentTab) {
-                GalleryTab.Home -> HomeScreen(
-                    viewModel = viewModel,
-                    onOpenFolderModal = { showFolderModal = true },
-                    onOpenSearch = { showSearch = true },
-                    onImageClick = { img ->
-                        val idx = viewModel.visibleImages(state).indexOfFirst { it.id == img.id }
-                        if (idx >= 0) viewModel.openViewer(idx)
-                    },
-                    onRemoveFolder = { folder ->
-                        showFolderModal = false
-                        folderToRemove = folder
-                    },
-                    onChromeVisibleChange = { visible -> bottomBarVisible = visible }
-                )
-                GalleryTab.Favorites -> FavoritesScreen(
-                    viewModel = viewModel,
-                    onImageClick = { img ->
-                        val idx = viewModel.visibleImages(state).indexOfFirst { it.id == img.id }
-                        if (idx >= 0) viewModel.openViewer(idx)
+        androidx.compose.foundation.layout.Row(modifier = Modifier.fillMaxSize()) {
+            // Landscape/tablet layout: a fixed side rail on the left — it
+            // does NOT participate in the Home scroll-hide behavior.
+            if (isLandscape) {
+                NavigationRail(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.fillMaxHeight()
+                ) {
+                    androidx.compose.foundation.layout.Spacer(
+                        Modifier.height(12.dp)
+                    )
+                    GalleryTab.entries.forEach { tab ->
+                        NavigationRailItem(
+                            selected = state.currentTab == tab,
+                            onClick = { viewModel.selectTab(tab) },
+                            icon = { Icon(tabIcon(tab), contentDescription = tabLabel(tab)) },
+                            label = { Text(tabLabel(tab), fontSize = 10.sp) }
+                        )
                     }
-                )
-                GalleryTab.Settings -> SettingsScreen(
-                    viewModel = viewModel,
-                    onAddFolder = onPickFolder,
-                    onRemoveFolder = { folder -> folderToRemove = folder },
-                    onEditType = { folder -> folderToEditType = folder }
-                )
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .padding(
+                        top = innerPadding.calculateTopPadding(),
+                        bottom = innerPadding.calculateBottomPadding(),
+                        start = if (isLandscape) 0.dp else innerPadding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
+                        end = if (isLandscape) 0.dp else innerPadding.calculateRightPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)
+                    )
+            ) {
+                when (state.currentTab) {
+                    GalleryTab.Home -> HomeScreen(
+                        viewModel = viewModel,
+                        onOpenFolderModal = { showFolderModal = true },
+                        onOpenSearch = { showSearch = true },
+                        onImageClick = { img ->
+                            val idx = viewModel.visibleImages(state).indexOfFirst { it.id == img.id }
+                            if (idx >= 0) viewModel.openViewer(idx)
+                        },
+                        onRemoveFolder = { folder ->
+                            showFolderModal = false
+                            folderToRemove = folder
+                        },
+                        onChromeVisibleChange = { visible -> bottomBarVisible = visible }
+                    )
+                    GalleryTab.Favorites -> FavoritesScreen(
+                        viewModel = viewModel,
+                        onImageClick = { img ->
+                            val idx = viewModel.visibleImages(state).indexOfFirst { it.id == img.id }
+                            if (idx >= 0) viewModel.openViewer(idx)
+                        }
+                    )
+                    GalleryTab.Settings -> SettingsScreen(
+                        viewModel = viewModel,
+                        onAddFolder = onPickFolder,
+                        onRemoveFolder = { folder -> folderToRemove = folder },
+                        onEditType = { folder -> folderToEditType = folder }
+                    )
+                }
             }
         }
     }
