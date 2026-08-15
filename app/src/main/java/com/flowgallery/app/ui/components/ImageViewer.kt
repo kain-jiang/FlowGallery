@@ -2,6 +2,7 @@ package com.flowgallery.app.ui.components
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -247,10 +248,11 @@ fun ImageViewer(
                 onClick = { navigateBy(-1) },
                 modifier = Modifier
                     .align(Alignment.CenterStart)
-                    .padding(12.dp)
-                    .size(56.dp)
+                    .padding(start = 14.dp)
+                    .size(52.dp)
                     .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.5f))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
+                    .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
             ) {
                 Icon(Icons.Filled.ChevronLeft, contentDescription = stringResource(R.string.cd_prev), tint = Color.White)
             }
@@ -260,10 +262,11 @@ fun ImageViewer(
                 onClick = { navigateBy(1) },
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .padding(12.dp)
-                    .size(56.dp)
+                    .padding(end = 14.dp)
+                    .size(52.dp)
                     .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.5f))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
+                    .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
             ) {
                 Icon(Icons.Filled.ChevronRight, contentDescription = stringResource(R.string.cd_next), tint = Color.White)
             }
@@ -284,19 +287,21 @@ fun ImageViewer(
                 IconButton(
                     onClick = onClose,
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.5f))
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
+                        .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
                 ) {
                     Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back), tint = Color.White)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     IconButton(
                         onClick = { onToggleFavorite(image.id) },
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(40.dp)
                             .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.5f))
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
+                            .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
                     ) {
                         Icon(
                             imageVector = if (image.id in favoriteIds) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
@@ -307,9 +312,10 @@ fun ImageViewer(
                     IconButton(
                         onClick = { onShare?.invoke(image) },
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(40.dp)
                             .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.5f))
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
+                            .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
                     ) {
                         Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.cd_share), tint = Color.White)
                     }
@@ -317,9 +323,10 @@ fun ImageViewer(
                         IconButton(
                             onClick = { showMoreMenu = true },
                             modifier = Modifier
-                                .size(44.dp)
+                                .size(40.dp)
                                 .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.5f))
+                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
+                                .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
                         ) {
                             Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_more), tint = Color.White)
                         }
@@ -714,7 +721,8 @@ private fun VideoPlayerView(
                     .align(Alignment.Center)
                     .size(72.dp)
                     .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.55f))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.9f))
+                    .border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape)
             ) {
                 Icon(
                     Icons.Filled.PlayArrow,
@@ -738,12 +746,16 @@ private fun VideoPlayerView(
             ) {
                 IconButton(
                     onClick = { if (isPlaying) exoPlayer.pause() else exoPlayer.play() },
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
+                        .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
                 ) {
                     Icon(
                         imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                         contentDescription = if (isPlaying) stringResource(R.string.cd_pause) else stringResource(R.string.cd_play),
-                        tint = Color.White
+                        tint = if (isPlaying) MaterialTheme.colorScheme.primary else Color.White
                     )
                 }
                 Text(
@@ -781,12 +793,16 @@ private fun VideoPlayerView(
                 // Fullscreen toggle (rotate into landscape pure-play view)
                 IconButton(
                     onClick = onToggleFullscreen,
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
+                        .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
                 ) {
                     Icon(
                         imageVector = if (fullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
                         contentDescription = stringResource(R.string.cd_fullscreen),
-                        tint = Color.White
+                        tint = if (fullscreen) MaterialTheme.colorScheme.primary else Color.White
                     )
                 }
             }
