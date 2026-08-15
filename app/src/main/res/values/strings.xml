@@ -89,6 +89,10 @@
     <string name="setting_quality_desc">High-quality thumbnails</string>
     <string name="setting_monet">Monet Colors</string>
     <string name="setting_monet_desc">Material You wallpaper colors (Android 12+)</string>
+    <string name="setting_pill_alignment">Floating Pills Position</string>
+    <string name="setting_pill_alignment_desc">Stats &amp; tap-to-top pills side</string>
+    <string name="side_left">Left</string>
+    <string name="side_right">Right</string>
     <string name="setting_cache">Clear Cache</string>
     <string name="setting_cache_desc">Release cached thumbnails</string>
     <string name="setting_about">FlowGallery</string>

@@ -89,6 +89,10 @@
     <string name="setting_quality_desc">高清缩略图</string>
     <string name="setting_monet">莫奈取色</string>
     <string name="setting_monet_desc">跟随壁纸动态取色（Android 12+）</string>
+    <string name="setting_pill_alignment">悬浮胶囊位置</string>
+    <string name="setting_pill_alignment_desc">统计与置顶胶囊所在侧</string>
+    <string name="side_left">左</string>
+    <string name="side_right">右</string>
     <string name="setting_cache">清除缓存</string>
     <string name="setting_cache_desc">释放缩略图缓存</string>
     <string name="setting_about">瀑布画廊</string>

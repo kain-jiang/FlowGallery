@@ -49,6 +49,8 @@ data class GalleryUiState(
     val hdThumbnails: Boolean = true,
     /** Monet (Material You) dynamic color from wallpaper (Android 12+) */
     val monetColors: Boolean = false,
+    /** Floating pills (stats + tap-to-top) anchored left instead of right */
+    val pillAlignmentLeft: Boolean = false,
     /** type filter for search: null = all, else MediaType name */
     val mediaTypeFilter: String? = null
 )
@@ -75,7 +77,8 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                 favoritesSingleColumn = prefs.getBoolean(KEY_FAVORITES_SINGLE_COLUMN, false),
                 sortMode = savedSort,
                 hdThumbnails = prefs.getBoolean(KEY_HD_THUMBNAILS, true),
-                monetColors = prefs.getBoolean(KEY_MONET_COLORS, false)
+                monetColors = prefs.getBoolean(KEY_MONET_COLORS, false),
+                pillAlignmentLeft = prefs.getBoolean(KEY_PILL_ALIGNMENT_LEFT, false)
             )
         }
         refreshFolders()
@@ -271,6 +274,12 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update { it.copy(monetColors = newVal) }
     }
 
+    /** Set floating-pill alignment (left/right), persisted. */
+    fun setPillAlignment(left: Boolean) {
+        prefs.edit().putBoolean(KEY_PILL_ALIGNMENT_LEFT, left).apply()
+        _uiState.update { it.copy(pillAlignmentLeft = left) }
+    }
+
     /** Set search media-type filter (null = all). */
     fun setMediaTypeFilter(type: String?) =
         _uiState.update { it.copy(mediaTypeFilter = type) }
@@ -445,5 +454,6 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         const val KEY_SORT_MODE = "sort_mode"
         const val KEY_HD_THUMBNAILS = "hd_thumbnails"
         const val KEY_MONET_COLORS = "monet_colors"
+        const val KEY_PILL_ALIGNMENT_LEFT = "pill_alignment_left"
     }
 }

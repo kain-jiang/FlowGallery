@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.SystemUpdate
@@ -487,6 +488,60 @@ fun SettingsScreen(
             }
         }
         item {
+            // Floating pills alignment: left / right (both pills move together)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Filled.Place,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.setting_pill_alignment),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        stringResource(R.string.setting_pill_alignment_desc),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    AlignmentChip(
+                        label = stringResource(R.string.side_left),
+                        selected = state.pillAlignmentLeft,
+                        onClick = { viewModel.setPillAlignment(true) }
+                    )
+                    AlignmentChip(
+                        label = stringResource(R.string.side_right),
+                        selected = !state.pillAlignmentLeft,
+                        onClick = { viewModel.setPillAlignment(false) }
+                    )
+                }
+            }
+        }
+        item {
             // Clear cache (actually clears Coil memory + disk caches)
             Row(
                 modifier = Modifier
@@ -775,6 +830,27 @@ private fun SearchTypeChip(
             .background(if (selected) scheme.primary else scheme.surface)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp)
+    )
+}
+
+/** Small left/right alignment chip (used by the pill-alignment setting). */
+@Composable
+private fun AlignmentChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    Text(
+        text = label,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Medium,
+        color = if (selected) scheme.onPrimary else scheme.onSurfaceVariant,
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (selected) scheme.primary else scheme.surfaceVariant)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 6.dp)
     )
 }
 
