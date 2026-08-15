@@ -259,7 +259,13 @@ fun ImageViewer(
                     tint = Color.White,
                     modifier = Modifier
                         .size(28.dp)
-                        .shadow(6.dp, CircleShape, clip = false)
+                        .shadow(
+                            elevation = 10.dp,
+                            shape = CircleShape,
+                            clip = true,
+                            ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                            spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                        )
                 )
             }
         }
@@ -277,7 +283,13 @@ fun ImageViewer(
                     tint = Color.White,
                     modifier = Modifier
                         .size(28.dp)
-                        .shadow(6.dp, CircleShape, clip = false)
+                        .shadow(
+                            elevation = 10.dp,
+                            shape = CircleShape,
+                            clip = true,
+                            ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                            spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                        )
                 )
             }
         }
@@ -304,7 +316,13 @@ fun ImageViewer(
                         tint = Color.White,
                         modifier = Modifier
                             .size(22.dp)
-                            .shadow(5.dp, CircleShape, clip = false)
+                            .shadow(
+                                elevation = 9.dp,
+                                shape = CircleShape,
+                                clip = true,
+                                ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                            )
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -318,7 +336,13 @@ fun ImageViewer(
                             tint = if (image.id in favoriteIds) Color(0xFFEF4444) else Color.White,
                             modifier = Modifier
                                 .size(22.dp)
-                                .shadow(5.dp, CircleShape, clip = false)
+                                .shadow(
+                                    elevation = 9.dp,
+                                    shape = CircleShape,
+                                    clip = true,
+                                    ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                                    spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                                )
                         )
                     }
                     IconButton(
@@ -331,7 +355,13 @@ fun ImageViewer(
                             tint = Color.White,
                             modifier = Modifier
                                 .size(22.dp)
-                                .shadow(5.dp, CircleShape, clip = false)
+                                .shadow(
+                                    elevation = 9.dp,
+                                    shape = CircleShape,
+                                    clip = true,
+                                    ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                                    spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                                )
                         )
                     }
                     Box {
@@ -345,7 +375,13 @@ fun ImageViewer(
                                 tint = Color.White,
                                 modifier = Modifier
                                     .size(22.dp)
-                                    .shadow(5.dp, CircleShape, clip = false)
+                                    .shadow(
+                                        elevation = 9.dp,
+                                        shape = CircleShape,
+                                        clip = true,
+                                        ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                                        spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                                    )
                             )
                         }
                         // More menu: save to gallery
@@ -737,15 +773,21 @@ private fun VideoPlayerView(
                 onClick = { exoPlayer.play() },
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .size(64.dp)
+                    .size(72.dp)
             ) {
                 Icon(
                     Icons.Filled.PlayArrow,
                     contentDescription = stringResource(R.string.cd_play),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
-                        .size(44.dp)
-                        .shadow(8.dp, CircleShape, clip = false)
+                        .size(48.dp)
+                        .shadow(
+                            elevation = 14.dp,
+                            shape = CircleShape,
+                            clip = true,
+                            ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f),
+                            spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
+                        )
                 )
             }
         }
@@ -771,7 +813,13 @@ private fun VideoPlayerView(
                         tint = if (isPlaying) MaterialTheme.colorScheme.primary else Color.White,
                         modifier = Modifier
                             .size(22.dp)
-                            .shadow(5.dp, CircleShape, clip = false)
+                            .shadow(
+                                elevation = 9.dp,
+                                shape = CircleShape,
+                                clip = true,
+                                ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                            )
                     )
                 }
                 Spacer(Modifier.width(10.dp))
@@ -818,7 +866,13 @@ private fun VideoPlayerView(
                         tint = if (fullscreen) MaterialTheme.colorScheme.primary else Color.White,
                         modifier = Modifier
                             .size(22.dp)
-                            .shadow(5.dp, CircleShape, clip = false)
+                            .shadow(
+                                elevation = 9.dp,
+                                shape = CircleShape,
+                                clip = true,
+                                ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                            )
                     )
                 }
             }
