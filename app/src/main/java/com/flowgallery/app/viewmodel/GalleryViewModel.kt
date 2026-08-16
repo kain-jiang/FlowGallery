@@ -145,7 +145,9 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         }
         _indexJob.update {
             it.copy(
-                entryCount = mediaIndex.size,
+                entryCount = mediaIndex.values.count {
+                    it.status == com.flowgallery.app.data.index.IndexStatus.SUCCESS
+                },
                 lastIndexedAt = mediaIndex.values.maxOfOrNull { e -> e.indexedAt } ?: 0L,
                 // Default selection = ENABLED folders (never everything).
                 indexFolders = repository.loadFolders()
@@ -377,7 +379,9 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                 it.copy(
                     running = false,
                     isAuto = false,
-                    entryCount = newIndex.size,
+                    entryCount = newIndex.values.count {
+                        it.status == com.flowgallery.app.data.index.IndexStatus.SUCCESS
+                    },
                     lastIndexedAt = System.currentTimeMillis()
                 )
             }
@@ -496,7 +500,9 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                     running = false,
                     paused = false,
                     extracted = extracted,
-                    entryCount = newIndex.size,
+                    entryCount = newIndex.values.count {
+                        it.status == com.flowgallery.app.data.index.IndexStatus.SUCCESS
+                    },
                     lastIndexedAt = System.currentTimeMillis()
                 )
             }
@@ -654,21 +660,18 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
 
-    /** True when an index entry carries real metadata — dimensions, OR a
-     *  video duration (videos often fail to report dimensions over network
-     *  streams while the duration succeeds). */
-    private fun isIndexedEntry(e: com.flowgallery.app.data.index.IndexEntry): Boolean =
-        (e.width > 0 && e.height > 0) || (e.durationMs ?: 0L) > 0
-
-    /** Indexed count for [folder] — from the INDEX RECORD ONLY. FolderId
-     *  match, plus a uri match that compares DECODED path segments (SAF tree
-     *  vs document uris differ in percent-encoding; SMB uris carry
-     *  credentials) — encoding/credential independent, home-independent. */
+    /** Indexed count for [folder] — straight from the INDEX RECORD: only
+     *  entries with status SUCCESS count as indexed (FAILED markers never
+     *  count). FolderId match, plus decoded pathSegments uri match
+     *  (encoding/credential independent). Home-independent. */
     fun indexedCount(folder: com.flowgallery.app.data.model.Folder): Int =
         maxOf(
-            mediaIndex.values.count { it.folderId == folder.id && isIndexedEntry(it) },
             mediaIndex.values.count {
-                uriUnderFolder(it.uriString, folder.uriString) && isIndexedEntry(it)
+                it.folderId == folder.id && it.status == com.flowgallery.app.data.index.IndexStatus.SUCCESS
+            },
+            mediaIndex.values.count {
+                uriUnderFolder(it.uriString, folder.uriString) &&
+                    it.status == com.flowgallery.app.data.index.IndexStatus.SUCCESS
             }
         )
 

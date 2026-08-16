@@ -39,7 +39,9 @@ class IndexStore(private val context: Context) {
                                 sizeBytes = o.optLong("s"),
                                 modifiedTime = o.optLong("m"),
                                 contentHash = if (o.isNull("h")) null else o.optString("h"),
-                                indexedAt = o.optLong("t")
+                                indexedAt = o.optLong("t"),
+                                status = if (o.optString("st") == "FAILED")
+                                    IndexStatus.FAILED else IndexStatus.SUCCESS
                             )
                         )
                     }
@@ -69,6 +71,7 @@ class IndexStore(private val context: Context) {
                         put("m", e.modifiedTime)
                         put("h", e.contentHash)
                         put("t", e.indexedAt)
+                        put("st", e.status.name)
                     }
                 )
             }

@@ -24,6 +24,11 @@ class MediaIndexer(
     private val context: Context,
     private val sourceRegistry: com.flowgallery.app.data.source.SourceRegistry
 ) {
+    /** Failed extracts are retried at most once per 24h (kept as FAILED
+     *  markers in between, so incremental runs stay fast). */
+    private companion object {
+        const val RETRY_THROTTLE_MS = 24L * 60 * 60 * 1000
+    }
 
     private val resolver = context.applicationContext.contentResolver
 
@@ -57,7 +62,7 @@ class MediaIndexer(
             // extract) would otherwise be reused forever because its
             // size/mtime match — the broken metadata never heals.
             if (!force &&
-                cached != null &&
+                cached?.status == IndexStatus.SUCCESS &&
                 cached.width > 0 && cached.height > 0 &&
                 cached.sizeBytes == item.sizeBytes &&
                 cached.modifiedTime == item.modifiedTime
@@ -68,11 +73,25 @@ class MediaIndexer(
                 if (cached.folderId < 0) {
                     result[item.uriString] = cached.copy(folderId = item.folderId)
                 }
+            } else if (!force && cached?.status == IndexStatus.FAILED &&
+                System.currentTimeMillis() - cached.indexedAt < RETRY_THROTTLE_MS
+            ) {
+                // Failed recently — keep the FAILED marker, skip the retry.
             } else {
                 val entry = extract(item)
                 val bad = entry.width <= 0 && entry.height <= 0 && entry.durationMs == null
                 if (bad) {
                     failed++
+                    // Keep a FAILED marker so the index record reflects the
+                    // outcome (and is counted as NOT indexed).
+                    result[item.uriString] = IndexEntry(
+                        uriString = item.uriString,
+                        folderId = item.folderId,
+                        sizeBytes = item.sizeBytes,
+                        modifiedTime = item.modifiedTime,
+                        indexedAt = now,
+                        status = IndexStatus.FAILED
+                    )
                 } else {
                     result[item.uriString] = IndexEntry(
                         uriString = item.uriString,
@@ -83,7 +102,8 @@ class MediaIndexer(
                         sizeBytes = item.sizeBytes,
                         modifiedTime = item.modifiedTime,
                         contentHash = entry.contentHash,
-                        indexedAt = now
+                        indexedAt = now,
+                        status = IndexStatus.SUCCESS
                     )
                     extracted++
                 }
