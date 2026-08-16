@@ -87,12 +87,12 @@ data class ViewerState(
     val favoritesOnly: Boolean = false
 )
 
-/** Bottom navigation destinations. */
+/** Bottom navigation destinations. Settings stays rightmost; Index third. */
 enum class GalleryTab(val label: String) {
     Home("Home"),
     Favorites("Favorites"),
-    Settings("Settings"),
-    Index("Index")
+    Index("Index"),
+    Settings("Settings")
 }
 
 /** Gallery sort modes (home grid). */
