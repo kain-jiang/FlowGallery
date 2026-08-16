@@ -175,26 +175,39 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Re-scan ONE folder (Settings refresh button): replaces its items,
      *  clears stale index entries for it, then re-indexes it if auto-index
-     *  is enabled. */
+     *  is enabled. Result is toasted. */
     fun refreshFolder(id: Long) {
         viewModelScope.launch {
             val folder = _uiState.value.folders.find { it.id == id } ?: return@launch
-            val result = runCatching { repository.scanFolder(folder) }.getOrNull()
-                ?: return@launch
-            repository.updateFolderSubFolders(id, result.subFolders, result.items.size)
+            val result = runCatching { repository.scanFolder(folder) }
+            result.onFailure { e ->
+                _uiState.update {
+                    it.copy(indexNotice = "刷新失败：${(e.message ?: "未知错误").take(60)}")
+                }
+                return@launch
+            }
+            val scan = result.getOrNull() ?: return@launch
+            repository.updateFolderSubFolders(id, scan.subFolders, scan.items.size)
             // Replace this folder's items; keep the others.
             val others = _uiState.value.images.filter { it.folderId != id }
-            val images = others + result.items
+            val images = others + scan.items
             _uiState.update { it.copy(images = images, folders = repository.loadFolders()) }
             repository.saveScanCache(applyIndex(images))
             // Drop this folder's stale index entries, then re-index if
             // auto-index is enabled.
             mediaIndex = mediaIndex.filterValues { it.folderId != id }
-            if (_uiState.value.autoIndex && needsIndexing(result.items)) {
-                indexImagesInBackground(result.items)
+            if (_uiState.value.autoIndex && needsIndexing(scan.items)) {
+                indexImagesInBackground(scan.items)
             } else {
                 indexStore.save(mediaIndex.values)
             }
+            // Feedback
+            val app = getApplication<Application>()
+            val msg = app.getString(
+                com.flowgallery.app.R.string.folder_refreshed_notice,
+                folder.name, scan.items.size
+            )
+            _uiState.update { it.copy(indexNotice = msg) }
         }
     }
 
@@ -627,14 +640,31 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
 
-    /** Indexed count for [folder] — from the INDEX RECORD ONLY (folderId,
-     *  with uri-prefix fallback). Completely independent of the home screen:
-     *  disabled folders still count what was indexed. */
+    /** Indexed count for [folder] — from the INDEX RECORD ONLY. FolderId
+     *  match, plus a uri match that compares DECODED path segments (SAF tree
+     *  vs document uris differ in percent-encoding; SMB uris carry
+     *  credentials) — encoding/credential independent, home-independent. */
     fun indexedCount(folder: com.flowgallery.app.data.model.Folder): Int =
         maxOf(
             mediaIndex.values.count { it.folderId == folder.id && it.width > 0 && it.height > 0 },
-            mediaIndex.values.count { it.uriString.startsWith(folder.uriString) && it.width > 0 && it.height > 0 }
+            mediaIndex.values.count {
+                uriUnderFolder(it.uriString, folder.uriString) &&
+                    it.width > 0 && it.height > 0
+            }
         )
+
+    /** True when [itemUri] lives under [folderUri]: compares DECODED path
+     *  segments so percent-encoding (tree/document) and SMB credentials
+     *  never break the match. */
+    private fun uriUnderFolder(itemUri: String, folderUri: String): Boolean = try {
+        val item = android.net.Uri.parse(itemUri)
+        val folder = android.net.Uri.parse(folderUri)
+        val ip = item.pathSegments
+        val fp = folder.pathSegments
+        fp.isNotEmpty() && ip.size >= fp.size && ip.take(fp.size) == fp
+    } catch (e: Exception) {
+        false
+    }
 
     /** Set search media-type filter (null = all). */
     fun setMediaTypeFilter(type: String?) =

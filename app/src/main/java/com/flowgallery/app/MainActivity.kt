@@ -354,6 +354,7 @@ private fun MainScaffold(
                     GalleryTab.Settings -> SettingsScreen(
                         viewModel = viewModel,
                         onAddFolder = { showSourcePicker = true },
+                        onShowInfo = { folder -> folderInfo = folder },
                         onRemoveFolder = { folder -> folderToRemove = folder },
                         onEditType = { folder -> folderToEditType = folder }
                     )
@@ -646,6 +647,79 @@ private fun MainScaffold(
         }
     }
 
+    // Folder info dialog — project-styled
+    folderInfo?.let { folder ->
+        val scheme = MaterialTheme.colorScheme
+        androidx.compose.ui.window.Dialog(onDismissRequest = { folderInfo = null }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(scheme.surface)
+                    .padding(24.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(width = 40.dp, height = 4.dp)
+                        .align(Alignment.CenterHorizontally)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(scheme.outline)
+                )
+                Spacer(Modifier.height(20.dp))
+                Text(
+                    text = stringResource(R.string.folder_info_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = scheme.onSurface
+                )
+                Spacer(Modifier.height(16.dp))
+                InfoRow(
+                    label = stringResource(R.string.folder_info_name),
+                    value = folder.name
+                )
+                InfoRow(
+                    label = stringResource(R.string.folder_info_source),
+                    value = folder.source.label
+                )
+                InfoRow(
+                    label = stringResource(R.string.folder_info_type),
+                    value = stringResource(
+                        if (folder.type == com.flowgallery.app.data.model.FolderType.PACK)
+                            R.string.folder_type_pack else R.string.folder_type_normal
+                    )
+                )
+                InfoRow(
+                    label = stringResource(R.string.folder_info_path),
+                    value = folder.uriString
+                )
+                InfoRow(
+                    label = stringResource(R.string.folder_info_files),
+                    value = "${folder.imageCount}"
+                )
+                InfoRow(
+                    label = stringResource(R.string.folder_info_indexed),
+                    value = "${viewModel.indexedCount(folder)}"
+                )
+                Spacer(Modifier.height(20.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(scheme.surfaceVariant)
+                        .clickable { folderInfo = null }
+                        .padding(vertical = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(R.string.close),
+                        color = scheme.onSurfaceVariant,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+    }
+
     // Source picker before adding a folder (LOCAL = SAF, SMB = config dialog)
     if (showSourcePicker) {
         SourcePickerDialog(
@@ -818,6 +892,25 @@ private fun tabIcon(tab: GalleryTab): ImageVector = when (tab) {
     GalleryTab.Favorites -> Icons.Filled.Favorite
     GalleryTab.Settings -> Icons.Filled.Settings
     GalleryTab.Index -> Icons.Filled.Bolt
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    val scheme = MaterialTheme.colorScheme
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            color = scheme.onSurfaceVariant,
+            fontSize = 11.sp
+        )
+        Text(
+            text = value,
+            color = scheme.onSurface,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium
+        )
+        Spacer(Modifier.height(10.dp))
+    }
 }
 
 @Composable

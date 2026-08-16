@@ -196,4 +196,15 @@
     <string name="cd_remove_folder">移出文件夹</string>
     <string name="cd_refresh_folder">重新扫描</string>
     <string name="cd_folder_info">文件夹信息</string>
+
+    <!-- Folder info dialog + refresh feedback -->
+    <string name="folder_info_title">文件夹信息</string>
+    <string name="folder_info_name">名称</string>
+    <string name="folder_info_source">来源</string>
+    <string name="folder_info_type">类型</string>
+    <string name="folder_info_path">路径</string>
+    <string name="folder_info_files">文件数</string>
+    <string name="folder_info_indexed">已索引</string>
+    <string name="folder_refreshed_notice">已刷新 %1$s：%2$d 个文件</string>
+    <string name="close">关闭</string>
 </resources>

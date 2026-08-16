@@ -196,4 +196,15 @@
     <string name="cd_remove_folder">Remove folder</string>
     <string name="cd_refresh_folder">Re-scan folder</string>
     <string name="cd_folder_info">Folder info</string>
+
+    <!-- Folder info dialog + refresh feedback -->
+    <string name="folder_info_title">Folder info</string>
+    <string name="folder_info_name">Name</string>
+    <string name="folder_info_source">Source</string>
+    <string name="folder_info_type">Type</string>
+    <string name="folder_info_path">Path</string>
+    <string name="folder_info_files">Files</string>
+    <string name="folder_info_indexed">Indexed</string>
+    <string name="folder_refreshed_notice">Refreshed %1$s: %2$d files</string>
+    <string name="close">Close</string>
 </resources>
