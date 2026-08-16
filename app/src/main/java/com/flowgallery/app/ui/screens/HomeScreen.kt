@@ -120,25 +120,9 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxWidth()
         ) {
-            if (state.isRefreshing && visible.isEmpty()) {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    HomeHeader(
-                        state = state,
-                        selectedFolders = selectedFolders,
-                        onOpenSearch = onOpenSearch,
-                        onOpenFolderModal = onOpenFolderModal,
-                        onSetSortMode = viewModel::setSortMode,
-                        onToggleSingleColumn = viewModel::toggleSingleColumn,
-                        onSelectFolder = viewModel::selectFilter,
-                        onSelectSubFolder = viewModel::selectSubFolder
-                    )
-                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            } else if (visible.isEmpty()) {
+            // Empty content (refreshing or not) shows the guide state —
+            // no endless spinner; pull-to-refresh provides its own indicator.
+            if (visible.isEmpty()) {
                 // Empty state must KEEP the header (title + folder selector)
                 // visible, otherwise the user cannot switch folders back.
                 Column(modifier = Modifier.fillMaxSize()) {
@@ -545,13 +529,6 @@ private fun FolderDropdown(
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                currentIcon,
-                contentDescription = null,
-                tint = scheme.primary,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(Modifier.width(12.dp))
             Text(
                 text = currentLabel,
                 color = scheme.onSurface,

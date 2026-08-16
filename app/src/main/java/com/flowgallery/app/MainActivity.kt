@@ -18,21 +18,31 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
@@ -155,6 +165,18 @@ private fun MainScaffold(
 ) {
     val state by viewModel.uiState.collectAsState()
     val favorites by viewModel.favorites.collectAsState()
+    val uiContext = androidx.compose.ui.platform.LocalContext.current
+
+    // Surface scan / connection errors as a toast.
+    val scanError = state.error
+    androidx.compose.runtime.LaunchedEffect(scanError) {
+        if (scanError != null) {
+            android.widget.Toast.makeText(
+                uiContext, scanError, android.widget.Toast.LENGTH_LONG
+            ).show()
+            viewModel.clearError()
+        }
+    }
 
     var showFolderModal by remember { mutableStateOf(false) }
     var folderToRemove by remember { mutableStateOf<Folder?>(null) }
@@ -358,28 +380,102 @@ private fun MainScaffold(
         )
     }
 
-    // Remove-folder confirmation dialog (FR-2)
+    // Remove-folder confirmation dialog (FR-2) — app-styled
     folderToRemove?.let { folder ->
-        AlertDialog(
-            onDismissRequest = { folderToRemove = null },
-            title = { Text(stringResource(R.string.remove_folder_title)) },
-            text = {
-                Text(stringResource(R.string.remove_folder_msg, folder.name, folder.imageCount))
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.removeFolder(folder.id)
-                    folderToRemove = null
-                }) {
-                    Text(stringResource(R.string.remove_folder_confirm), color = MaterialTheme.colorScheme.error)
+        val scheme = MaterialTheme.colorScheme
+        androidx.compose.ui.window.Dialog(onDismissRequest = { folderToRemove = null }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(scheme.surface)
+                    .padding(24.dp)
+            ) {
+                // Drag handle
+                Box(
+                    modifier = Modifier
+                        .size(width = 40.dp, height = 4.dp)
+                        .align(Alignment.CenterHorizontally)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(scheme.outline)
+                )
+                Spacer(Modifier.height(20.dp))
+
+                // Warning icon chip
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(scheme.error.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Filled.Delete,
+                        contentDescription = null,
+                        tint = scheme.error,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { folderToRemove = null }) {
-                    Text(stringResource(R.string.remove_folder_cancel))
+                Spacer(Modifier.height(16.dp))
+
+                Text(
+                    text = stringResource(R.string.remove_folder_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = scheme.onSurface
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.remove_folder_msg, folder.name, folder.imageCount),
+                    color = scheme.onSurfaceVariant,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp
+                )
+
+                Spacer(Modifier.height(24.dp))
+
+                // Cancel + confirm buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(scheme.surfaceVariant)
+                            .clickable { folderToRemove = null }
+                            .padding(vertical = 14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.remove_folder_cancel),
+                            color = scheme.onSurfaceVariant,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1.4f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(scheme.error.copy(alpha = 0.15f))
+                            .clickable {
+                                viewModel.removeFolder(folder.id)
+                                folderToRemove = null
+                            }
+                            .padding(vertical = 14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.remove_folder_confirm),
+                            color = scheme.error,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
-        )
+        }
     }
 
     // Folder-type selection after SAF pick (recommended type pre-selected)

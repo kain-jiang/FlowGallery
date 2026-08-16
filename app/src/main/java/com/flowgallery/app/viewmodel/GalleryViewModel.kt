@@ -280,6 +280,9 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update { it.copy(pillAlignmentLeft = left) }
     }
 
+    /** Clear the last scan/connection error (after it was shown as a toast). */
+    fun clearError() = _uiState.update { it.copy(error = null) }
+
     /** Set search media-type filter (null = all). */
     fun setMediaTypeFilter(type: String?) =
         _uiState.update { it.copy(mediaTypeFilter = type) }
