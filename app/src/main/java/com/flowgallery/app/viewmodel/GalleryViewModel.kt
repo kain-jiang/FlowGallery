@@ -160,6 +160,31 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Re-scan ONE folder (Settings refresh button): replaces its items,
+     *  clears stale index entries for it, then re-indexes it if auto-index
+     *  is enabled. */
+    fun refreshFolder(id: Long) {
+        viewModelScope.launch {
+            val folder = _uiState.value.folders.find { it.id == id } ?: return@launch
+            val result = runCatching { repository.scanFolder(folder) }.getOrNull()
+                ?: return@launch
+            repository.updateFolderSubFolders(id, result.subFolders, result.items.size)
+            // Replace this folder's items; keep the others.
+            val others = _uiState.value.images.filter { it.folderId != id }
+            val images = others + result.items
+            _uiState.update { it.copy(images = images, folders = repository.loadFolders()) }
+            repository.saveScanCache(applyIndex(images))
+            // Drop this folder's stale index entries, then re-index if
+            // auto-index is enabled.
+            mediaIndex = mediaIndex.filterValues { it.folderId != id }
+            if (_uiState.value.autoIndex && needsIndexing(result.items)) {
+                indexImagesInBackground(result.items)
+            } else {
+                indexStore.save(mediaIndex.values)
+            }
+        }
+    }
+
     /** Change an existing folder's type (Normal ↔ Pack), then rescan. */
     fun updateFolderType(id: Long, type: FolderType) {
         viewModelScope.launch {

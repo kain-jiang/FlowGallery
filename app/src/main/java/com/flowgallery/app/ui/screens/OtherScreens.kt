@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lan
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.SystemUpdate
@@ -358,12 +359,20 @@ fun SettingsScreen(
                         checkedThumbColor = Color.White
                     )
                 )
-                // Remove folder (FR-2)
+                // Refresh (re-scan this folder) — project-styled
+                IconButton(onClick = { viewModel.refreshFolder(folder.id) }) {
+                    Icon(
+                        Icons.Filled.Refresh,
+                        contentDescription = stringResource(R.string.cd_refresh_folder),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                // Remove folder (FR-2) — project-styled
                 IconButton(onClick = { onRemoveFolder(folder) }) {
                     Icon(
-                        Icons.Filled.Close,
+                        Icons.Filled.Delete,
                         contentDescription = stringResource(R.string.cd_remove_folder),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = MaterialTheme.colorScheme.error
                     )
                 }
             }
