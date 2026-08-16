@@ -48,6 +48,14 @@
     <string name="empty_title">No images yet</string>
     <string name="empty_desc">Tap the + button to add folders and start browsing your image packs</string>
     <string name="add_folder">Add Folder</string>
+    <string name="source_picker_title">Add folder from</string>
+    <string name="source_picker_subtitle">Choose where the folder lives</string>
+    <string name="source_local">Local storage</string>
+    <string name="source_smb">SMB network share</string>
+    <string name="source_ftp">FTP server</string>
+    <string name="source_sftp">SFTP server</string>
+    <string name="source_webdav">WebDAV server</string>
+    <string name="source_wip">%1$s — in development</string>
     <string name="cd_search">Search</string>
     <string name="cd_grid_toggle">Grid toggle</string>
     <string name="cd_add_folder">Add folder</string>

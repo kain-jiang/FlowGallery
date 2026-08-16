@@ -48,6 +48,14 @@
     <string name="empty_title">还没有图片</string>
     <string name="empty_desc">点击 + 按钮添加文件夹，开始浏览你的图包</string>
     <string name="add_folder">添加文件夹</string>
+    <string name="source_picker_title">添加文件夹来源</string>
+    <string name="source_picker_subtitle">选择文件夹所在的位置</string>
+    <string name="source_local">本机存储</string>
+    <string name="source_smb">SMB 网络共享</string>
+    <string name="source_ftp">FTP 服务器</string>
+    <string name="source_sftp">SFTP 服务器</string>
+    <string name="source_webdav">WebDAV 服务器</string>
+    <string name="source_wip">%1$s — 开发中</string>
     <string name="cd_search">搜索</string>
     <string name="cd_grid_toggle">切换网格视图</string>
     <string name="cd_add_folder">添加文件夹</string>

@@ -79,6 +79,7 @@ import com.flowgallery.app.R
 import com.flowgallery.app.ui.components.FolderSelectionModal
 import com.flowgallery.app.ui.components.FolderTypeDialog
 import com.flowgallery.app.ui.components.ImageViewer
+import com.flowgallery.app.ui.components.SourcePickerDialog
 import com.flowgallery.app.ui.screens.FavoritesScreen
 import com.flowgallery.app.ui.screens.HomeScreen
 import com.flowgallery.app.ui.screens.IndexScreen
@@ -192,6 +193,31 @@ private fun MainScaffold(
         }
     }
 
+    // Monet (Material You) dynamic colors: the system wallpaper colors are
+    // read once when the Activity composes — a wallpaper change does NOT
+    // refresh them by itself. Listen for color changes and recreate the
+    // Activity so dynamicDarkColorScheme re-reads the new palette.
+    if (android.os.Build.VERSION.SDK_INT >= 31) {
+        androidx.compose.runtime.DisposableEffect(state.monetColors) {
+            val activity = uiContext as? android.app.Activity
+            val wallpaperManager = android.app.WallpaperManager.getInstance(uiContext)
+            val listener = object : android.app.WallpaperManager.OnColorsChangedListener {
+                override fun onColorsChanged(colors: android.app.WallpaperColors?, which: Int) {
+                    if (state.monetColors) {
+                        activity?.recreate()
+                    }
+                }
+            }
+            wallpaperManager.addOnColorsChangedListener(
+                listener,
+                android.os.Handler(android.os.Looper.getMainLooper())
+            )
+            onDispose {
+                wallpaperManager.removeOnColorsChangedListener(listener)
+            }
+        }
+    }
+
     var showFolderModal by remember { mutableStateOf(false) }
     var folderToRemove by remember { mutableStateOf<Folder?>(null) }
     var folderToEditType by remember { mutableStateOf<Folder?>(null) }
@@ -200,6 +226,7 @@ private fun MainScaffold(
     // First back on Home scrolls to top; the second one opens the exit dialog.
     var pendingExitConfirm by remember { mutableStateOf(false) }
     var scrollToTopSignal by remember { mutableStateOf(0) }
+    var showSourcePicker by remember { mutableStateOf(false) }
     // Bottom nav + system bars auto-hide while browsing down (Home only)
     var bottomBarVisible by remember { mutableStateOf(true) }
 
@@ -321,7 +348,7 @@ private fun MainScaffold(
                     )
                     GalleryTab.Settings -> SettingsScreen(
                         viewModel = viewModel,
-                        onAddFolder = onPickFolder,
+                        onAddFolder = { showSourcePicker = true },
                         onRemoveFolder = { folder -> folderToRemove = folder },
                         onEditType = { folder -> folderToEditType = folder }
                     )
@@ -612,6 +639,28 @@ private fun MainScaffold(
                 }
             }
         }
+    }
+
+    // Source picker before adding a folder (only LOCAL implemented)
+    if (showSourcePicker) {
+        SourcePickerDialog(
+            onPickLocal = {
+                showSourcePicker = false
+                onPickFolder()
+            },
+            onPickExternal = { type ->
+                showSourcePicker = false
+                android.widget.Toast.makeText(
+                    uiContext,
+                    uiContext.getString(
+                        com.flowgallery.app.R.string.source_wip,
+                        type.label
+                    ),
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            },
+            onDismiss = { showSourcePicker = false }
+        )
     }
 
     // Folder-type selection after SAF pick (recommended type pre-selected)

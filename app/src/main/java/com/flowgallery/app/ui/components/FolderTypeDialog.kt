@@ -13,8 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Collections
-import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -82,7 +81,7 @@ fun FolderTypeDialog(
 
             // NORMAL option
             TypeOption(
-                icon = Icons.Filled.FolderOpen,
+                icon = com.flowgallery.app.ui.components.folderTypeIcon(FolderType.NORMAL),
                 title = stringResource(R.string.folder_type_normal),
                 desc = stringResource(R.string.folder_type_normal_desc),
                 isSelected = selected == FolderType.NORMAL,
@@ -93,7 +92,7 @@ fun FolderTypeDialog(
 
             // PACK option
             TypeOption(
-                icon = Icons.Filled.Collections,
+                icon = com.flowgallery.app.ui.components.folderTypeIcon(FolderType.PACK),
                 title = stringResource(R.string.folder_type_pack),
                 desc = stringResource(R.string.folder_type_pack_desc),
                 isSelected = selected == FolderType.PACK,
@@ -193,7 +192,7 @@ private fun TypeOption(
         if (isSelected) {
             Spacer(Modifier.width(8.dp))
             Icon(
-                Icons.Filled.FolderOpen,
+                Icons.Filled.Check,
                 contentDescription = null,
                 tint = scheme.primary,
                 modifier = Modifier.size(16.dp)

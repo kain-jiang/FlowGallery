@@ -623,8 +623,9 @@ GalleryUiState
 - **查看器手势**：**双指捏合缩放**（放大下限 1f 平滑跟手、缩小自由回 1x、首帧跳过防猛跳）+ **双击缩放**（以点击处为锚点 — 按视口中心 pivot 公式校准，放大 coverScale/还原 1x）+ 放大后单指平移（边界约束）+ 单击切换工具栏（延迟 300ms 防双击误触发）；双指时禁用 Pager 滚动；1x 单指由 Pager 翻页；**切页重置缩放**（remember 按 item.id）
 - **索引持久化修复**：取消索引时保存已提取的部分结果（此前取消即丢弃）；扫描缓存保存前先套用索引元数据（避免未索引数据覆盖已存维度，导致重启后分辨率丢失需重新索引）；**0 维度坏条目不再被增量复用**（复用要求完整维度，坏条目自动重新提取）；**needsIndexing 检查维度**（0 维度触发自动索引 + Toast「正在索引新内容…」）；**rescan 兜底旧维度**（索引修复期间不闪变 0）
 - 修复：查看器分辨率不刷新（remember 缓存导致索引完成后仍显示旧值）、ArrowBack/VolumeOff/Sort 弃用（AutoMirrored）
+- **莫奈取色自动刷新**：壁纸颜色变化监听（OnColorsChangedListener）→ 启用莫奈时自动 recreate Activity 应用新动态配色（此前壁纸变更后主题色不变）
 - **Tab 顺序**：首页 / 收藏 / ⚡索引 / **设置（最右固定）**（`8bbd4c8`）
-- **文件夹源抽象**（`feat/folder-source` `d6c9502`）：`data/source/` 抽象层 — `FolderSource` 接口（listFiles/openStream/testConnection）+ `SourceType`（LOCAL/SMB/FTP/SFTP/WEBDAV）+ `SourceRegistry` 注册表 + `LocalFolderSource`（SAF 实现）；Folder/ImageItem 带 `source` 字段并持久化；扫描/索引/去重读取全部经源接口分派。**新增外置源（SMB 等）只需实现 FolderSource + 注册 + 配置 UI**，详见 `docs/ARCHITECTURE.md`
+- **文件夹源抽象**（`feat/folder-source` `d6c9502`）：`data/source/` 抽象层 — `FolderSource` 接口（listFiles/openStream/testConnection）+ `SourceType`（LOCAL/SMB/FTP/SFTP/WEBDAV）+ `SourceRegistry` 注册表 + `LocalFolderSource`（SAF 实现）；Folder/ImageItem 带 `source` 字段并持久化；扫描/索引/去重读取全部经源接口分派。**新增外置源（SMB 等）只需实现 FolderSource + 注册 + 配置 UI**，详见 `docs/ARCHITECTURE.md`；设置页文件夹行**主图标=源类型**、**右上角徽标=文件夹类型**（普通=Folder、图包=Collections，抽象 `folderTypeIcon()` 统一设置徽标/类型弹窗/首页；GridView 保留给首页"全部"）；首页文件夹选择框图标与源类型一致（共用 sourceBadgeIcon，子文件夹图标与标题对齐+半透明）；**添加文件夹先弹源类型选择**（LOCAL 走 SAF，SMB/FTP/SFTP/WebDAV Toast「开发中」）
 
 ---
 
