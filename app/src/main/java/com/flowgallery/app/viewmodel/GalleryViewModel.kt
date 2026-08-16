@@ -482,18 +482,18 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Toggle a folder in/out of the index selection. null selection means
-     * "all selected folders"; unchecking the first folder materializes the
-     * set as "everything except it", so the semantics stay intuitive.
+     * "all folders" — computed over the FULL folder list (matching what the
+     * Index tab displays), so disabled folders behave consistently too.
      */
     fun toggleIndexFolder(id: Long) {
-        val all = _uiState.value.folders.filter { it.isSelected }.map { it.id }.toSet()
+        val all = _uiState.value.folders.map { it.id }.toSet()
         val cur = _indexJob.value.indexFolders
         val effective = cur ?: all
         val newSet = if (id in effective) effective - id else effective + id
         _indexJob.update { it.copy(indexFolders = newSet) }
     }
 
-    /** Select all (null = follow all selected folders) or none (empty set). */
+    /** Select all (null = follow all folders) or none (empty set). */
     fun setAllIndexFolders(selectAll: Boolean) {
         _indexJob.update {
             it.copy(indexFolders = if (selectAll) null else emptySet())
@@ -596,9 +596,18 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
      *  still show their true indexed count. */
     fun indexedCount(folder: com.flowgallery.app.data.model.Folder): Int {
         val prefix = folder.uriString
-        return mediaIndex.values.count { e ->
+        val count = mediaIndex.values.count { e ->
             e.uriString.startsWith(prefix) && e.width > 0 && e.height > 0
         }
+        // Diagnostic: show the full prefix and a couple of index keys so the
+        // uri mismatch (if any) is visible.
+        val sample = mediaIndex.keys.take(3).joinToString(" | ") { it.take(80) }
+        android.util.Log.d(
+            "IndexCount",
+            "folder=${folder.name} prefix=$prefix index=${mediaIndex.size} count=$count"
+        )
+        android.util.Log.d("IndexCount", "  keys: $sample")
+        return count
     }
 
     /** Set search media-type filter (null = all). */

@@ -150,71 +150,73 @@ private fun WaterfallCard(
             .clickable(onClick = onClick)
     ) {
         val ratio = resolvedRatio.coerceIn(0.4f, 2.5f)
-        // Not indexed yet (no dimensions) → special "pending" placeholder.
+        // Index state drives the home card: only INDEXED items load their
+        // thumbnail; unindexed ones show a fixed "pending" placeholder and
+        // never hit the source (index status ↔ home status, 1:1).
         val isIndexed = image.width > 0 && image.height > 0
-        // Same placeholder for loading AND error, so the card never flashes
-        // blank while the SMB stream decodes (or fails) — stable until done.
-        val placeholder: @Composable (
-            coil.compose.SubcomposeAsyncImageScope,
-            Any
-        ) -> Unit = { _, _ ->
-            if (isIndexed) {
-                // Plain placeholder for already-indexed items.
+        if (isIndexed) {
+            // Same placeholder for loading AND error, so the card never
+            // flashes blank while the SMB stream decodes (or fails).
+            val placeholder: @Composable (
+                coil.compose.SubcomposeAsyncImageScope,
+                Any
+            ) -> Unit = { _, _ ->
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                 )
-            } else {
-                // "Pending index" placeholder.
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        Icons.Filled.Bolt,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = stringResource(R.string.index_pending),
-                        color = MaterialTheme.colorScheme.outline,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+            }
+            SubcomposeAsyncImage(
+                model = ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                    .data(smbModel(image.uriString))
+                    .apply {
+                        if (image.type.isVideo) {
+                            setParameter(SmartVideoFrameDecoder.KEY_VIDEO_URI, image.uriString)
+                        }
+                    }
+                    .build(),
+                contentDescription = image.name,
+                contentScale = ContentScale.Crop,
+                loading = placeholder,
+                error = placeholder,
+                onSuccess = { state ->
+                    val d = state.result.drawable
+                    val w = d.intrinsicWidth
+                    val h = d.intrinsicHeight
+                    if (w > 0 && h > 0) {
+                        resolvedRatio = w.toFloat() / h
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(ratio)
+            )
+        } else {
+            // "Pending index" placeholder — no Coil request at all.
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(ratio)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    Icons.Filled.Bolt,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = stringResource(R.string.index_pending),
+                    color = MaterialTheme.colorScheme.outline,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium
+                )
             }
         }
-        SubcomposeAsyncImage(
-            model = ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
-                .data(smbModel(image.uriString))
-                .apply {
-                    if (image.type.isVideo) {
-                        setParameter(SmartVideoFrameDecoder.KEY_VIDEO_URI, image.uriString)
-                    }
-                }
-                .build(),
-            contentDescription = image.name,
-            contentScale = ContentScale.Crop,
-            loading = placeholder,
-            error = placeholder,
-            onSuccess = { state ->
-                val d = state.result.drawable
-                val w = d.intrinsicWidth
-                val h = d.intrinsicHeight
-                if (w > 0 && h > 0) {
-                    resolvedRatio = w.toFloat() / h
-                }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(ratio)
-        )
 
         // Bottom gradient overlay
         Box(
