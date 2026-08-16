@@ -24,6 +24,9 @@ class ImageRepository(private val context: Context) {
 
     private val resolver = context.applicationContext.contentResolver
 
+    /** Folder backend registry (LOCAL now; SMB/FTP/SFTP/WebDAV later). */
+    val sourceRegistry = com.flowgallery.app.data.source.SourceRegistry(context)
+
     // ------------------------------------------------------- scan cache
 
     private val scanCacheFile: java.io.File
@@ -138,6 +141,9 @@ class ImageRepository(private val context: Context) {
                     id = o.getLong("id"),
                     name = o.getString("name"),
                     uriString = o.getString("uri"),
+                    source = o.optString("source").takeIf { it.isNotBlank() }?.let { s ->
+                        runCatching { com.flowgallery.app.data.source.SourceType.valueOf(s) }.getOrNull()
+                    } ?: com.flowgallery.app.data.source.SourceType.LOCAL,
                     type = o.optString("type").takeIf { it.isNotBlank() }?.let { t ->
                         runCatching { FolderType.valueOf(t) }.getOrNull()
                     } ?: FolderType.NORMAL,
@@ -200,6 +206,7 @@ class ImageRepository(private val context: Context) {
                     .put("id", f.id)
                     .put("name", f.name)
                     .put("uri", f.uriString)
+                    .put("source", f.source.name)
                     .put("type", f.type.name)
                     .put("count", f.imageCount)
                     .put("selected", f.isSelected)
@@ -250,11 +257,35 @@ class ImageRepository(private val context: Context) {
      */
     fun hasSubDirectories(uri: Uri): Boolean {
         return try {
-            val children = resolver.getChildDocuments(uri) ?: return false
-            children.any { q ->
-                !isImageName(q.name) && !isVideoName(q.name) &&
-                    q.mime.startsWith("vnd.android.document/directory")
+            val docId = try {
+                android.provider.DocumentsContract.getDocumentId(uri)
+            } catch (e: IllegalArgumentException) {
+                android.provider.DocumentsContract.getTreeDocumentId(uri)
             }
+            val childrenUri = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(
+                uri, docId
+            )
+            resolver.query(
+                childrenUri,
+                arrayOf(
+                    android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                    android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE
+                ),
+                null, null, null
+            )?.use { c ->
+                val nameCol = c.getColumnIndexOrThrow(
+                    android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                val mimeCol = c.getColumnIndexOrThrow(
+                    android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE)
+                var found = false
+                while (c.moveToNext() && !found) {
+                    val name = c.getString(nameCol) ?: ""
+                    val mime = c.getString(mimeCol) ?: ""
+                    found = !isImageName(name) && !isVideoName(name) &&
+                        mime.startsWith("vnd.android.document/directory")
+                }
+                found
+            } ?: false
         } catch (e: Exception) {
             false
         }
@@ -295,104 +326,54 @@ class ImageRepository(private val context: Context) {
     // ------------------------------------------------------------------ scanning
 
     /**
-     * Recursively scan a folder tree (FR-2.1): collects all images/videos
-     * from the root and every nested level, and returns the first-level
-     * subfolder breakdown.
+     * Scan a folder through its [FolderSource]: zero-IO listing, then build
+     * ImageItems. PACK folders group first-level subfolders as browsable
+     * sub-entries; NORMAL folders collect recursively without tagging.
      */
     suspend fun scanFolder(folder: Folder): FolderScanResult = withContext(Dispatchers.IO) {
-        val rootUri = Uri.parse(folder.uriString) ?: return@withContext FolderScanResult(folder.id, emptyList(), emptyList())
+        val source = sourceRegistry.get(folder.source)
+        val entries = runCatching { source.listFiles(folder) }.getOrDefault(emptyList())
+
         val allItems = mutableListOf<ImageItem>()
         var nextId = folder.id * 1_000_000L
-
-        /**
-         * Recursively collect media under [dirUri]. Items get tagged with the
-         * first-level subfolder they live under (null when directly in root).
-         */
-        fun collectRecursive(
-            dirUri: Uri,
-            subFolderId: Long?,
-            subFolderUri: String?,
-            subFolderName: String?,
-            out: MutableList<ImageItem>
-        ) {
-            val children = resolver.getChildDocuments(dirUri) ?: return
-            for ((childUri, childName, mime, size, modified) in children) {
-                if (isImageName(childName) || isVideoName(childName)) {
-                    // No content IO during scan — classify by extension only
-                    // (dimensions are filled in lazily by the UI via Coil).
-                    out.add(
-                        ImageItem(
-                            id = nextId++,
-                            folderId = folder.id,
-                            folderName = folder.name,
-                            subFolderId = subFolderId,
-                            subFolderUri = subFolderUri,
-                            subFolderName = subFolderName,
-                            name = childName,
-                            uriString = childUri.toString(),
-                            type = classify(childName),
-                            width = 0,
-                            height = 0,
-                            sizeBytes = size,
-                            modifiedTime = modified
-                        )
-                    )
-                } else {
-                    // Not a media file — attempt recursion; if it's a plain
-                    // file (not a directory) getChildDocuments returns null
-                    // and we simply skip it. MIME alone is unreliable here.
-                    collectRecursive(childUri, subFolderId, subFolderUri, subFolderName, out)
-                }
-            }
-        }
-
-        // Root pass: direct files + first-level subfolders
-        // NORMAL folders: subfolders are collected recursively but NOT
-        // indexed as separate sub-entries. PACK folders: each first-level
-        // subfolder becomes a browsable sub-entry.
         val isPack = folder.type == FolderType.PACK
-        val rootChildren = resolver.getChildDocuments(rootUri) ?: emptyList()
-        val subGroups = LinkedHashMap<String, Pair<SubFolder, List<ImageItem>>>()
-        for ((childUri, childName, mime, size, modified) in rootChildren) {
-            if (isImageName(childName) || isVideoName(childName)) {
-                allItems.add(
-                    ImageItem(
-                        id = nextId++,
-                        folderId = folder.id,
-                        folderName = folder.name,
-                        name = childName,
-                        uriString = childUri.toString(),
-                        type = classify(childName),
-                        width = 0,
-                        height = 0,
-                        sizeBytes = size,
-                        modifiedTime = modified
-                    )
-                )
-            } else if (isPack) {
-                // first-level subfolder of a PACK: recursive collect with tag.
-                // Stable id derived from the document URI (not a scan
-                // counter) so the persisted selection never drifts when
-                // folder contents change between scans.
-                val subUriStr = childUri.toString()
-                val subId = subUriStr.hashCode().toLong()
-                val subItems = mutableListOf<ImageItem>()
-                collectRecursive(childUri, subId, subUriStr, childName, subItems)
-                if (subItems.isNotEmpty() || resolver.isDirectory(childUri)) {
-                    val subName = resolver.displayNameOf(childUri) ?: childName
-                    subGroups[subUriStr] =
-                        SubFolder(id = subId, name = subName, uriString = subUriStr, imageCount = subItems.size) to subItems
-                    allItems.addAll(subItems)
-                }
-            } else {
-                // NORMAL folder: recurse into subfolders without tagging them.
-                collectRecursive(childUri, null, null, childName, allItems)
+        val subGroups = LinkedHashMap<String, Pair<SubFolder, MutableList<ImageItem>>>()
+
+        for (e in entries) {
+            if (!isImageName(e.name) && !isVideoName(e.name)) continue
+            val subId = e.subFolderUri?.hashCode()?.toLong()
+            val item = ImageItem(
+                id = nextId++,
+                folderId = folder.id,
+                folderName = folder.name,
+                source = folder.source,
+                subFolderId = subId,
+                subFolderUri = e.subFolderUri,
+                subFolderName = e.subFolderName,
+                name = e.name,
+                uriString = e.uriString,
+                type = classify(e.name),
+                width = 0,
+                height = 0,
+                sizeBytes = e.size,
+                modifiedTime = e.modified
+            )
+            if (isPack && e.subFolderUri != null && subId != null) {
+                subGroups.getOrPut(e.subFolderUri) {
+                    SubFolder(
+                        id = subId,
+                        name = e.subFolderName ?: e.subFolderUri,
+                        uriString = e.subFolderUri,
+                        imageCount = 0
+                    ) to mutableListOf()
+                }.second.add(item)
             }
+            allItems.add(item)
         }
 
         // Build first-level subfolder summaries — skip empty subfolders (FR-2.1)
         val subs = subGroups.values
-            .map { it.first }
+            .map { it.first.copy(imageCount = it.second.size) }
             .filter { it.imageCount > 0 }
         FolderScanResult(folder.id, allItems, subs)
     }
@@ -401,23 +382,6 @@ class ImageRepository(private val context: Context) {
     suspend fun scanAll(folders: List<Folder>): List<FolderScanResult> = withContext(Dispatchers.IO) {
         folders.map { scanFolder(it) }
     }
-
-    /**
-     * Lazily resolve real dimensions for items that were scanned with zero IO.
-     * Images: BitmapFactory bounds decode (fast, header only). Videos are
-     * skipped — their resolution is not needed for HD/SD badges.
-     */
-    suspend fun resolveDimensions(items: List<ImageItem>): List<ImageItem> =
-        withContext(Dispatchers.IO) {
-            items.map { item ->
-                if (item.width > 0 || item.type == MediaType.VIDEO) {
-                    item
-                } else {
-                    val (w, h) = resolver.dimensionOf(Uri.parse(item.uriString))
-                    if (w > 0 && h > 0) item.copy(width = w, height = h) else item
-                }
-            }
-        }
 
     /**
      * Content-level dedup: same file size + same content hash ⇒ duplicate.
@@ -433,9 +397,9 @@ class ImageRepository(private val context: Context) {
 
             val hashById = mutableMapOf<Long, String>()
             for (item in candidates) {
-                // Prefer the indexed hash (no IO); fall back to computing it.
-                val hash = item.contentHash
-                    ?: resolver.contentHash(Uri.parse(item.uriString))
+                // Prefer the indexed hash (no IO); fall back to reading via
+                // the item's source.
+                val hash = item.contentHash ?: hashViaSource(item)
                 if (hash != null) hashById[item.id] = hash
             }
 
@@ -472,141 +436,20 @@ class ImageRepository(private val context: Context) {
         val subFolders: List<SubFolder>
     )
 
-    private fun android.content.ContentResolver.getChildDocuments(
-        parentUri: Uri
-    ): List<Quad>? {
-        return try {
-            // Subfolders are document URIs, the root is a tree URI —
-            // getDocumentId works for both (getTreeDocumentId only for trees).
-            val docId = try {
-                android.provider.DocumentsContract.getDocumentId(parentUri)
-            } catch (e: IllegalArgumentException) {
-                android.provider.DocumentsContract.getTreeDocumentId(parentUri)
+    /** MD5 of the file contents via the item's source, or null on failure. */
+    private fun hashViaSource(item: ImageItem): String? = try {
+        val md = java.security.MessageDigest.getInstance("MD5")
+        sourceRegistry.get(item.source).openStream(item)?.use { input ->
+            val buf = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buf)
+                if (n <= 0) break
+                md.update(buf, 0, n)
             }
-            val childrenUri = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(
-                parentUri, docId
-            )
-            val list = mutableListOf<Quad>()
-            resolver.query(
-                childrenUri,
-                arrayOf(
-                    android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-                    android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-                    android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE,
-                    android.provider.DocumentsContract.Document.COLUMN_SIZE,
-                    android.provider.DocumentsContract.Document.COLUMN_LAST_MODIFIED
-                ),
-                null, null, null
-            )?.use { c ->
-                val idCol = c.getColumnIndexOrThrow(
-                    android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID)
-                val nameCol = c.getColumnIndexOrThrow(
-                    android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME)
-                val mimeCol = c.getColumnIndexOrThrow(
-                    android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE)
-                val sizeCol = c.getColumnIndex(
-                    android.provider.DocumentsContract.Document.COLUMN_SIZE)
-                val modCol = c.getColumnIndex(
-                    android.provider.DocumentsContract.Document.COLUMN_LAST_MODIFIED)
-                while (c.moveToNext()) {
-                    val docIdChild = c.getString(idCol)
-                    val name = c.getString(nameCol) ?: "unknown"
-                    val mime = c.getString(mimeCol) ?: ""
-                    val size = if (sizeCol >= 0 && !c.isNull(sizeCol)) c.getLong(sizeCol) else 0L
-                    val modified = if (modCol >= 0 && !c.isNull(modCol)) c.getLong(modCol) else 0L
-                    list.add(
-                        Quad(
-                            android.provider.DocumentsContract.buildDocumentUriUsingTree(parentUri, docIdChild),
-                            name,
-                            mime,
-                            size,
-                            modified
-                        )
-                    )
-                }
-            }
-            list
-        } catch (e: Exception) {
-            null
+            md.digest().joinToString("") { "%02x".format(it) }
         }
-    }
-
-    /** (uri, displayName, mimeType, sizeBytes, lastModifiedMs) */
-    private data class Quad(
-        val uri: Uri,
-        val name: String,
-        val mime: String,
-        val size: Long,
-        val modified: Long
-    )
-
-    private fun android.content.ContentResolver.isDirectory(uri: Uri): Boolean {
-        return try {
-            val docId = try {
-                android.provider.DocumentsContract.getDocumentId(uri)
-            } catch (e: IllegalArgumentException) {
-                android.provider.DocumentsContract.getTreeDocumentId(uri)
-            }
-            resolver.query(
-                android.provider.DocumentsContract.buildDocumentUriUsingTree(uri, docId),
-                arrayOf(android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE),
-                null, null, null
-            )?.use { c ->
-                if (c.moveToFirst()) {
-                    (c.getString(0) ?: "").startsWith("vnd.android.document/directory")
-                } else false
-            } ?: false
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    /** Decode image bounds without loading pixels (fast, header only). */
-    private fun android.content.ContentResolver.dimensionOf(uri: Uri): Pair<Int, Int> {
-        return try {
-            val opts = android.graphics.BitmapFactory.Options()
-            opts.inJustDecodeBounds = true
-            resolver.openInputStream(uri)?.use { input ->
-                android.graphics.BitmapFactory.decodeStream(input, null, opts)
-                if (opts.outWidth > 0 && opts.outHeight > 0) {
-                    opts.outWidth to opts.outHeight
-                } else 0 to 0
-            } ?: (0 to 0)
-        } catch (e: Exception) {
-            (0 to 0)
-        }
-    }
-
-    /** MD5 of the file contents, or null on failure. Used for content dedup. */
-    private fun android.content.ContentResolver.contentHash(uri: Uri): String? {
-        return try {
-            val md = java.security.MessageDigest.getInstance("MD5")
-            resolver.openInputStream(uri)?.use { input ->
-                val buf = ByteArray(64 * 1024)
-                while (true) {
-                    val n = input.read(buf)
-                    if (n <= 0) break
-                    md.update(buf, 0, n)
-                }
-                md.digest().joinToString("") { "%02x".format(it) }
-            }
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    private fun android.content.ContentResolver.displayNameOf(uri: Uri): String? {
-        return try {
-            resolver.query(
-                uri,
-                arrayOf(android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME),
-                null, null, null
-            )?.use { c ->
-                if (c.moveToFirst()) c.getString(0) else null
-            }
-        } catch (e: Exception) {
-            null
-        }
+    } catch (e: Exception) {
+        null
     }
 
     /**

@@ -515,7 +515,9 @@ private fun FolderDropdown(
                 currentCount = sub.imageCount
             } else {
                 currentLabel = folder?.name ?: stringResource(R.string.all)
-                currentIcon = Icons.Filled.Folder
+                // Folder icon reflects its source (consistent with settings)
+                currentIcon = folder?.let { com.flowgallery.app.ui.components.sourceBadgeIcon(it.source) }
+                    ?: Icons.Filled.Folder
                 currentCount = folder?.imageCount ?: 0
             }
         }
@@ -594,7 +596,7 @@ private fun FolderDropdown(
                             )
                         }
                     },
-                    leadingIcon = { Icon(Icons.Filled.Folder, contentDescription = null, tint = scheme.primary) },
+                    leadingIcon = { Icon(com.flowgallery.app.ui.components.sourceBadgeIcon(folder.source), contentDescription = null, tint = scheme.primary) },
                     onClick = { onSelectFolder(folder.id); expanded = false },
                     colors = menuItemColors(scheme)
                 )
@@ -608,6 +610,15 @@ private fun FolderDropdown(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.padding(start = 20.dp)
                                 ) {
+                                    // Subfolder icon inline with its title —
+                                    // indented like the label, slightly faded.
+                                    Icon(
+                                        com.flowgallery.app.ui.components.sourceBadgeIcon(folder.source),
+                                        contentDescription = null,
+                                        tint = scheme.primary.copy(alpha = 0.55f),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(8.dp))
                                     Text(
                                         sub.name,
                                         fontSize = 14.sp,
@@ -623,7 +634,6 @@ private fun FolderDropdown(
                                     )
                                 }
                             },
-                            leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null, tint = scheme.primary.copy(alpha = 0.6f)) },
                             onClick = {
                                 onSelectFolder(folder.id)
                                 onSelectSubFolder(sub.id)

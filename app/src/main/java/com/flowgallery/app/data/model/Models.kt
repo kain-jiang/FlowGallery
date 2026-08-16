@@ -15,6 +15,8 @@ data class Folder(
     val id: Long,
     val name: String,
     val uriString: String,
+    /** backend that hosts this folder (LOCAL / SMB / FTP / SFTP / WEBDAV) */
+    val source: com.flowgallery.app.data.source.SourceType = com.flowgallery.app.data.source.SourceType.LOCAL,
     val type: FolderType = FolderType.NORMAL,
     val imageCount: Int = 0,
     val isSelected: Boolean = true,
@@ -53,6 +55,8 @@ data class ImageItem(
     val id: Long,
     val folderId: Long,
     val folderName: String,
+    /** backend that hosts this item (from its folder) */
+    val source: com.flowgallery.app.data.source.SourceType = com.flowgallery.app.data.source.SourceType.LOCAL,
     val subFolderId: Long? = null,
     val subFolderName: String? = null,
     /** stable subfolder document URI — the reliable matching key (ids are

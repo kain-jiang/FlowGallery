@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lan
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
@@ -300,22 +302,35 @@ fun SettingsScreen(
                         .clickable { onEditType(folder) },
                     contentAlignment = Alignment.Center
                 ) {
+                    // MAIN icon = folder SOURCE (local storage / SMB / …)
                     Icon(
-                        if (folder.type == com.flowgallery.app.data.model.FolderType.PACK) {
-                            Icons.Filled.Collections
-                        } else {
-                            Icons.Filled.FolderOpen
-                        },
-                        contentDescription = stringResource(
-                            if (folder.type == com.flowgallery.app.data.model.FolderType.PACK) {
-                                R.string.folder_type_pack
-                            } else {
-                                R.string.folder_type_normal
-                            }
-                        ),
+                        imageVector = com.flowgallery.app.ui.components.sourceBadgeIcon(folder.source),
+                        contentDescription = folder.source.label,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)
                     )
+                    // Corner badge = folder TYPE (pack / normal)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .size(16.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = com.flowgallery.app.ui.components.folderTypeIcon(folder.type),
+                            contentDescription = stringResource(
+                                if (folder.type == com.flowgallery.app.data.model.FolderType.PACK) {
+                                    R.string.folder_type_pack
+                                } else {
+                                    R.string.folder_type_normal
+                                }
+                            ),
+                            tint = Color.White,
+                            modifier = Modifier.size(11.dp)
+                        )
+                    }
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
