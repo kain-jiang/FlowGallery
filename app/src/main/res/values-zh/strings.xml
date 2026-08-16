@@ -9,6 +9,12 @@
     <string name="tab_settings">设置</string>
     <string name="tab_index">索引</string>
 
+    <!-- Exit confirm -->
+    <string name="exit_title">退出 FlowGallery？</string>
+    <string name="exit_message">你的文件夹与设置已保存。确定要退出应用吗？</string>
+    <string name="exit_confirm">退出</string>
+    <string name="exit_cancel">取消</string>
+
     <!-- Index tab -->
     <string name="index_status_idle">空闲</string>
     <string name="index_status_running">索引中…</string>

@@ -16,30 +16,41 @@ class IndexStore(private val context: Context) {
         get() = File(context.filesDir, "index.json")
 
     /** Load the persisted index (empty map if none / corrupt). */
-    fun load(): Map<String, IndexEntry> = runCatching {
-        if (!indexFile.exists()) return emptyMap()
-        val arr = JSONArray(indexFile.readText())
-        buildMap {
-            for (i in 0 until arr.length()) {
-                val o = arr.getJSONObject(i)
-                val uri = o.optString("uri")
-                if (uri.isBlank()) continue
-                put(
-                    uri,
-                    IndexEntry(
-                        uriString = uri,
-                        width = o.optInt("w"),
-                        height = o.optInt("h"),
-                        durationMs = if (o.isNull("d")) null else o.optLong("d"),
-                        sizeBytes = o.optLong("s"),
-                        modifiedTime = o.optLong("m"),
-                        contentHash = if (o.isNull("h")) null else o.optString("h"),
-                        indexedAt = o.optLong("t")
-                    )
-                )
+    fun load(): Map<String, IndexEntry> {
+        return try {
+            if (!indexFile.exists()) {
+                android.util.Log.d("IndexStore", "no index file yet")
+                emptyMap()
+            } else {
+                val arr = JSONArray(indexFile.readText())
+                val map = buildMap {
+                    for (i in 0 until arr.length()) {
+                        val o = arr.getJSONObject(i)
+                        val uri = o.optString("uri")
+                        if (uri.isBlank()) continue
+                        put(
+                            uri,
+                            IndexEntry(
+                                uriString = uri,
+                                width = o.optInt("w"),
+                                height = o.optInt("h"),
+                                durationMs = if (o.isNull("d")) null else o.optLong("d"),
+                                sizeBytes = o.optLong("s"),
+                                modifiedTime = o.optLong("m"),
+                                contentHash = if (o.isNull("h")) null else o.optString("h"),
+                                indexedAt = o.optLong("t")
+                            )
+                        )
+                    }
+                }
+                android.util.Log.d("IndexStore", "loaded ${map.size} entries")
+                map
             }
+        } catch (e: Exception) {
+            android.util.Log.e("IndexStore", "load failed", e)
+            emptyMap()
         }
-    }.getOrDefault(emptyMap())
+    }
 
     /** Persist the whole index (replaces the file). */
     fun save(entries: Collection<IndexEntry>) {
@@ -60,6 +71,9 @@ class IndexStore(private val context: Context) {
                 )
             }
             indexFile.writeText(arr.toString())
+            android.util.Log.d("IndexStore", "saved ${entries.size} entries, file=${indexFile.absolutePath}")
+        }.onFailure { e ->
+            android.util.Log.e("IndexStore", "save failed", e)
         }
     }
 }

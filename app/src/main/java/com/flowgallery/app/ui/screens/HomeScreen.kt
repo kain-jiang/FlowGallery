@@ -91,7 +91,9 @@ fun HomeScreen(
     onOpenSearch: () -> Unit,
     onImageClick: (ImageItem) -> Unit,
     onRemoveFolder: (Folder) -> Unit,
-    onChromeVisibleChange: (Boolean) -> Unit = {}
+    onChromeVisibleChange: (Boolean) -> Unit = {},
+    /** External scroll-to-top signal (system back from MainActivity). */
+    scrollToTopSignal: Int = 0
 ) {
     val state by viewModel.uiState.collectAsState()
     val favorites by viewModel.favorites.collectAsState()
@@ -104,6 +106,13 @@ fun HomeScreen(
     // with the grid (identical speed, no separate animation).
     var headerHidden by remember { mutableStateOf(false) }
     var headerScrollTarget by remember { mutableStateOf(0) }
+
+    // External back-press scroll-to-top: bump the internal target.
+    androidx.compose.runtime.LaunchedEffect(scrollToTopSignal) {
+        if (scrollToTopSignal > 0) {
+            headerScrollTarget = headerScrollTarget + 1
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Pull-to-refresh wraps the whole home content (FR-9)

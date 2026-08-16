@@ -215,13 +215,18 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                 val folders = repository.loadFolders()
                 _uiState.update {
                     it.copy(
-                        images = images,
+                        // Apply the index IMMEDIATELY — otherwise the fresh
+                        // scan's bare items (width=0) would flash wrong
+                        // ratios/badges until the background index finishes.
+                        images = applyIndex(images),
                         folders = folders,
                         isRefreshing = false
                     )
                 }
-                // Persist so the next launch shows content instantly.
-                repository.saveScanCache(images)
+                // Persist so the next launch shows content instantly —
+                // enriched with any indexed metadata (never store bare items
+                // over previously saved dimensions).
+                repository.saveScanCache(applyIndex(images))
                 // Incremental metadata indexing (dimensions / duration /
                 // content hash) — reused entries are free, only new/changed
                 // files are touched. Runs in the background; the UI streams
@@ -274,10 +279,12 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Fill items with metadata from the in-memory index. */
-    private fun applyIndex(items: List<ImageItem>): List<ImageItem> =
-        items.map { item ->
+    private fun applyIndex(items: List<ImageItem>): List<ImageItem> {
+        val enriched = items.map { item ->
             val e = mediaIndex[item.uriString] ?: return@map item
-            if (e.width > 0 || e.height > 0 || e.durationMs != null || e.contentHash != null) {
+            // Only apply COMPLETE dimensions (w>0 && h>0); a partial entry
+            // like (1000, 0) from a broken video extract would show garbage.
+            if (e.width > 0 && e.height > 0) {
                 item.copy(
                     width = e.width,
                     height = e.height,
@@ -286,6 +293,11 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                 )
             } else item
         }
+        // Diagnostic: how many items actually got dimensions from the index.
+        android.util.Log.d("ApplyIndex", "items=${items.size} index=${mediaIndex.size} " +
+            "withDim=${enriched.count { it.width > 0 && it.height > 0 }}")
+        return enriched
+    }
 
     // ------------------------------------------------------------- index job
 
@@ -325,35 +337,31 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                     extracted = 0
                 )
             }
-            val (newIndex, extracted) = try {
-                mediaIndexer.merge(
-                    items = items,
-                    existing = if (force) emptyMap() else mediaIndex,
-                    force = force
-                ) { done, total ->
+            val (newIndex, extracted) = mediaIndexer.merge(
+                items = items,
+                existing = if (force) emptyMap() else mediaIndex,
+                force = force,
+                onProgress = { done, total ->
                     // Pause support (onProgress runs on the IO dispatcher —
                     // Thread.sleep is fine here).
                     while (_indexJob.value.paused) {
                         Thread.sleep(150)
                     }
-                    if (indexCancelRequested.get()) {
-                        throw kotlinx.coroutines.CancellationException("index cancelled")
-                    }
                     _indexJob.update {
                         it.copy(done = done, total = total)
                     }
-                }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                // Cancelled by the user — keep what was already indexed.
-                _indexJob.update { it.copy(running = false, paused = false) }
-                return@launch
-            }
-            if (indexCancelRequested.get()) {
-                _indexJob.update { it.copy(running = false, paused = false) }
-                return@launch
-            }
+                },
+                onCancelCheck = { indexCancelRequested.get() }
+            )
+            // Save whatever was indexed — including a cancelled run's partial
+            // results (so a re-open keeps what was already done).
             mediaIndex = newIndex
             indexStore.save(newIndex.values)
+            val cancelled = indexCancelRequested.get()
+            if (cancelled) {
+                _indexJob.update { it.copy(running = false, paused = false) }
+                return@launch
+            }
             _indexJob.update {
                 it.copy(
                     running = false,

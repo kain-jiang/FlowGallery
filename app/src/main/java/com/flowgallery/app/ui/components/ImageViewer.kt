@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -217,10 +218,14 @@ fun ImageViewer(
         // Main media — HorizontalPager: items sit side by side, dragging
         // moves them together (standard ViewPager feel), vertical drags
         // never trigger navigation. Each page owns its zoom/double-tap.
+        // While a pinch is active the pager scrolling is disabled so it can't
+        // fight the zoom gesture (first finger down otherwise starts a swipe).
+        var multiTouchActive by remember { mutableStateOf(false) }
         androidx.compose.foundation.pager.HorizontalPager(
             state = pagerState,
             key = { images[it].id },
             beyondViewportPageCount = 1,
+            userScrollEnabled = !multiTouchActive,
             modifier = Modifier.fillMaxSize()
         ) { page ->
             val item = images[page]
@@ -241,7 +246,10 @@ fun ImageViewer(
             } else {
                 ZoomableImage(
                     item = item,
-                    onTap = { chromeVisible = !chromeVisible }
+                    onTap = { chromeVisible = !chromeVisible },
+                    onMultiTouchChange = { active ->
+                        multiTouchActive = active
+                    }
                 )
             }
         }
@@ -970,20 +978,24 @@ private fun formatTime(ms: Long): String {
 @Composable
 private fun ZoomableImage(
     item: ImageItem,
-    onTap: () -> Unit
+    onTap: () -> Unit,
+    /** called when a two-finger pinch starts/ends (pager must stand down) */
+    onMultiTouchChange: (Boolean) -> Unit = {}
 ) {
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    var offsetY by remember { mutableFloatStateOf(0f) }
+    // Keyed by item.id so a recycled pager page gets a FRESH transform when
+    // it comes back (otherwise the previous image's zoom/pan persists).
+    var scale by remember(item.id) { mutableFloatStateOf(1f) }
+    var offsetX by remember(item.id) { mutableFloatStateOf(0f) }
+    var offsetY by remember(item.id) { mutableFloatStateOf(0f) }
     var resolvedW by remember(item.uriString) { mutableIntStateOf(item.width) }
     var resolvedH by remember(item.uriString) { mutableIntStateOf(item.height) }
     var viewportW by remember { mutableFloatStateOf(1f) }
     var viewportH by remember { mutableFloatStateOf(1f) }
-    val scope = rememberCoroutineScope()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
 
-    // Minimum zoom that covers the whole viewport (no black band). At 1x the
-    // image is Fit (complete view); this returns the scale that fills BOTH
-    // dimensions, floored at 2x for a sensible double-tap.
+    // Minimum zoom that covers the whole viewport (no black band). Used as
+    // the pinch-zoom floor so any zoomed-in view fills the screen — a plain
+    // 1f floor would letterbox wide images at 2x.
     fun coverScale(): Float {
         if (resolvedW <= 0 || resolvedH <= 0 || viewportW <= 0f || viewportH <= 0f) return 2f
         val scaleX = viewportW / resolvedW.toFloat()
@@ -998,7 +1010,24 @@ private fun ZoomableImage(
         return kotlin.math.max(2f, need)
     }
 
-    fun animateTo(targetScale: Float) {
+    /** Keep the zoomed content inside the viewport (no drifting off-screen). */
+    fun clampOffsets() {
+        if (scale <= 1f) {
+            offsetX = 0f
+            offsetY = 0f
+            return
+        }
+        val maxX = viewportW * (scale - 1f) / 2f
+        val maxY = viewportH * (scale - 1f) / 2f
+        offsetX = offsetX.coerceIn(-maxX, maxX)
+        offsetY = offsetY.coerceIn(-maxY, maxY)
+    }
+
+    /** Animate to [targetScale], anchored at [focus] (double-tap position). */
+    fun animateTo(targetScale: Float, focus: androidx.compose.ui.geometry.Offset? = null) {
+        val startScale = scale
+        val startOffsetX = offsetX
+        val startOffsetY = offsetY
         scope.launch {
             androidx.compose.animation.core.animate(
                 initialValue = scale,
@@ -1009,7 +1038,18 @@ private fun ZoomableImage(
                 if (targetScale <= 1f) {
                     offsetX = 0f
                     offsetY = 0f
+                } else if (focus != null) {
+                    // Keep the point under the double-tap fixed. graphicsLayer
+                    // scales around the VIEWPORT CENTER (cx, cy), so the
+                    // correct anchor equation is:
+                    //   offset = startOffset * f + (focus - C) * (1 - f)
+                    val f = value / startScale
+                    val cx = viewportW / 2f
+                    val cy = viewportH / 2f
+                    offsetX = startOffsetX * f + (focus.x - cx) * (1 - f)
+                    offsetY = startOffsetY * f + (focus.y - cy) * (1 - f)
                 }
+                clampOffsets()
             }
         }
     }
@@ -1022,39 +1062,47 @@ private fun ZoomableImage(
                 viewportH = size.height.toFloat()
             }
             .pointerInput(item.id) {
-                detectTapGestures(
-                    onDoubleTap = {
-                        animateTo(if (scale <= 1f) coverScale() else 1f)
-                    },
-                    onTap = { onTap() }
-                )
-            }
-            .pointerInput(item.id) {
-                // Custom transform: pinch-zoom + pan, but a single-finger
-                // horizontal drag at 1x is NOT consumed so the pager can
-                // swipe between items (detectTransformGestures would eat it).
+                // ONE gesture loop: pinch-zoom, pan, double-tap and single-tap.
+                // Single-finger drags at 1x stay unconsumed so the pager swipes.
+                val tapSlop = with(density) { 12.dp.toPx() }
+                var lastTapTime = 0L
+                var lastTapPos = androidx.compose.ui.geometry.Offset.Zero
                 awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var multi = false
+                    var maxDist = 0f
                     do {
                         val event = awaitPointerEvent()
                         val pressed = event.changes.any { it.pressed }
                         if (pressed) {
-                            val multi = event.changes.size > 1
-                            if (multi) {
-                                // Two fingers: pinch zoom + pan. The zoom
-                                // floor is coverScale() so any zoomed-in view
-                                // fills the whole viewport (no black band) —
-                                // a plain 1f floor lets wide images show
-                                // letterboxing at 2x.
+                            if (event.changes.size > 1) {
+                                if (!multi) {
+                                    multi = true
+                                    onMultiTouchChange(true)
+                                    // First frame: the second finger just
+                                    // landed — calculateZoom() is unreliable
+                                    // (the new pointer's position delta makes
+                                    // it jump), so consume and skip this frame.
+                                    event.changes.forEach { it.consume() }
+                                } else {
+                                // Two fingers: pinch zoom + pan.
+                                // NOTE: calculatePan() is already centroid-
+                                // relative (content follows the fingers), so
+                                // do NOT also apply a centroid-anchor formula
+                                // — doing both double-counts the pan and makes
+                                // the image drift ("not following").
                                 val zoom = event.calculateZoom()
                                 val pan = event.calculatePan()
-                                val minScale = coverScale()
-                                // Pinch-out always reaches at least coverScale
-                                // (no letterboxing); pinch-in can return to 1x.
-                                val newScale = if (scale * zoom <= 1f) {
-                                    1f
-                                } else {
-                                    (scale * zoom).coerceIn(minScale, 4f)
+                                val target = scale * zoom
+                                val newScale = when {
+                                    // Pinch-in back to 1x: full restore.
+                                    target <= 1f -> 1f
+                                    // Pinching in but not yet at 1x: shrink
+                                    // freely.
+                                    target < scale -> target
+                                    // Pinching out: smooth from 1f (no jump to
+                                    // coverScale — that would snap on touch).
+                                    else -> target.coerceIn(1f, 4f)
                                 }
                                 if (newScale <= 1f) {
                                     scale = 1f
@@ -1064,19 +1112,58 @@ private fun ZoomableImage(
                                     scale = newScale
                                     offsetX += pan.x
                                     offsetY += pan.y
+                                    clampOffsets()
                                 }
                                 event.changes.forEach { it.consume() }
+                                }
                             } else if (scale > 1f) {
                                 // Single finger while zoomed: pan the image.
                                 val pan = event.calculatePan()
                                 offsetX += pan.x
                                 offsetY += pan.y
+                                clampOffsets()
                                 event.changes.forEach { it.consume() }
+                            } else {
+                                // 1x single finger: track movement only —
+                                // leave unconsumed so the pager swipes.
+                                val change = event.changes.first()
+                                val d = (change.position - down.position).getDistance()
+                                if (d > maxDist) maxDist = d
                             }
-                            // scale == 1f single finger: leave unconsumed so
-                            // the pager handles horizontal swiping.
                         }
                     } while (pressed)
+
+                    // Pinch ended — re-enable pager scrolling.
+                    if (multi) {
+                        onMultiTouchChange(false)
+                    }
+
+                    // Gesture ended (no pinch, finger barely moved): decide
+                    // double-tap vs single-tap.
+                    if (!multi && maxDist < tapSlop) {
+                        val now = down.uptimeMillis
+                        val dist = (down.position - lastTapPos).getDistance()
+                        if (now - lastTapTime < 300 && dist < 80f) {
+                            // Double-tap: zoom to cover / back to 1x, anchored
+                            // at the tap position.
+                            lastTapTime = 0L
+                            animateTo(
+                                if (scale <= 1f) coverScale() else 1f,
+                                down.position
+                            )
+                        } else {
+                            lastTapTime = now
+                            lastTapPos = down.position
+                            // Delay single-tap so a quick second tap can
+                            // upgrade it to a double-tap.
+                            scope.launch {
+                                kotlinx.coroutines.delay(300)
+                                if (lastTapTime == now) {
+                                    onTap()
+                                }
+                            }
+                        }
+                    }
                 }
             }
     ) {

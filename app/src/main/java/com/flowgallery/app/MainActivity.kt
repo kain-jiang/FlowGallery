@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
@@ -184,6 +185,10 @@ private fun MainScaffold(
     var folderToRemove by remember { mutableStateOf<Folder?>(null) }
     var folderToEditType by remember { mutableStateOf<Folder?>(null) }
     var showSearch by remember { mutableStateOf(false) }
+    var showExitConfirm by remember { mutableStateOf(false) }
+    // First back on Home scrolls to top; the second one opens the exit dialog.
+    var pendingExitConfirm by remember { mutableStateOf(false) }
+    var scrollToTopSignal by remember { mutableStateOf(0) }
     // Bottom nav + system bars auto-hide while browsing down (Home only)
     var bottomBarVisible by remember { mutableStateOf(true) }
 
@@ -291,7 +296,8 @@ private fun MainScaffold(
                             showFolderModal = false
                             folderToRemove = folder
                         },
-                        onChromeVisibleChange = { visible -> bottomBarVisible = visible }
+                        onChromeVisibleChange = { visible -> bottomBarVisible = visible },
+                        scrollToTopSignal = scrollToTopSignal
                     )
                     GalleryTab.Favorites -> FavoritesScreen(
                         viewModel = viewModel,
@@ -315,13 +321,29 @@ private fun MainScaffold(
     }
 
     // Back handling: search overlay → close; viewer → close viewer;
-    // folder modal → close modal
+    // folder modal → close modal; Home → scroll to top first, then exit
+    // confirm dialog; other tabs → exit confirm directly.
     if (showSearch) {
         BackHandler { showSearch = false }
     } else if (state.viewer.isOpen) {
         BackHandler { viewModel.closeViewer() }
     } else if (showFolderModal) {
         BackHandler { showFolderModal = false }
+    } else if (showExitConfirm) {
+        BackHandler { showExitConfirm = false }
+    } else {
+        BackHandler {
+            if (state.currentTab == GalleryTab.Home) {
+                if (pendingExitConfirm) {
+                    showExitConfirm = true
+                } else {
+                    scrollToTopSignal = scrollToTopSignal + 1
+                    pendingExitConfirm = true
+                }
+            } else {
+                showExitConfirm = true
+            }
+        }
     }
     // Folder selection modal
     if (showFolderModal) {
@@ -472,6 +494,106 @@ private fun MainScaffold(
                         Text(
                             text = stringResource(R.string.remove_folder_confirm),
                             color = scheme.error,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // Exit-confirm dialog — app-styled (drag handle + icon + buttons)
+    if (showExitConfirm) {
+        val scheme = MaterialTheme.colorScheme
+        androidx.compose.ui.window.Dialog(onDismissRequest = { showExitConfirm = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(scheme.surface)
+                    .padding(24.dp)
+            ) {
+                // Drag handle
+                Box(
+                    modifier = Modifier
+                        .size(width = 40.dp, height = 4.dp)
+                        .align(Alignment.CenterHorizontally)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(scheme.outline)
+                )
+                Spacer(Modifier.height(20.dp))
+
+                // Icon chip
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(scheme.primary.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Filled.ExitToApp,
+                        contentDescription = null,
+                        tint = scheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+
+                Text(
+                    text = stringResource(R.string.exit_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = scheme.onSurface
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.exit_message),
+                    color = scheme.onSurfaceVariant,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp
+                )
+
+                Spacer(Modifier.height(24.dp))
+
+                // Cancel + exit buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(scheme.surfaceVariant)
+                            .clickable {
+                                showExitConfirm = false
+                                pendingExitConfirm = false
+                            }
+                            .padding(vertical = 14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.exit_cancel),
+                            color = scheme.onSurfaceVariant,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1.4f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(scheme.primary.copy(alpha = 0.15f))
+                            .clickable {
+                                (uiContext as? android.app.Activity)?.finish()
+                            }
+                            .padding(vertical = 14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.exit_confirm),
+                            color = scheme.primary,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold
                         )

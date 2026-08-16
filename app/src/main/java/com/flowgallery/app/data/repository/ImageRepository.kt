@@ -57,39 +57,61 @@ class ImageRepository(private val context: Context) {
                 })
             }
             scanCacheFile.writeText(arr.toString())
+            android.util.Log.d("ScanCache", "saved ${items.size} items, " +
+                "withDim=${items.count { it.width > 0 }}, file=${scanCacheFile.absolutePath}")
+        }.onFailure { e ->
+            android.util.Log.e("ScanCache", "save failed", e)
         }
     }
 
     /** Load the cached scan (empty list if none / corrupt). */
-    fun loadScanCache(): List<ImageItem> = runCatching {
-        if (!scanCacheFile.exists()) return emptyList()
-        val arr = org.json.JSONArray(scanCacheFile.readText())
-        buildList {
-            for (i in 0 until arr.length()) {
-                val o = arr.getJSONObject(i)
-                add(
-                    ImageItem(
-                        id = o.getLong("id"),
-                        folderId = o.getLong("folderId"),
-                        folderName = o.optString("folderName"),
-                        subFolderId = if (o.isNull("subFolderId")) null else o.optLong("subFolderId"),
-                        subFolderName = if (o.isNull("subFolderName")) null else o.optString("subFolderName"),
-                        subFolderUri = if (o.isNull("subFolderUri")) null else o.optString("subFolderUri"),
-                        name = o.optString("name"),
-                        uriString = o.optString("uriString"),
-                        type = runCatching { MediaType.valueOf(o.optString("type")) }
-                            .getOrDefault(MediaType.STATIC_IMAGE),
-                        width = o.optInt("width"),
-                        height = o.optInt("height"),
-                        sizeBytes = o.optLong("sizeBytes"),
-                        modifiedTime = o.optLong("modifiedTime"),
-                        durationMs = if (o.isNull("durationMs")) null else o.optLong("durationMs"),
-                        contentHash = if (o.isNull("contentHash")) null else o.optString("contentHash")
-                    )
-                )
+    fun loadScanCache(): List<ImageItem> {
+        return try {
+            if (!scanCacheFile.exists()) {
+                android.util.Log.d("ScanCache", "no cache file yet")
+                emptyList()
+            } else {
+                val arr = org.json.JSONArray(scanCacheFile.readText())
+                val list = buildList {
+                    for (i in 0 until arr.length()) {
+                        val o = arr.getJSONObject(i)
+                        add(
+                            ImageItem(
+                                id = o.getLong("id"),
+                                folderId = o.getLong("folderId"),
+                                folderName = o.optString("folderName"),
+                                subFolderId = if (o.isNull("subFolderId")) null else o.optLong("subFolderId"),
+                                subFolderName = if (o.isNull("subFolderName")) null else o.optString("subFolderName"),
+                                subFolderUri = if (o.isNull("subFolderUri")) null else o.optString("subFolderUri"),
+                                name = o.optString("name"),
+                                uriString = o.optString("uriString"),
+                                type = runCatching { MediaType.valueOf(o.optString("type")) }
+                                    .getOrDefault(MediaType.STATIC_IMAGE),
+                                width = o.optInt("width"),
+                                height = o.optInt("height"),
+                                sizeBytes = o.optLong("sizeBytes"),
+                                modifiedTime = o.optLong("modifiedTime"),
+                                durationMs = if (o.isNull("durationMs")) null else o.optLong("durationMs"),
+                                contentHash = if (o.isNull("contentHash")) null else o.optString("contentHash")
+                            )
+                        )
+                    }
+                }
+                android.util.Log.d("ScanCache", "loaded ${list.size} items, withDim=${list.count { it.width > 0 }}")
+                // Sanitize half-baked entries: a (w>0, h==0) or (w==0, h>0)
+                // dimension is garbage from a broken extract and must not be
+                // shown — zero both so the UI falls back to unknown.
+                list.map {
+                    if (it.width > 0 && it.height > 0) it
+                    else if (it.width > 0 || it.height > 0) it.copy(width = 0, height = 0)
+                    else it
+                }
             }
+        } catch (e: Exception) {
+            android.util.Log.e("ScanCache", "load failed", e)
+            emptyList()
         }
-    }.getOrDefault(emptyList())
+    }
 
     // ------------------------------------------------------------------ folders
 

@@ -30,18 +30,24 @@ class MediaIndexer(private val context: Context) {
      *
      * @param force re-extract every file even if size/mtime are unchanged
      * @param onProgress invoked as files are processed: (done, total)
+     * @param onCancelCheck when it returns true the merge STOPS and returns
+     *   the partial result (so cancelled runs still persist what they did)
      */
     suspend fun merge(
         items: List<ImageItem>,
         existing: Map<String, IndexEntry>,
         force: Boolean = false,
-        onProgress: ((done: Int, total: Int) -> Unit)? = null
+        onProgress: ((done: Int, total: Int) -> Unit)? = null,
+        onCancelCheck: (() -> Boolean)? = null
     ): Pair<Map<String, IndexEntry>, Int> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val result = existing.toMutableMap()
         var extracted = 0
         val total = items.size
         items.forEachIndexed { index, item ->
+            if (onCancelCheck?.invoke() == true) {
+                return@withContext result to extracted
+            }
             val cached = existing[item.uriString]
             if (!force &&
                 cached != null &&
@@ -80,12 +86,24 @@ class MediaIndexer(private val context: Context) {
                 val mmr = MediaMetadataRetriever()
                 try {
                     mmr.setDataSource(context, uri)
-                    val w = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+                    var w = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
                         ?.toIntOrNull() ?: 0
-                    val h = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+                    var h = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
                         ?.toIntOrNull() ?: 0
                     val d = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
                         ?.toLongOrNull()
+                    // Some files only expose one dimension via metadata —
+                    // fall back to the decoded first frame's real size.
+                    if (w <= 0 || h <= 0) {
+                        val frame = runCatching {
+                            mmr.getFrameAtTime(0)
+                        }.getOrNull()
+                        if (frame != null) {
+                            if (w <= 0) w = frame.width
+                            if (h <= 0) h = frame.height
+                            frame.recycle()
+                        }
+                    }
                     IndexEntry(
                         uriString = item.uriString,
                         width = w,

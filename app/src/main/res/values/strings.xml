@@ -9,6 +9,12 @@
     <string name="tab_settings">Settings</string>
     <string name="tab_index">Index</string>
 
+    <!-- Exit confirm -->
+    <string name="exit_title">Exit FlowGallery?</string>
+    <string name="exit_message">Your folders and settings are saved. Exit the app?</string>
+    <string name="exit_confirm">Exit</string>
+    <string name="exit_cancel">Cancel</string>
+
     <!-- Index tab -->
     <string name="index_status_idle">Idle</string>
     <string name="index_status_running">Indexing…</string>
