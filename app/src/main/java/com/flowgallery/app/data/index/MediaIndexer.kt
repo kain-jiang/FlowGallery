@@ -28,8 +28,8 @@ class MediaIndexer(
     private val resolver = context.applicationContext.contentResolver
 
     /**
-     * Merge [items] with [existing]; returns the updated index map and the
-     * number of entries that were freshly extracted (for progress reporting).
+     * Merge [items] with [existing]; returns the updated index map, the
+     * number of freshly extracted entries and the number of FAILED extracts.
      *
      * @param force re-extract every file even if size/mtime are unchanged
      * @param onProgress invoked as files are processed: (done, total)
@@ -42,14 +42,15 @@ class MediaIndexer(
         force: Boolean = false,
         onProgress: ((done: Int, total: Int) -> Unit)? = null,
         onCancelCheck: (() -> Boolean)? = null
-    ): Pair<Map<String, IndexEntry>, Int> = withContext(Dispatchers.IO) {
+    ): Triple<Map<String, IndexEntry>, Int, Int> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val result = existing.toMutableMap()
         var extracted = 0
+        var failed = 0
         val total = items.size
         items.forEachIndexed { index, item ->
             if (onCancelCheck?.invoke() == true) {
-                return@withContext result to extracted
+                return@withContext Triple(result, extracted, failed)
             }
             val cached = existing[item.uriString]
             // Reuse only COMPLETE entries. A zero-dimension entry (failed
@@ -64,26 +65,34 @@ class MediaIndexer(
                 // unchanged — reuse without touching the file
             } else {
                 val entry = extract(item)
-                result[item.uriString] = IndexEntry(
-                    uriString = item.uriString,
-                    width = entry.width,
-                    height = entry.height,
-                    durationMs = entry.durationMs,
-                    sizeBytes = item.sizeBytes,
-                    modifiedTime = item.modifiedTime,
-                    contentHash = entry.contentHash,
-                    indexedAt = now
-                )
-                extracted++
+                val bad = entry.width <= 0 && entry.height <= 0 && entry.durationMs == null
+                if (bad) {
+                    failed++
+                } else {
+                    result[item.uriString] = IndexEntry(
+                        uriString = item.uriString,
+                        width = entry.width,
+                        height = entry.height,
+                        durationMs = entry.durationMs,
+                        sizeBytes = item.sizeBytes,
+                        modifiedTime = item.modifiedTime,
+                        contentHash = entry.contentHash,
+                        indexedAt = now
+                    )
+                    extracted++
+                }
             }
             if (index % 10 == 0 || index == total - 1) {
                 onProgress?.invoke(index + 1, total)
             }
         }
-        result to extracted
+        Triple(result, extracted, failed)
     }
 
-    /** Extract metadata for one item (dimensions, duration, hash). */
+    /** Extract metadata for one item (dimensions, duration). NOTE: content
+     *  hash is NOT computed here — hashing reads the WHOLE file and makes
+     *  indexing crawl on network sources. Dedup computes hashes on demand
+     *  (only for size-duplicate candidates) instead. */
     private suspend fun extract(item: ImageItem): IndexEntry = withContext(Dispatchers.IO) {
         val uri = Uri.parse(item.uriString)
         if (item.type.isVideo) {
@@ -92,7 +101,13 @@ class MediaIndexer(
             try {
                 val mmr = MediaMetadataRetriever()
                 try {
-                    mmr.setDataSource(context, uri)
+                    if (uri.scheme == "smb") {
+                        // SMB videos: stream via SmbMediaDataSource (plain
+                        // MediaMetadataRetriever can't open smb:// uris).
+                        mmr.setDataSource(com.flowgallery.app.data.SmbMediaDataSource(item.uriString))
+                    } else {
+                        mmr.setDataSource(context, uri)
+                    }
                     var w = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
                         ?.toIntOrNull() ?: 0
                     var h = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
@@ -115,27 +130,21 @@ class MediaIndexer(
                         uriString = item.uriString,
                         width = w,
                         height = h,
-                        durationMs = d,
-                        contentHash = contentHash(item)
+                        durationMs = d
                     )
                 } finally {
                     runCatching { mmr.release() }
                 }
             } catch (e: Exception) {
-                IndexEntry(
-                    uriString = item.uriString,
-                    contentHash = contentHash(item)
-                )
+                IndexEntry(uriString = item.uriString)
             }
         } else {
             val (w, h) = dimensionOf(item)
-            val hash = contentHash(item)
             IndexEntry(
                 uriString = item.uriString,
                 width = w,
                 height = h,
-                durationMs = null,
-                contentHash = hash
+                durationMs = null
             )
         }
     }
@@ -152,21 +161,5 @@ class MediaIndexer(
         } ?: (0 to 0)
     } catch (e: Exception) {
         (0 to 0)
-    }
-
-    /** MD5 of the file contents, or null on failure. Used for content dedup. */
-    private fun contentHash(item: ImageItem): String? = try {
-        val md = java.security.MessageDigest.getInstance("MD5")
-        sourceRegistry.get(item.source).openStream(item)?.use { input ->
-            val buf = ByteArray(64 * 1024)
-            while (true) {
-                val n = input.read(buf)
-                if (n <= 0) break
-                md.update(buf, 0, n)
-            }
-            md.digest().joinToString("") { "%02x".format(it) }
-        }
-    } catch (e: Exception) {
-        null
     }
 }

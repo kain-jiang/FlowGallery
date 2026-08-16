@@ -33,6 +33,8 @@
     <string name="index_what_title">索引是什么？</string>
     <string name="index_what_body">索引提取资源的元数据（尺寸、视频时长、内容哈希），用于正确的图片比例、HD/SD 徽章、排序与去重。增量索引只处理新增/变更文件；重新索引全量重建；清空索引移除全部条目。</string>
     <string name="index_auto_notice">正在索引新内容…</string>
+    <string name="index_done_notice">索引完成：成功 %1$d 条，失败 %2$d 条</string>
+    <string name="index_cancelled_notice">索引已取消：成功 %1$d 条，失败 %2$d 条</string>
     <string name="index_folders_title">要索引的文件夹</string>
     <string name="index_folders_empty">暂无文件夹 — 请先在设置中添加</string>
     <string name="index_select_all">全选</string>

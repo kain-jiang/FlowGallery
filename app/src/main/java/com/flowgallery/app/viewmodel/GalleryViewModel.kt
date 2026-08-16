@@ -288,7 +288,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun indexImagesInBackground(images: List<ImageItem>) {
         viewModelScope.launch(Dispatchers.IO) {
-            val (newIndex, _) = mediaIndexer.merge(images, mediaIndex)
+            val (newIndex, _, _) = mediaIndexer.merge(images, mediaIndex)
             mediaIndex = newIndex
             indexStore.save(newIndex.values)
             val enriched = applyIndex(images)
@@ -369,7 +369,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                     extracted = 0
                 )
             }
-            val (newIndex, extracted) = mediaIndexer.merge(
+            val (newIndex, extracted, failed) = mediaIndexer.merge(
                 items = items,
                 existing = if (force) emptyMap() else mediaIndex,
                 force = force,
@@ -403,6 +403,14 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                     lastIndexedAt = System.currentTimeMillis()
                 )
             }
+            // Report success/failure counts (even when zero).
+            val app = getApplication<Application>()
+            val notice = app.getString(
+                if (cancelled) com.flowgallery.app.R.string.index_cancelled_notice
+                else com.flowgallery.app.R.string.index_done_notice,
+                extracted, failed
+            )
+            _uiState.update { it.copy(indexNotice = notice) }
             // Refresh the home grid with the enriched metadata.
             val enriched = applyIndex(_uiState.value.images)
             _uiState.update { st -> st.copy(images = enriched) }

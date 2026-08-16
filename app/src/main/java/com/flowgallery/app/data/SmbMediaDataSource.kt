@@ -18,13 +18,16 @@ class SmbMediaDataSource(private val fileUrl: String) : MediaDataSource() {
     private var streamPos = 0L
 
     override fun readAt(position: Long, buffer: ByteArray, offset: Int, size: Int): Int {
-        val s = stream ?: return -1
         synchronized(this) {
             try {
+                var s = stream ?: return -1
                 if (position < streamPos) {
-                    // Backward seek: reopen the stream.
+                    // Backward seek: reopen the stream — and use the NEW
+                    // stream from here on (reading the closed one throws
+                    // "Bad file descriptor").
                     s.close()
-                    stream = smbFile?.inputStream
+                    s = smbFile?.inputStream ?: return -1
+                    stream = s
                     streamPos = 0L
                 }
                 if (position > streamPos) {
@@ -42,12 +45,17 @@ class SmbMediaDataSource(private val fileUrl: String) : MediaDataSource() {
                 if (n > 0) streamPos += n
                 return n
             } catch (e: Exception) {
+                android.util.Log.e("SmbMediaDS", "readAt($position) failed", e)
                 return -1
             }
         }
     }
 
-    override fun getSize(): Long = runCatching { smbFile?.length() ?: -1L }.getOrDefault(-1L)
+    override fun getSize(): Long = runCatching {
+        val sz = smbFile?.length() ?: -1L
+        android.util.Log.d("SmbMediaDS", "getSize=$sz")
+        sz
+    }.getOrDefault(-1L)
 
     override fun close() {
         runCatching { stream?.close() }

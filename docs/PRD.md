@@ -626,8 +626,8 @@ GalleryUiState
 - **莫奈取色自动刷新**：壁纸颜色变化监听（OnColorsChangedListener）→ 启用莫奈时自动 recreate Activity 应用新动态配色（此前壁纸变更后主题色不变）
 - **Tab 顺序**：首页 / 收藏 / ⚡索引 / **设置（最右固定）**（`8bbd4c8`）
 - **文件夹源抽象**（`feat/folder-source` `d6c9502`）：`data/source/` 抽象层 — `FolderSource` 接口（listFiles/openStream/testConnection）+ `SourceType`（LOCAL/SMB/FTP/SFTP/WEBDAV）+ `SourceRegistry` 注册表 + `LocalFolderSource`（SAF 实现）；Folder/ImageItem 带 `source` 字段并持久化；扫描/索引/去重读取全部经源接口分派。**新增外置源（SMB 等）只需实现 FolderSource + 注册 + 配置 UI**，详见 `docs/ARCHITECTURE.md`；设置页文件夹行**主图标=源类型**、**右上角徽标=文件夹类型**（普通=Folder、图包=Collections，抽象 `folderTypeIcon()` 统一设置徽标/类型弹窗/首页；GridView 保留给首页"全部"）；首页文件夹选择框图标与源类型一致（共用 sourceBadgeIcon，子文件夹图标与标题对齐+半透明）；**添加文件夹先弹源类型选择**
-- **SMB 源实现**（feat/smb-support）：`SmbFolderSource`（jcifs-ng 列目录/读流/测试连接）+ `SmbConfig`（host/share/path/账号，url 含凭据为 folder.uriString）+ `SmbContexts`（超时/DNS/context 缓存复用连接）+ 注册；`SmbAddDialog`（服务器/共享/路径/账号/密码/域 + 测试连接 + 可滚动，**添加后弹类型选择弹窗（同本地流程）**）；Coil `SmbFetcher`（SmbUri 包装绕过 String→Uri 映射，下载临时文件解码，并发限 3）；视频播放 `SmbDataSource`（Media3 流式）+ 视频缩略图 `SmbMediaDataSource`（MediaMetadataRetriever 流式取帧）；pruneOverlaps 保留非 SAF 源
-- **索引 Tab 全文件夹可选**：索引范围不看文件夹启用状态（所有文件夹都可勾选索引，行内显示源类型图标）；**三功能**：清空索引 / 重新索引（全量）/ 增量索引（两行布局：清空+重索引第一行、增量独占第二行）；说明文案同步
+- **SMB 源实现**（feat/smb-support）：`SmbFolderSource`（jcifs-ng 列目录/读流/测试连接）+ `SmbConfig`（host/share/path/账号，url 含凭据为 folder.uriString）+ `SmbContexts`（超时/DNS/context 缓存复用连接）+ 注册；`SmbAddDialog`（服务器/共享/路径/账号/密码/域 + 测试连接 + 可滚动，**添加后弹类型选择弹窗（同本地流程）**）；Coil `SmbFetcher`（SmbUri 包装绕过 String→Uri 映射 + **SmbUriKeyer 稳定磁盘缓存**；**图片/视频都下载临时文件后解码取帧**（视频流式 seek 取帧过慢，改为本地取帧）；并发限 3）；视频播放 `SmbDataSource`（Media3 流式）；**SmbMediaDataSource 修复**（向后 seek 重开流后用新流读取，修复 "Bad file descriptor"，作为视频取帧后备）；pruneOverlaps 保留非 SAF 源；**索引提取不算 MD5**（哈希全文件读取在 SMB 上极慢，改为去重时按需计算，仅大小重复候选）
+- **索引 Tab 全文件夹可选**：索引范围不看文件夹启用状态（所有文件夹都可勾选索引，行内显示源类型图标）；**三功能**：清空索引 / 重新索引（全量）/ 增量索引（两行布局：清空+重索引第一行、增量独占第二行）；说明文案同步；**完成后 Toast 成功/失败数量（即便 0）**，取消也提示
 
 ---
 

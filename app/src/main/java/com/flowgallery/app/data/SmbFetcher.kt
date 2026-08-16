@@ -21,6 +21,14 @@ fun smbModel(uriString: String): Any =
     if (uriString.startsWith("smb://")) SmbUri(uriString) else uriString
 
 /**
+ * Stable disk-cache key for [SmbUri] — without it Coil can't cache SMB
+ * results and every scroll/re-open would re-download.
+ */
+class SmbUriKeyer : coil.key.Keyer<SmbUri> {
+    override fun key(data: SmbUri, options: Options): String? = data.value
+}
+
+/**
  * Coil Fetcher for [SmbUri]: downloads the whole file to a temp file first,
  * then lets Coil decode from the local copy (stream decoding can stall on
  * slow SMB reads). Concurrency is capped to respect the server's connection
@@ -36,6 +44,29 @@ class SmbFetcher(
         val config = SmbConfig.fromUrl(url) ?: throw IllegalStateException("bad smb url")
         val mime = mimeFromUrl(url)
 
+        // VIDEOS: download to a temp file then let SmartVideoFrameDecoder
+        // read frames LOCALLY — streaming seek over SMB is far too slow for
+        // MediaMetadataRetriever's random access (frames never arrive).
+        // Local decoding is fast; the disk cache reuses it afterwards.
+        downloadSemaphore.acquire()
+        try {
+            val tmp = java.io.File.createTempFile("smb_", ".bin", options.context.cacheDir)
+            try {
+                val file = SmbFile(url, SmbContexts.context(config))
+                file.inputStream.use { input ->
+                    tmp.outputStream().use { output -> input.copyTo(output) }
+                }
+                val imageSource = SmbImageSourceFactory.create(tmp)
+                return SourceResult(imageSource, mime, DataSource.DISK)
+            } catch (e: Exception) {
+                tmp.delete()
+                throw e
+            }
+        } finally {
+            downloadSemaphore.release()
+        }
+
+        // IMAGES: download fully to a temp file, then decode locally.
         downloadSemaphore.acquire()
         try {
             val tmp = java.io.File.createTempFile("smb_", ".bin", options.context.cacheDir)
