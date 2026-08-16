@@ -147,6 +147,14 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Add an SMB share folder, then rescan. */
+    fun addSmbFolder(config: com.flowgallery.app.data.source.SmbConfig, name: String?, type: FolderType) {
+        viewModelScope.launch {
+            val added = repository.addSmbFolder(config, name, type)
+            if (added) refreshFolders()
+        }
+    }
+
     /** Change an existing folder's type (Normal ↔ Pack), then rescan. */
     fun updateFolderType(id: Long, type: FolderType) {
         viewModelScope.launch {
@@ -333,10 +341,11 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         if (_indexJob.value.running) return
         viewModelScope.launch(Dispatchers.IO) {
             indexCancelRequested.set(false)
-            // Respect the per-folder selection (null = all selected folders).
+            // Respect the per-folder selection (null = all folders,
+            // regardless of their enabled state).
             val selection = _indexJob.value.indexFolders
             val folders = _uiState.value.folders.filter {
-                it.isSelected && (selection == null || it.id in selection)
+                selection == null || it.id in selection
             }
             if (folders.isEmpty()) {
                 _indexJob.update { it.copy(running = false) }

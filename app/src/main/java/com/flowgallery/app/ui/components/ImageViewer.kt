@@ -94,6 +94,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.compose.SubcomposeAsyncImage
 import com.flowgallery.app.R
+import com.flowgallery.app.data.smbModel
 import com.flowgallery.app.data.model.ImageItem
 import com.flowgallery.app.data.model.MediaType
 import com.flowgallery.app.ui.theme.Surface2
@@ -533,7 +534,7 @@ fun ImageViewer(
                                 model = coil.request.ImageRequest.Builder(
                                     androidx.compose.ui.platform.LocalContext.current
                                 )
-                                    .data(img.uriString)
+                                    .data(smbModel(img.uriString))
                                     .apply {
                                         if (img.type.isVideo) {
                                             setParameter(
@@ -714,7 +715,16 @@ private fun VideoPlayerView(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val exoPlayer = remember(uriString) {
-        ExoPlayer.Builder(context).build().apply {
+        val builder = ExoPlayer.Builder(context)
+        // SMB videos stream through jcifs-ng (smb:// DataSource).
+        if (uriString.startsWith("smb://")) {
+            builder.setMediaSourceFactory(
+                androidx.media3.exoplayer.source.DefaultMediaSourceFactory(
+                    androidx.media3.datasource.DataSource.Factory { com.flowgallery.app.data.SmbDataSource() }
+                )
+            )
+        }
+        builder.build().apply {
             setMediaItem(MediaItem.fromUri(uriString))
             prepare()
             playWhenReady = false
@@ -798,7 +808,7 @@ private fun VideoPlayerView(
         if (!isPlaying) {
             SubcomposeAsyncImage(
                 model = coil.request.ImageRequest.Builder(context)
-                    .data(uriString)
+                    .data(smbModel(uriString))
                     .setParameter(
                         com.flowgallery.app.data.SmartVideoFrameDecoder.KEY_VIDEO_URI,
                         uriString
@@ -1170,7 +1180,7 @@ private fun ZoomableImage(
         // Keep 1x as a complete Fit view (no cropping). Double-tap zooms to
         // coverScale() which fills the whole viewport (no black band).
         SubcomposeAsyncImage(
-            model = item.uriString,
+            model = smbModel(item.uriString),
             contentDescription = item.name,
             contentScale = ContentScale.Fit,
             onSuccess = { state ->

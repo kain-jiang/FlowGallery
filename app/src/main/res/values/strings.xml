@@ -56,6 +56,22 @@
     <string name="source_sftp">SFTP server</string>
     <string name="source_webdav">WebDAV server</string>
     <string name="source_wip">%1$s — in development</string>
+
+    <!-- SMB dialog -->
+    <string name="smb_title">SMB Network Share</string>
+    <string name="smb_host">Server</string>
+    <string name="smb_host_hint">e.g. 192.168.1.10 or nas.local</string>
+    <string name="smb_share">Share</string>
+    <string name="smb_path">Path (optional)</string>
+    <string name="smb_path_hint">e.g. Photos/2024</string>
+    <string name="smb_username">Username</string>
+    <string name="smb_password">Password</string>
+    <string name="smb_domain">Domain (optional)</string>
+    <string name="smb_test">Test connection</string>
+    <string name="smb_testing">Testing…</string>
+    <string name="smb_test_ok">Connected ✓</string>
+    <string name="smb_name">Display name (optional)</string>
+    <string name="smb_add">Add share</string>
     <string name="cd_search">Search</string>
     <string name="cd_grid_toggle">Grid toggle</string>
     <string name="cd_add_folder">Add folder</string>

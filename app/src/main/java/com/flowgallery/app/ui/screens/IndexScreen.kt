@@ -264,7 +264,8 @@ private fun FolderSelectionCard(
 ) {
     val scheme = MaterialTheme.colorScheme
     val state by viewModel.uiState.collectAsState()
-    val folders = state.folders.filter { it.isSelected }
+    // ALL folders are selectable — regardless of their enabled state.
+    val folders = state.folders
     val selection = job.indexFolders // null = all
 
     Column(

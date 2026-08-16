@@ -31,7 +31,16 @@ class SmartVideoFrameDecoder(
         val retriever = MediaMetadataRetriever()
         try {
             if (uri != null) {
-                retriever.setDataSource(options.context, uri)
+                if (uri.scheme == "smb") {
+                    // SMB videos: serve via a streaming MediaDataSource so
+                    // MediaMetadataRetriever reads frames on demand (no full
+                    // download).
+                    retriever.setDataSource(
+                        SmbMediaDataSource(uri.toString())
+                    )
+                } else {
+                    retriever.setDataSource(options.context, uri)
+                }
             } else {
                 source.fileOrNull()?.let { retriever.setDataSource(it.toString()) }
             }

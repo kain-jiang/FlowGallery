@@ -56,6 +56,22 @@
     <string name="source_sftp">SFTP 服务器</string>
     <string name="source_webdav">WebDAV 服务器</string>
     <string name="source_wip">%1$s — 开发中</string>
+
+    <!-- SMB dialog -->
+    <string name="smb_title">SMB 网络共享</string>
+    <string name="smb_host">服务器</string>
+    <string name="smb_host_hint">例如 192.168.1.10 或 nas.local</string>
+    <string name="smb_share">共享名</string>
+    <string name="smb_path">路径（可选）</string>
+    <string name="smb_path_hint">例如 照片/2024</string>
+    <string name="smb_username">用户名</string>
+    <string name="smb_password">密码</string>
+    <string name="smb_domain">域（可选）</string>
+    <string name="smb_test">测试连接</string>
+    <string name="smb_testing">测试中…</string>
+    <string name="smb_test_ok">连接成功 ✓</string>
+    <string name="smb_name">显示名称（可选）</string>
+    <string name="smb_add">添加共享</string>
     <string name="cd_search">搜索</string>
     <string name="cd_grid_toggle">切换网格视图</string>
     <string name="cd_add_folder">添加文件夹</string>

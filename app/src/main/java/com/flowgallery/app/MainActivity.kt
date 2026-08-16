@@ -79,6 +79,7 @@ import com.flowgallery.app.R
 import com.flowgallery.app.ui.components.FolderSelectionModal
 import com.flowgallery.app.ui.components.FolderTypeDialog
 import com.flowgallery.app.ui.components.ImageViewer
+import com.flowgallery.app.ui.components.SmbAddDialog
 import com.flowgallery.app.ui.components.SourcePickerDialog
 import com.flowgallery.app.ui.screens.FavoritesScreen
 import com.flowgallery.app.ui.screens.HomeScreen
@@ -227,6 +228,9 @@ private fun MainScaffold(
     var pendingExitConfirm by remember { mutableStateOf(false) }
     var scrollToTopSignal by remember { mutableStateOf(0) }
     var showSourcePicker by remember { mutableStateOf(false) }
+    var showSmbDialog by remember { mutableStateOf(false) }
+    var pendingSmbConfig by remember { mutableStateOf<com.flowgallery.app.data.source.SmbConfig?>(null) }
+    var pendingSmbName by remember { mutableStateOf<String?>(null) }
     // Bottom nav + system bars auto-hide while browsing down (Home only)
     var bottomBarVisible by remember { mutableStateOf(true) }
 
@@ -641,7 +645,7 @@ private fun MainScaffold(
         }
     }
 
-    // Source picker before adding a folder (only LOCAL implemented)
+    // Source picker before adding a folder (LOCAL = SAF, SMB = config dialog)
     if (showSourcePicker) {
         SourcePickerDialog(
             onPickLocal = {
@@ -650,16 +654,45 @@ private fun MainScaffold(
             },
             onPickExternal = { type ->
                 showSourcePicker = false
-                android.widget.Toast.makeText(
-                    uiContext,
-                    uiContext.getString(
-                        com.flowgallery.app.R.string.source_wip,
-                        type.label
-                    ),
-                    android.widget.Toast.LENGTH_SHORT
-                ).show()
+                if (type == com.flowgallery.app.data.source.SourceType.SMB) {
+                    showSmbDialog = true
+                } else {
+                    android.widget.Toast.makeText(
+                        uiContext,
+                        uiContext.getString(
+                            com.flowgallery.app.R.string.source_wip,
+                            type.label
+                        ),
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
             },
             onDismiss = { showSourcePicker = false }
+        )
+    }
+
+    // SMB share config dialog → then folder-type dialog (like local flow)
+    if (showSmbDialog) {
+        SmbAddDialog(
+            onConfirm = { config, name ->
+                showSmbDialog = false
+                pendingSmbConfig = config
+                pendingSmbName = name
+            },
+            onDismiss = { showSmbDialog = false }
+        )
+    }
+
+    // Folder-type selection for a pending SMB share (recommended = PACK)
+    pendingSmbConfig?.let { config ->
+        FolderTypeDialog(
+            folderName = pendingSmbName ?: "${config.host}/${config.share}",
+            recommended = com.flowgallery.app.data.model.FolderType.PACK,
+            onConfirm = { type ->
+                pendingSmbConfig = null
+                viewModel.addSmbFolder(config, pendingSmbName, type)
+            },
+            onDismiss = { pendingSmbConfig = null }
         )
     }
 

@@ -11,8 +11,9 @@ class SourceRegistry(context: Context) {
 
     private val sources: Map<SourceType, FolderSource> = buildMap {
         put(SourceType.LOCAL, LocalFolderSource(context))
+        put(SourceType.SMB, SmbFolderSource())
         // Future backends register here, e.g.:
-        // put(SourceType.SMB, SmbFolderSource(context))
+        // put(SourceType.FTP, FtpFolderSource(context))
     }
 
     fun get(type: SourceType): FolderSource =

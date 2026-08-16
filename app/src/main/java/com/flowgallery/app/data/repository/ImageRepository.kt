@@ -170,11 +170,16 @@ class ImageRepository(private val context: Context) {
         val ids = folders.map { it.id to treeDocumentId(Uri.parse(it.uriString)) }
         val result = mutableListOf<Folder>()
         for (folder in folders) {
-            val fid = ids.firstOrNull { it.first == folder.id }?.second ?: continue
+            val fid = ids.firstOrNull { it.first == folder.id }?.second
+            // Non-SAF sources (SMB shares, …) have no tree id and can't be
+            // overlap-pruned — keep them as-is.
+            if (fid == null) {
+                result.add(folder)
+                continue
+            }
             val coveredByParent = ids.any { (otherId, otherFid) ->
                 otherId != folder.id &&
                     otherFid != null &&
-                    fid != null &&
                     (fid.startsWith("$otherFid/") || fid == otherFid)
             }
             if (!coveredByParent) {
@@ -238,6 +243,26 @@ class ImageRepository(private val context: Context) {
 
         val nextId = (folders.maxOfOrNull { it.id } ?: 0L) + 1
         folders.add(Folder(id = nextId, name = displayName, uriString = uri.toString(), type = type))
+        saveFolders(folders)
+        return true
+    }
+
+    /** Add an SMB share folder (source = SMB), dedup by smb url. */
+    fun addSmbFolder(config: com.flowgallery.app.data.source.SmbConfig, displayName: String?, type: FolderType): Boolean {
+        val folders = loadFolders().toMutableList()
+        val url = config.url
+        if (folders.any { it.uriString == url }) return false
+        val name = displayName?.takeIf { it.isNotBlank() } ?: "${config.host}/${config.share}"
+        val nextId = (folders.maxOfOrNull { it.id } ?: 0L) + 1
+        folders.add(
+            Folder(
+                id = nextId,
+                name = name,
+                uriString = url,
+                source = com.flowgallery.app.data.source.SourceType.SMB,
+                type = type
+            )
+        )
         saveFolders(folders)
         return true
     }
