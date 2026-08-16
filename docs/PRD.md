@@ -4,7 +4,7 @@
 |---|---|
 | 产品名称 | FlowGallery（瀑布画廊） |
 | 文档版本 | v1.6 |
-| 状态 | 已评审（功能全部实现，M1–M3 ✅；v1.1.0 已发布，持续 UI 打磨） |
+| 状态 | 已评审（功能全部实现，M1–M3 ✅；v1.1.0 已发布，持续 UI 打磨 + 性能优化） |
 | 设计稿 | `flowgallery-android.html`（可交互原型） |
 | 参考产品 | macOS FlowVision |
 | 平台 | Android（手机） |
@@ -608,6 +608,10 @@ GalleryUiState
 - 查看器 HorizontalPager 滑动重构、画布全屏、双击/捏合缩放（coverScale 无黑边）、跨目录双箭头
 - 中央播放按钮高级化（紫环+光晕+白三角）、删除弹窗项目化、错误 Toast、空状态引导、选择器简化、导航栏过渡动画
 - 发布流程：tag `v*` → GitHub Actions 自动构建签名 APK → Release（见 `docs/RELEASE.md`）
+
+**v1.1.1（性能优化，main `6e838a4`）**：
+- **扫描结果缓存**：上次扫描结果持久化（`filesDir/scan_cache.json`）→ 启动秒显内容、后台自动刷新（解决"每次进 App 重新加载"痛点）；维度解析完成后更新缓存（重启即有 HD/SD 徽章与图片比例）
+- ArrowBack 弃用修复（AutoMirrored）
 
 ---
 
