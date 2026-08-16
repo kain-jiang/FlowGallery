@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -68,15 +69,21 @@ fun SmbAddDialog(
     )
 
     Dialog(onDismissRequest = onDismiss) {
-        Column(
+        // Outer Box carries the fixed rounded background; the inner Column
+        // scrolls inside it so the corners stay rounded while scrolling.
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.92f)
-                .verticalScroll(rememberScrollState())
                 .clip(RoundedCornerShape(24.dp))
                 .background(scheme.surface)
-                .padding(24.dp)
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp)
+            ) {
             // Drag handle
             Box(
                 modifier = Modifier
@@ -238,6 +245,7 @@ fun SmbAddDialog(
                     )
                 }
             }
-        }
+            } // inner Column
+        } // outer Box
     }
 }

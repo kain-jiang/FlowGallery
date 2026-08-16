@@ -23,6 +23,7 @@
     <string name="index_progress_detail">%1$d%% · %2$d new entries</string>
     <string name="index_start">Index now</string>
     <string name="index_reindex">Re-index all</string>
+    <string name="index_clear">Clear index</string>
     <string name="index_pause">Pause</string>
     <string name="index_resume">Resume</string>
     <string name="index_cancel">Cancel</string>
@@ -30,7 +31,7 @@
     <string name="index_stat_last">Last indexed</string>
     <string name="index_stat_never">Never</string>
     <string name="index_what_title">What is the index?</string>
-    <string name="index_what_body">The index extracts metadata (dimensions, video duration, content hash) from your folders. The home screen uses it for correct image ratios, HD/SD badges, sorting and duplicate detection — and it only touches new or changed files, so re-running is fast.</string>
+    <string name="index_what_body">The index extracts metadata (dimensions, video duration, content hash) for correct ratios, HD/SD badges, sorting and dedup. Incremental index only touches new/changed files; re-index rebuilds everything; clear index removes all entries.</string>
     <string name="index_auto_notice">Indexing new content…</string>
     <string name="index_folders_title">Folders to index</string>
     <string name="index_folders_empty">No folders added — add folders in Settings first</string>

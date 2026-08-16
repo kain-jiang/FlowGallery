@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -234,15 +236,16 @@ private fun IndexStatusCard(
                 )
             }
         } else {
+            // Row 1: clear + re-index; Row 2: incremental index (full width)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 ActionButton(
-                    label = stringResource(R.string.index_start),
-                    icon = Icons.Filled.Bolt,
-                    tint = scheme.primary,
-                    onClick = { viewModel.startIndex(false) },
+                    label = stringResource(R.string.index_clear),
+                    icon = Icons.Filled.DeleteSweep,
+                    tint = scheme.error,
+                    onClick = viewModel::clearIndex,
                     modifier = Modifier.weight(1f)
                 )
                 ActionButton(
@@ -253,6 +256,14 @@ private fun IndexStatusCard(
                     modifier = Modifier.weight(1f)
                 )
             }
+            Spacer(Modifier.height(8.dp))
+            ActionButton(
+                label = stringResource(R.string.index_start),
+                icon = Icons.Filled.Bolt,
+                tint = scheme.primary,
+                onClick = { viewModel.startIndex(false) },
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
@@ -352,13 +363,22 @@ private fun FolderSelectionCard(
                             )
                         }
                     }
+                    Spacer(Modifier.width(10.dp))
+                    // Source icon (consistent with settings/home)
+                    Icon(
+                        com.flowgallery.app.ui.components.sourceBadgeIcon(folder.source),
+                        contentDescription = folder.source.label,
+                        tint = scheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         text = folder.name,
                         color = scheme.onSurface,
                         fontSize = 14.sp,
                         modifier = Modifier
                             .weight(1f)
-                            .padding(start = 10.dp)
+                            .padding(start = 4.dp)
                     )
                     Text(
                         text = stringResource(

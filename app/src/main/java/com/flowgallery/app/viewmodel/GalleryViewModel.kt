@@ -423,6 +423,25 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         _indexJob.update { it.copy(running = false, paused = false) }
     }
 
+    /** Wipe the whole index (entries + persisted store) and strip indexed
+     *  dimensions from the home items. */
+    fun clearIndex() {
+        if (_indexJob.value.running) return
+        mediaIndex = emptyMap()
+        indexStore.save(emptyList())
+        // Strip indexed dimensions from current items (bare scan data stays).
+        val bare = _uiState.value.images.map { it.copy(width = 0, height = 0, contentHash = null) }
+        _uiState.update { st -> st.copy(images = bare) }
+        repository.saveScanCache(bare)
+        _indexJob.update {
+            it.copy(
+                running = false, paused = false,
+                entryCount = 0, lastIndexedAt = 0L,
+                done = 0, total = 0, extracted = 0
+            )
+        }
+    }
+
     /**
      * Toggle a folder in/out of the index selection. null selection means
      * "all selected folders"; unchecking the first folder materializes the
