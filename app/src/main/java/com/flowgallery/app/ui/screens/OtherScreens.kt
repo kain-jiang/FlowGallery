@@ -64,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -264,6 +265,7 @@ private fun CenteredHint(icon: ImageVector, title: String, desc: String) {
 fun SettingsScreen(
     viewModel: GalleryViewModel,
     onAddFolder: () -> Unit,
+    onShowInfo: (Folder) -> Unit = {},
     onRemoveFolder: (Folder) -> Unit,
     onEditType: (Folder) -> Unit
 ) {
@@ -351,29 +353,54 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Switch(
-                    checked = folder.isSelected,
-                    onCheckedChange = { viewModel.toggleFolder(folder.id) },
-                    colors = SwitchDefaults.colors(
-                        checkedTrackColor = MaterialTheme.colorScheme.primary,
-                        checkedThumbColor = Color.White
-                    )
-                )
-                // Refresh (re-scan this folder) — project-styled
-                IconButton(onClick = { viewModel.refreshFolder(folder.id) }) {
-                    Icon(
-                        Icons.Filled.Refresh,
-                        contentDescription = stringResource(R.string.cd_refresh_folder),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-                // Remove folder (FR-2) — project-styled
-                IconButton(onClick = { onRemoveFolder(folder) }) {
-                    Icon(
-                        Icons.Filled.Delete,
-                        contentDescription = stringResource(R.string.cd_remove_folder),
-                        tint = MaterialTheme.colorScheme.error
-                    )
+                // Action block — 2×2 grid: enable/refresh (row 1),
+                // info/remove (row 2), in one rounded chip on the right.
+                Column(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Row 1: enable/disable + refresh
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = folder.isSelected,
+                            onCheckedChange = { viewModel.toggleFolder(folder.id) },
+                            colors = SwitchDefaults.colors(
+                                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                checkedThumbColor = Color.White
+                            ),
+                            modifier = Modifier.scale(0.7f)
+                        )
+                        IconButton(onClick = { viewModel.refreshFolder(folder.id) }) {
+                            Icon(
+                                Icons.Filled.Refresh,
+                                contentDescription = stringResource(R.string.cd_refresh_folder),
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                    // Row 2: info + remove
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { onShowInfo(folder) }) {
+                            Icon(
+                                Icons.Filled.Info,
+                                contentDescription = stringResource(R.string.cd_folder_info),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        IconButton(onClick = { onRemoveFolder(folder) }) {
+                            Icon(
+                                Icons.Filled.Delete,
+                                contentDescription = stringResource(R.string.cd_remove_folder),
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                 }
             }
         }

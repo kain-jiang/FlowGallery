@@ -74,8 +74,9 @@ data class IndexJobState(
     val extracted: Int = 0,
     val lastIndexedAt: Long = 0L,
     val entryCount: Int = 0,
-    /** folder ids to index; null = ALL selected folders */
-    val indexFolders: Set<Long>? = null
+    /** folder ids to index; defaults to the ENABLED folders (init), so the
+     *  Index tab never opens with everything selected */
+    val indexFolders: Set<Long> = emptySet()
 )
 
 class GalleryViewModel(app: Application) : AndroidViewModel(app) {
@@ -120,10 +121,22 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         // Load the metadata index, then show the last cached scan immediately
         // (no empty flash / re-load wait), then refresh in the background.
         mediaIndex = indexStore.load()
+        // Architecture hygiene: drop entries that can't belong to any current
+        // folder (legacy folderId=-1, or folders that were removed) — they
+        // would pollute per-folder counts forever.
+        val folderIds = repository.loadFolders().map { it.id }.toSet()
+        val clean = mediaIndex.filterValues { it.folderId >= 0 && it.folderId in folderIds }
+        if (clean.size != mediaIndex.size) {
+            mediaIndex = clean
+            indexStore.save(clean.values)
+        }
         _indexJob.update {
             it.copy(
                 entryCount = mediaIndex.size,
-                lastIndexedAt = mediaIndex.values.maxOfOrNull { e -> e.indexedAt } ?: 0L
+                lastIndexedAt = mediaIndex.values.maxOfOrNull { e -> e.indexedAt } ?: 0L,
+                // Default selection = ENABLED folders (never everything).
+                indexFolders = repository.loadFolders()
+                    .filter { it.isSelected }.map { it.id }.toSet()
             )
         }
         val cached = repository.loadScanCache()
@@ -227,6 +240,9 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     fun removeFolder(id: Long) {
         viewModelScope.launch {
             repository.removeFolder(id)
+            // Drop this folder's index entries (no orphans left behind).
+            mediaIndex = mediaIndex.filterValues { it.folderId != id }
+            indexStore.save(mediaIndex.values)
             val folders = repository.loadFolders()
             val st = _uiState.value
             val filterReset = if (st.currentFilter == id) null else st.currentFilter
@@ -395,11 +411,10 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         if (_indexJob.value.running) return
         viewModelScope.launch(Dispatchers.IO) {
             indexCancelRequested.set(false)
-            // Respect the per-folder selection (null = all folders,
-            // regardless of their enabled state).
+            // Respect the per-folder selection (defaults to enabled folders).
             val selection = _indexJob.value.indexFolders
             val folders = _uiState.value.folders.filter {
-                selection == null || it.id in selection
+                it.id in selection
             }
             if (folders.isEmpty()) {
                 _indexJob.update { it.copy(running = false) }
@@ -505,23 +520,19 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /**
-     * Toggle a folder in/out of the index selection. null selection means
-     * "all folders" — computed over the FULL folder list (matching what the
-     * Index tab displays), so disabled folders behave consistently too.
-     */
+    /** Toggle a folder in/out of the index selection (explicit set). */
     fun toggleIndexFolder(id: Long) {
-        val all = _uiState.value.folders.map { it.id }.toSet()
         val cur = _indexJob.value.indexFolders
-        val effective = cur ?: all
-        val newSet = if (id in effective) effective - id else effective + id
-        _indexJob.update { it.copy(indexFolders = newSet) }
+        _indexJob.update {
+            it.copy(indexFolders = if (id in cur) cur - id else cur + id)
+        }
     }
 
-    /** Select all (null = follow all folders) or none (empty set). */
+    /** Select all folders (or clear the selection). */
     fun setAllIndexFolders(selectAll: Boolean) {
+        val all = _uiState.value.folders.map { it.id }.toSet()
         _indexJob.update {
-            it.copy(indexFolders = if (selectAll) null else emptySet())
+            it.copy(indexFolders = if (selectAll) all else emptySet())
         }
     }
 
@@ -616,22 +627,14 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
 
-    /** Indexed count for [folder] — the number of its items that carry
-     *  dimensions, from whichever source has them: the home set (index +
-     *  scan cache, stable across restarts), the index by folderId, or the
-     *  index by uri prefix (covers disabled folders / legacy entries). */
-    fun indexedCount(folder: com.flowgallery.app.data.model.Folder): Int {
-        val fromImages = _uiState.value.images.count { img ->
-            img.folderId == folder.id && img.width > 0 && img.height > 0
-        }
-        val fromIndexId = mediaIndex.values.count { e ->
-            e.folderId == folder.id && e.width > 0 && e.height > 0
-        }
-        val fromIndexUri = mediaIndex.values.count { e ->
-            e.uriString.startsWith(folder.uriString) && e.width > 0 && e.height > 0
-        }
-        return maxOf(fromImages, fromIndexId, fromIndexUri)
-    }
+    /** Indexed count for [folder] — from the INDEX RECORD ONLY (folderId,
+     *  with uri-prefix fallback). Completely independent of the home screen:
+     *  disabled folders still count what was indexed. */
+    fun indexedCount(folder: com.flowgallery.app.data.model.Folder): Int =
+        maxOf(
+            mediaIndex.values.count { it.folderId == folder.id && it.width > 0 && it.height > 0 },
+            mediaIndex.values.count { it.uriString.startsWith(folder.uriString) && it.width > 0 && it.height > 0 }
+        )
 
     /** Set search media-type filter (null = all). */
     fun setMediaTypeFilter(type: String?) =

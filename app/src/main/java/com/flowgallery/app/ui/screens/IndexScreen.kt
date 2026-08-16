@@ -279,7 +279,7 @@ private fun FolderSelectionCard(
     val state by viewModel.uiState.collectAsState()
     // ALL folders are selectable — regardless of their enabled state.
     val folders = state.folders
-    val selection = job.indexFolders // null = all
+    val selection = job.indexFolders
 
     Column(
         modifier = Modifier
@@ -299,7 +299,7 @@ private fun FolderSelectionCard(
             if (!job.running) {
                 Text(
                     text = stringResource(
-                        if (selection == null || selection.size == folders.size)
+                        if (selection.size == folders.size)
                             R.string.index_select_none
                         else R.string.index_select_all
                     ),
@@ -311,7 +311,7 @@ private fun FolderSelectionCard(
                         .clickable {
                             // All-selected → tap clears; partial → tap selects all.
                             viewModel.setAllIndexFolders(
-                                selection != null && selection.size != folders.size
+                                selection.size != folders.size
                             )
                         }
                         .padding(horizontal = 8.dp, vertical = 4.dp)
@@ -328,7 +328,7 @@ private fun FolderSelectionCard(
             )
         } else {
             folders.forEach { folder ->
-                val checked = selection == null || folder.id in selection
+                val checked = folder.id in selection
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

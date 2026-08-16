@@ -229,6 +229,7 @@ private fun MainScaffold(
     var scrollToTopSignal by remember { mutableStateOf(0) }
     var showSourcePicker by remember { mutableStateOf(false) }
     var showSmbDialog by remember { mutableStateOf(false) }
+    var folderInfo by remember { mutableStateOf<Folder?>(null) }
     var pendingSmbConfig by remember { mutableStateOf<com.flowgallery.app.data.source.SmbConfig?>(null) }
     var pendingSmbName by remember { mutableStateOf<String?>(null) }
     // Bottom nav + system bars auto-hide while browsing down (Home only)
