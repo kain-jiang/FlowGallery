@@ -591,24 +591,12 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
 
-    /** Number of items under [folder] (uri prefix) with a COMPLETE index
-     *  entry — independent of the home-enabled set, so disabled folders
-     *  still show their true indexed count. */
-    fun indexedCount(folder: com.flowgallery.app.data.model.Folder): Int {
-        val prefix = folder.uriString
-        val count = mediaIndex.values.count { e ->
-            e.uriString.startsWith(prefix) && e.width > 0 && e.height > 0
+    /** Number of items of [folderId] with a COMPLETE index entry — exact
+     *  folderId match (no uri-prefix fragility). */
+    fun indexedCount(folderId: Long): Int =
+        mediaIndex.values.count { e ->
+            e.folderId == folderId && e.width > 0 && e.height > 0
         }
-        // Diagnostic: show the full prefix and a couple of index keys so the
-        // uri mismatch (if any) is visible.
-        val sample = mediaIndex.keys.take(3).joinToString(" | ") { it.take(80) }
-        android.util.Log.d(
-            "IndexCount",
-            "folder=${folder.name} prefix=$prefix index=${mediaIndex.size} count=$count"
-        )
-        android.util.Log.d("IndexCount", "  keys: $sample")
-        return count
-    }
 
     /** Set search media-type filter (null = all). */
     fun setMediaTypeFilter(type: String?) =

@@ -32,6 +32,7 @@ class IndexStore(private val context: Context) {
                             uri,
                             IndexEntry(
                                 uriString = uri,
+                                folderId = if (o.isNull("f")) -1L else o.optLong("f", -1L),
                                 width = o.optInt("w"),
                                 height = o.optInt("h"),
                                 durationMs = if (o.isNull("d")) null else o.optLong("d"),
@@ -60,6 +61,7 @@ class IndexStore(private val context: Context) {
                 arr.put(
                     JSONObject().apply {
                         put("uri", e.uriString)
+                        put("f", e.folderId)
                         put("w", e.width)
                         put("h", e.height)
                         put("d", e.durationMs)

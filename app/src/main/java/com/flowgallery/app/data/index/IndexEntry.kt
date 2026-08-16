@@ -7,6 +7,9 @@ package com.flowgallery.app.data.index
  */
 data class IndexEntry(
     val uriString: String,
+    /** owning folder id — enables exact per-folder counts without fragile
+     *  uri-prefix matching (SMB credential encoding, tree/document shapes) */
+    val folderId: Long = -1L,
     val width: Int = 0,
     val height: Int = 0,
     val durationMs: Long? = null,

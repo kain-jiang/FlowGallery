@@ -71,6 +71,7 @@ class MediaIndexer(
                 } else {
                     result[item.uriString] = IndexEntry(
                         uriString = item.uriString,
+                        folderId = item.folderId,
                         width = entry.width,
                         height = entry.height,
                         durationMs = entry.durationMs,
