@@ -81,6 +81,12 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                 pillAlignmentLeft = prefs.getBoolean(KEY_PILL_ALIGNMENT_LEFT, false)
             )
         }
+        // Show the last cached scan immediately (no empty flash / re-load
+        // wait), then refresh in the background.
+        val cached = repository.loadScanCache()
+        if (cached.isNotEmpty()) {
+            _uiState.update { it.copy(images = cached) }
+        }
         refreshFolders()
     }
 
@@ -178,6 +184,8 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                         isRefreshing = false
                     )
                 }
+                // Persist so the next launch shows content instantly.
+                repository.saveScanCache(images)
                 // Resolve real dimensions in the background so HD/SD badges,
                 // stats and masonry ratios become accurate (zero-IO scan
                 // leaves width/height at 0).
@@ -216,6 +224,10 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                     kotlinx.coroutines.delay(50)
                 }
             }
+            // Persist the resolved dimensions with the scan cache.
+            repository.saveScanCache(
+                _uiState.value.images.map { it.copy(duplicates = emptyList()) }
+            )
         }
     }
 

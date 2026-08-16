@@ -24,8 +24,76 @@ class ImageRepository(private val context: Context) {
 
     private val resolver = context.applicationContext.contentResolver
 
+    // ------------------------------------------------------- scan cache
+
+    private val scanCacheFile: java.io.File
+        get() = java.io.File(context.filesDir, "scan_cache.json")
+
+    /**
+     * Persist the last scan result so the app can show content instantly on
+     * startup, then refresh in the background (avoids the "reloads every
+     * time you open the app" problem on large packs).
+     */
+    fun saveScanCache(items: List<ImageItem>) {
+        runCatching {
+            val arr = org.json.JSONArray()
+            for (it in items) {
+                arr.put(org.json.JSONObject().apply {
+                    put("id", it.id)
+                    put("folderId", it.folderId)
+                    put("folderName", it.folderName)
+                    put("subFolderId", it.subFolderId)
+                    put("subFolderName", it.subFolderName)
+                    put("subFolderUri", it.subFolderUri)
+                    put("name", it.name)
+                    put("uriString", it.uriString)
+                    put("type", it.type.name)
+                    put("width", it.width)
+                    put("height", it.height)
+                    put("sizeBytes", it.sizeBytes)
+                    put("modifiedTime", it.modifiedTime)
+                    put("durationMs", it.durationMs)
+                    put("contentHash", it.contentHash)
+                })
+            }
+            scanCacheFile.writeText(arr.toString())
+        }
+    }
+
+    /** Load the cached scan (empty list if none / corrupt). */
+    fun loadScanCache(): List<ImageItem> = runCatching {
+        if (!scanCacheFile.exists()) return emptyList()
+        val arr = org.json.JSONArray(scanCacheFile.readText())
+        buildList {
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                add(
+                    ImageItem(
+                        id = o.getLong("id"),
+                        folderId = o.getLong("folderId"),
+                        folderName = o.optString("folderName"),
+                        subFolderId = if (o.isNull("subFolderId")) null else o.optLong("subFolderId"),
+                        subFolderName = if (o.isNull("subFolderName")) null else o.optString("subFolderName"),
+                        subFolderUri = if (o.isNull("subFolderUri")) null else o.optString("subFolderUri"),
+                        name = o.optString("name"),
+                        uriString = o.optString("uriString"),
+                        type = runCatching { MediaType.valueOf(o.optString("type")) }
+                            .getOrDefault(MediaType.STATIC_IMAGE),
+                        width = o.optInt("width"),
+                        height = o.optInt("height"),
+                        sizeBytes = o.optLong("sizeBytes"),
+                        modifiedTime = o.optLong("modifiedTime"),
+                        durationMs = if (o.isNull("durationMs")) null else o.optLong("durationMs"),
+                        contentHash = if (o.isNull("contentHash")) null else o.optString("contentHash")
+                    )
+                )
+            }
+        }
+    }.getOrDefault(emptyList())
+
     // ------------------------------------------------------------------ folders
 
+    /** Load the cached folder list from prefs. */
     fun loadFolders(): List<Folder> {
         val raw = prefs.getString(KEY_FOLDERS, null) ?: return emptyList()
         val folders = try {
