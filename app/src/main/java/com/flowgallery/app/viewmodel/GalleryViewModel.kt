@@ -121,11 +121,15 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         // Load the metadata index, then show the last cached scan immediately
         // (no empty flash / re-load wait), then refresh in the background.
         mediaIndex = indexStore.load()
-        // Architecture hygiene: drop entries that can't belong to any current
-        // folder (legacy folderId=-1, or folders that were removed) — they
-        // would pollute per-folder counts forever.
-        val folderIds = repository.loadFolders().map { it.id }.toSet()
-        val clean = mediaIndex.filterValues { it.folderId >= 0 && it.folderId in folderIds }
+        // Architecture hygiene: keep only entries that BELONG to a current
+        // folder (by folderId, or by decoded uri path when folderId is stale
+        // legacy data). Orphans would pollute per-folder counts forever.
+        val folders = repository.loadFolders()
+        val folderIds = folders.map { it.id }.toSet()
+        val clean = mediaIndex.filterValues { e ->
+            e.folderId in folderIds ||
+                folders.any { uriUnderFolder(e.uriString, it.uriString) }
+        }
         if (clean.size != mediaIndex.size) {
             mediaIndex = clean
             indexStore.save(clean.values)
@@ -193,10 +197,11 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             val images = others + scan.items
             _uiState.update { it.copy(images = images, folders = repository.loadFolders()) }
             repository.saveScanCache(applyIndex(images))
-            // Drop this folder's stale index entries, then re-index if
-            // auto-index is enabled.
+            // Drop this folder's stale index entries, then ALWAYS re-index
+            // this folder (refresh must leave it indexed, regardless of the
+            // auto-index switch — otherwise the refresh wipes its counts).
             mediaIndex = mediaIndex.filterValues { it.folderId != id }
-            if (_uiState.value.autoIndex && needsIndexing(scan.items)) {
+            if (scan.items.isNotEmpty()) {
                 indexImagesInBackground(scan.items)
             } else {
                 indexStore.save(mediaIndex.values)
