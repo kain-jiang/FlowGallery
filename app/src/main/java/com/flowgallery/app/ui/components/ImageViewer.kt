@@ -4,6 +4,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -13,12 +17,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
@@ -38,6 +46,8 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.KeyboardDoubleArrowLeft
+import androidx.compose.material.icons.filled.KeyboardDoubleArrowRight
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -56,6 +66,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -69,6 +80,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -83,6 +96,7 @@ import com.flowgallery.app.R
 import com.flowgallery.app.data.model.ImageItem
 import com.flowgallery.app.data.model.MediaType
 import com.flowgallery.app.ui.theme.Surface2
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /**
@@ -96,22 +110,17 @@ fun ImageViewer(
     favoriteIds: Set<Long>,
     onNavigate: (Int) -> Unit,
     onNavigateDelta: ((Int) -> Unit)? = null,
+    /** true when an adjacent subfolder exists in that direction (double arrow) */
+    canCrossBackward: Boolean = false,
+    canCrossForward: Boolean = false,
     onClose: () -> Unit,
     onToggleFavorite: (Long) -> Unit,
     onShare: ((ImageItem) -> Unit)? = null,
     onSaveToGallery: ((ImageItem) -> Unit)? = null
 ) {
     if (images.isEmpty()) return
-    val image = images[currentIndex]
-    val isVideo = image.type.isVideo
 
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    var offsetY by remember { mutableFloatStateOf(0f) }
     var chromeVisible by remember { mutableStateOf(true) }
-    // Real dimensions resolved lazily from the loaded drawable (zero-IO scan).
-    var resolvedWidth by remember(image.uriString) { mutableStateOf(image.width) }
-    var resolvedHeight by remember(image.uriString) { mutableStateOf(image.height) }
     // Thumbnail strip scroll state — auto-centers the current item.
     val thumbListState = androidx.compose.foundation.lazy.rememberLazyListState()
     LaunchedEffect(currentIndex) {
@@ -121,12 +130,46 @@ fun ImageViewer(
     // Duplicate files dialog state (content-dedup copies of this item).
     var showDuplicates by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
-    val duplicates = remember(image.id) { image.duplicates }
-    // Horizontal swipe accumulator for cross-media navigation.
-    var swipeAccum by remember(currentIndex) { mutableFloatStateOf(0f) }
     // Landscape pure-play fullscreen for videos (no browsing chrome).
-    // rememberSaveable so a config change (rotation) preserves the state.
-    var videoFullscreen by rememberSaveable(currentIndex) { mutableStateOf(false) }
+    // NO key: swiping to the next video while fullscreen keeps it fullscreen
+    // (a currentIndex key would reset it on every page change).
+    var videoFullscreen by rememberSaveable { mutableStateOf(false) }
+
+    // HorizontalPager: items are laid out side by side; dragging moves them
+    // together (ViewPager feel), vertical drags never navigate.
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(
+        initialPage = currentIndex.coerceIn(0, (images.size - 1).coerceAtLeast(0))
+    ) { images.size }
+
+    // Single source of truth for "what's on screen" — used by the top bar,
+    // info row and thumbnail highlight so everything updates instantly
+    // while swiping (the external currentIndex syncs asynchronously).
+    val pagerCurrent = pagerState.currentPage.coerceIn(0, images.lastIndex)
+    val currentItem = images[pagerCurrent]
+    val isVideo = currentItem.type.isVideo
+    val duplicates = remember(currentItem.id) { currentItem.duplicates }
+
+    // Swiping from a video to an image exits video fullscreen automatically.
+    androidx.compose.runtime.LaunchedEffect(isVideo) {
+        if (!isVideo) videoFullscreen = false
+    }
+
+    // External navigation (arrows / thumbnails / subfolder crossing) syncs
+    // the pager to the new current index.
+    LaunchedEffect(currentIndex) {
+        if (pagerState.currentPage != currentIndex) {
+            pagerState.scrollToPage(currentIndex.coerceIn(0, (images.size - 1).coerceAtLeast(0)))
+        }
+    }
+
+    // Pager page changes drive the external viewer index.
+    LaunchedEffect(pagerState) {
+        androidx.compose.runtime.snapshotFlow { pagerState.currentPage }
+            .distinctUntilChanged()
+            .collect { page ->
+                if (page != currentIndex) onNavigate(page)
+            }
+    }
 
     // Fullscreen: rotate the activity to landscape while in this mode.
     if (isVideo && videoFullscreen) {
@@ -151,135 +194,63 @@ fun ImageViewer(
         if (cb != null) cb(delta) else onNavigate(currentIndex + delta)
     }
 
-    // Reset transform when switching images
-    LaunchedEffect(currentIndex) {
-        scale = 1f
-        offsetX = 0f
-        offsetY = 0f
-        swipeAccum = 0f
-    }
-
-    // Double-tap zoom: images only. First double-tap zooms to 2x (centered),
-    // second restores 1x. Uses an animated transition for a smooth feel.
-    val doubleTapScope = rememberCoroutineScope()
-    fun handleDoubleTap() {
-        if (isVideo || videoFullscreen) return
-        doubleTapScope.launch {
-            if (scale <= 1f) {
-                androidx.compose.animation.core.animate(
-                    initialValue = 1f,
-                    targetValue = 2f,
-                    animationSpec = androidx.compose.animation.core.tween(220)
-                ) { value, _ -> scale = value }
-            } else {
-                androidx.compose.animation.core.animate(
-                    initialValue = scale,
-                    targetValue = 1f,
-                    animationSpec = androidx.compose.animation.core.tween(220)
-                ) { value, _ ->
-                    scale = value
-                    offsetX = 0f
-                    offsetY = 0f
-                }
-            }
-        }
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .pointerInput(currentIndex, videoFullscreen) {
-                // Tap toggles the chrome (control bar) for images and videos
-                // — including in video fullscreen, so the progress bar can be
-                // hidden/shown while watching. Double-tap (images only) zooms
-                // in to 2x / restores 1x instead of toggling the chrome.
-                detectTapGestures(
-                    onDoubleTap = { handleDoubleTap() },
-                    onTap = { chromeVisible = !chromeVisible }
-                )
-            }
-            .pointerInput(currentIndex, videoFullscreen) {
-                // Swipe navigation is disabled in video fullscreen (pure play).
-                if (videoFullscreen) return@pointerInput
-                if (isVideo) {
-                    // Videos: horizontal swipe navigates (no zoom).
-                    detectHorizontalDragGestures { change, dragAmount ->
-                        change.consume()
-                        swipeAccum += dragAmount
-                        if (kotlin.math.abs(swipeAccum) > 90f) {
-                            navigateBy(if (swipeAccum < 0) 1 else -1)
-                            swipeAccum = 0f
-                        }
-                    }
-                } else {
-                    // Images: pinch-zoom/pan, and swipe to navigate at 1x.
-                    detectTransformGestures { _, pan, zoom, _ ->
-                        val newScale = (scale * zoom).coerceIn(1f, 4f)
-                        if (newScale <= 1f) {
-                            // At 1x: horizontal drags navigate instead of pan.
-                            swipeAccum += pan.x
-                            if (kotlin.math.abs(swipeAccum) > 90f) {
-                                navigateBy(if (swipeAccum < 0) 1 else -1)
-                                swipeAccum = 0f
-                            }
-                            scale = 1f
-                            offsetX = 0f
-                            offsetY = 0f
-                        } else {
-                            scale = newScale
-                            offsetX += pan.x
-                            offsetY += pan.y
-                        }
-                    }
+            // NO safeDrawing padding here: the media canvas must fill the
+            // whole screen (a safe-area inset would leave a black band on
+            // top). The chrome (top bar / bottom strip) applies its own
+            // status/navigation insets individually.
+            .pointerInput(currentIndex, videoFullscreen, pagerState.currentPage) {
+                // Tap toggles the chrome. For IMAGE pages the tap is handled
+                // inside ZoomableImage (onTap → chrome toggle) — registering
+                // here too would double-toggle (on and back off). Only VIDEOS
+                // (and video fullscreen) use this outer tap handler.
+                if (currentItem.type.isVideo) {
+                    detectTapGestures(
+                        onTap = { chromeVisible = !chromeVisible }
+                    )
                 }
             }
     ) {
-        // Main media — the SAME VideoPlayerView composable is used in both
-        // normal and fullscreen modes so the ExoPlayer instance (and playback
-        // position) survives the toggle. Fullscreen hides all browsing chrome
-        // via the !videoFullscreen guards below.
-        when {
-            image.type.isVideo -> VideoPlayerView(
-                uriString = image.uriString,
-                chromeVisible = chromeVisible,
-                fullscreen = videoFullscreen,
-                onToggleFullscreen = {
-                    if (videoFullscreen) {
-                        // exiting fullscreen: make sure browsing chrome is back
-                        chromeVisible = true
+        // Main media — HorizontalPager: items sit side by side, dragging
+        // moves them together (standard ViewPager feel), vertical drags
+        // never trigger navigation. Each page owns its zoom/double-tap.
+        androidx.compose.foundation.pager.HorizontalPager(
+            state = pagerState,
+            key = { images[it].id },
+            beyondViewportPageCount = 1,
+            modifier = Modifier.fillMaxSize()
+        ) { page ->
+            val item = images[page]
+            if (item.type.isVideo) {
+                VideoPlayerView(
+                    uriString = item.uriString,
+                    chromeVisible = chromeVisible && page == pagerState.currentPage,
+                    fullscreen = videoFullscreen,
+                    isCurrentPage = page == pagerState.currentPage,
+                    onToggleFullscreen = {
+                        if (videoFullscreen) {
+                            // exiting fullscreen: make sure browsing chrome is back
+                            chromeVisible = true
+                        }
+                        videoFullscreen = !videoFullscreen
                     }
-                    videoFullscreen = !videoFullscreen
-                }
-            )
-            else -> SubcomposeAsyncImage(
-                model = image.uriString,
-                contentDescription = image.name,
-                contentScale = ContentScale.Fit,
-                onSuccess = { state ->
-                    val d = state.result.drawable
-                    if (d.intrinsicWidth > 0 && d.intrinsicHeight > 0) {
-                        resolvedWidth = d.intrinsicWidth
-                        resolvedHeight = d.intrinsicHeight
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        translationX = offsetX
-                        translationY = offsetY
-                    }
-            )
+                )
+            } else {
+                ZoomableImage(
+                    item = item,
+                    onTap = { chromeVisible = !chromeVisible }
+                )
+            }
         }
 
-        // Prev / Next arrows — shown when navigation is possible in that
-        // direction (currentIndex > 0 / < last). At the subfolder boundary
-        // the delta callback crosses into the adjacent subfolder. Hidden in
-        // video fullscreen (pure play).
-        if (chromeVisible && !videoFullscreen && currentIndex > 0) {
+        // Prev / Next arrows — single chevron = page within the current list;
+        // DOUBLE chevron = crossing into the adjacent subfolder at the
+        // boundary (only shown when such a neighbour actually exists).
+        // Hidden in video fullscreen (pure play).
+        if (chromeVisible && !videoFullscreen && (pagerCurrent > 0 || (pagerCurrent == 0 && canCrossBackward))) {
             IconButton(
                 onClick = { navigateBy(-1) },
                 modifier = Modifier
@@ -288,7 +259,11 @@ fun ImageViewer(
                     .size(48.dp)
             ) {
                 Icon(
-                    Icons.Filled.ChevronLeft,
+                    if (pagerCurrent == 0 && canCrossBackward) {
+                        Icons.Filled.KeyboardDoubleArrowLeft
+                    } else {
+                        Icons.Filled.ChevronLeft
+                    },
                     contentDescription = stringResource(R.string.cd_prev),
                     tint = Color.White,
                     modifier = Modifier
@@ -303,7 +278,7 @@ fun ImageViewer(
                 )
             }
         }
-        if (chromeVisible && !videoFullscreen && currentIndex < images.lastIndex) {
+        if (chromeVisible && !videoFullscreen && (pagerCurrent < images.lastIndex || (pagerCurrent == images.lastIndex && canCrossForward))) {
             IconButton(
                 onClick = { navigateBy(1) },
                 modifier = Modifier
@@ -312,7 +287,11 @@ fun ImageViewer(
                     .size(48.dp)
             ) {
                 Icon(
-                    Icons.Filled.ChevronRight,
+                    if (pagerCurrent == images.lastIndex && canCrossForward) {
+                        Icons.Filled.KeyboardDoubleArrowRight
+                    } else {
+                        Icons.Filled.ChevronRight
+                    },
                     contentDescription = stringResource(R.string.cd_next),
                     tint = Color.White,
                     modifier = Modifier
@@ -335,6 +314,11 @@ fun ImageViewer(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    // Clear status bar AND punch-hole cutout (canvas is
+                    // full-bleed, so the top chrome needs the full top inset)
+                    .windowInsetsPadding(
+                        WindowInsets.safeDrawing.only(WindowInsetsSides.Top)
+                    )
                     .padding(horizontal = 12.dp, vertical = 10.dp)
                     .align(Alignment.TopCenter),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -361,13 +345,13 @@ fun ImageViewer(
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     IconButton(
-                        onClick = { onToggleFavorite(image.id) },
+                        onClick = { onToggleFavorite(currentItem.id) },
                         modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
-                            imageVector = if (image.id in favoriteIds) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                            imageVector = if (currentItem.id in favoriteIds) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                             contentDescription = stringResource(R.string.cd_favorite),
-                            tint = if (image.id in favoriteIds) Color(0xFFEF4444) else Color.White,
+                            tint = if (currentItem.id in favoriteIds) Color(0xFFEF4444) else Color.White,
                             modifier = Modifier
                                 .size(22.dp)
                                 .shadow(
@@ -380,7 +364,7 @@ fun ImageViewer(
                         )
                     }
                     IconButton(
-                        onClick = { onShare?.invoke(image) },
+                        onClick = { onShare?.invoke(currentItem) },
                         modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
@@ -438,7 +422,7 @@ fun ImageViewer(
                                 },
                                 onClick = {
                                     showMoreMenu = false
-                                    onSaveToGallery?.invoke(image)
+                                    onSaveToGallery?.invoke(currentItem)
                                 }
                             )
                         }
@@ -450,12 +434,16 @@ fun ImageViewer(
         // Bottom area — filename row + thumbnail strip for BOTH images and
         // videos (consistent browsing experience). The video control bar
         // lives inside the frame, padded above this area. Hidden in video
-        // fullscreen.
+        // fullscreen. Uses pagerCurrent/currentItem (defined above).
+        val curResolvedW = remember(currentItem.uriString) { mutableIntStateOf(currentItem.width) }
+        val curResolvedH = remember(currentItem.uriString) { mutableIntStateOf(currentItem.height) }
         if (chromeVisible && !videoFullscreen) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
+                    // Clear the navigation bar (canvas is full-bleed)
+                    .navigationBarsPadding()
                     .background(
                         androidx.compose.ui.graphics.Brush.verticalGradient(
                             listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))
@@ -470,14 +458,14 @@ fun ImageViewer(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = image.name,
+                        text = currentItem.name,
                         color = Color.White,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.weight(1f)
                     )
                     Text(
-                        text = stringResource(R.string.dimensions, resolvedWidth, resolvedHeight),
+                        text = stringResource(R.string.dimensions, curResolvedW.intValue, curResolvedH.intValue),
                         color = Color.White.copy(alpha = 0.6f),
                         fontSize = 12.sp
                     )
@@ -549,7 +537,7 @@ fun ImageViewer(
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
                             )
-                            if (idx == currentIndex) {
+                            if (idx == pagerCurrent) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
@@ -608,7 +596,7 @@ fun ImageViewer(
                 Spacer(Modifier.height(16.dp))
 
                 // Current file first
-                DuplicateRow(item = image, isCurrent = true)
+                DuplicateRow(item = currentItem, isCurrent = true)
                 duplicates.forEach { dup ->
                     Spacer(Modifier.height(8.dp))
                     DuplicateRow(item = dup, isCurrent = false)
@@ -711,6 +699,7 @@ private fun VideoPlayerView(
     uriString: String,
     chromeVisible: Boolean,
     fullscreen: Boolean = false,
+    isCurrentPage: Boolean = true,
     onToggleFullscreen: () -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -752,6 +741,14 @@ private fun VideoPlayerView(
         onDispose {
             exoPlayer.removeListener(listener)
             exoPlayer.release()
+        }
+    }
+
+    // Pause when this page is no longer the current one (pager keeps
+    // adjacent pages composed — they must not keep playing).
+    androidx.compose.runtime.LaunchedEffect(isCurrentPage) {
+        if (!isCurrentPage && isPlaying) {
+            exoPlayer.pause()
         }
     }
 
@@ -804,27 +801,43 @@ private fun VideoPlayerView(
         }
 
         // Center play button when paused (independent of chrome).
+        // Full-size button (as before) with a compact accent ring hugging
+        // the glyph — no background disc, soft accent glow.
         if (!isPlaying) {
-            IconButton(
-                onClick = { exoPlayer.play() },
+            Box(
                 modifier = Modifier
                     .align(Alignment.Center)
                     .size(72.dp)
+                    .clip(CircleShape)
+                    .clickable { exoPlayer.play() },
+                contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    Icons.Filled.PlayArrow,
-                    contentDescription = stringResource(R.string.cd_play),
-                    tint = MaterialTheme.colorScheme.primary,
+                // Slim ring, just larger than the glyph
+                Box(
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(56.dp)
                         .shadow(
-                            elevation = 14.dp,
+                            elevation = 10.dp,
                             shape = CircleShape,
-                            clip = true,
-                            ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f),
-                            spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
+                            clip = false,
+                            ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                            spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
                         )
-                )
+                        .clip(CircleShape)
+                        .border(
+                            width = 2.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Filled.PlayArrow,
+                        contentDescription = stringResource(R.string.cd_play),
+                        tint = Color.White,
+                        modifier = Modifier.size(48.dp)
+                    )
+                }
             }
         }
 
@@ -946,4 +959,146 @@ private fun formatTime(ms: Long): String {
     val m = totalSec / 60
     val s = totalSec % 60
     return "%d:%02d".format(m, s)
+}
+
+/**
+ * One image page inside the pager: pinch-zoom (1x–4x), pan, and double-tap
+ * to zoom 2x / restore 1x. Tap is forwarded for chrome toggling.
+ */
+@Composable
+private fun ZoomableImage(
+    item: ImageItem,
+    onTap: () -> Unit
+) {
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    var offsetY by remember { mutableFloatStateOf(0f) }
+    var resolvedW by remember(item.uriString) { mutableIntStateOf(item.width) }
+    var resolvedH by remember(item.uriString) { mutableIntStateOf(item.height) }
+    var viewportW by remember { mutableFloatStateOf(1f) }
+    var viewportH by remember { mutableFloatStateOf(1f) }
+    val scope = rememberCoroutineScope()
+
+    // Minimum zoom that covers the whole viewport (no black band). At 1x the
+    // image is Fit (complete view); this returns the scale that fills BOTH
+    // dimensions, floored at 2x for a sensible double-tap.
+    fun coverScale(): Float {
+        if (resolvedW <= 0 || resolvedH <= 0 || viewportW <= 0f || viewportH <= 0f) return 2f
+        val scaleX = viewportW / resolvedW.toFloat()
+        val scaleY = viewportH / resolvedH.toFloat()
+        val fit = kotlin.math.min(scaleX, scaleY) // Fit's actual zoom
+        val displayW = resolvedW.toFloat() * fit
+        val displayH = resolvedH.toFloat() * fit
+        val need = kotlin.math.max(
+            viewportW / displayW,
+            viewportH / displayH
+        )
+        return kotlin.math.max(2f, need)
+    }
+
+    fun animateTo(targetScale: Float) {
+        scope.launch {
+            androidx.compose.animation.core.animate(
+                initialValue = scale,
+                targetValue = targetScale,
+                animationSpec = androidx.compose.animation.core.tween(220)
+            ) { value, _ ->
+                scale = value
+                if (targetScale <= 1f) {
+                    offsetX = 0f
+                    offsetY = 0f
+                }
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onSizeChanged { size ->
+                viewportW = size.width.toFloat()
+                viewportH = size.height.toFloat()
+            }
+            .pointerInput(item.id) {
+                detectTapGestures(
+                    onDoubleTap = {
+                        animateTo(if (scale <= 1f) coverScale() else 1f)
+                    },
+                    onTap = { onTap() }
+                )
+            }
+            .pointerInput(item.id) {
+                // Custom transform: pinch-zoom + pan, but a single-finger
+                // horizontal drag at 1x is NOT consumed so the pager can
+                // swipe between items (detectTransformGestures would eat it).
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    do {
+                        val event = awaitPointerEvent()
+                        val pressed = event.changes.any { it.pressed }
+                        if (pressed) {
+                            val multi = event.changes.size > 1
+                            if (multi) {
+                                // Two fingers: pinch zoom + pan. The zoom
+                                // floor is coverScale() so any zoomed-in view
+                                // fills the whole viewport (no black band) —
+                                // a plain 1f floor lets wide images show
+                                // letterboxing at 2x.
+                                val zoom = event.calculateZoom()
+                                val pan = event.calculatePan()
+                                val minScale = coverScale()
+                                // Pinch-out always reaches at least coverScale
+                                // (no letterboxing); pinch-in can return to 1x.
+                                val newScale = if (scale * zoom <= 1f) {
+                                    1f
+                                } else {
+                                    (scale * zoom).coerceIn(minScale, 4f)
+                                }
+                                if (newScale <= 1f) {
+                                    scale = 1f
+                                    offsetX = 0f
+                                    offsetY = 0f
+                                } else {
+                                    scale = newScale
+                                    offsetX += pan.x
+                                    offsetY += pan.y
+                                }
+                                event.changes.forEach { it.consume() }
+                            } else if (scale > 1f) {
+                                // Single finger while zoomed: pan the image.
+                                val pan = event.calculatePan()
+                                offsetX += pan.x
+                                offsetY += pan.y
+                                event.changes.forEach { it.consume() }
+                            }
+                            // scale == 1f single finger: leave unconsumed so
+                            // the pager handles horizontal swiping.
+                        }
+                    } while (pressed)
+                }
+            }
+    ) {
+        // Keep 1x as a complete Fit view (no cropping). Double-tap zooms to
+        // coverScale() which fills the whole viewport (no black band).
+        SubcomposeAsyncImage(
+            model = item.uriString,
+            contentDescription = item.name,
+            contentScale = ContentScale.Fit,
+            onSuccess = { state ->
+                val d = state.result.drawable
+                if (d.intrinsicWidth > 0 && d.intrinsicHeight > 0) {
+                    resolvedW = d.intrinsicWidth
+                    resolvedH = d.intrinsicHeight
+                }
+            },
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = offsetX
+                    translationY = offsetY
+                }
+        )
+    }
 }

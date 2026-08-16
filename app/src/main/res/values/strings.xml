@@ -61,6 +61,7 @@
     <string name="cd_fullscreen">Fullscreen</string>
     <string name="cd_mute">Mute</string>
     <string name="cd_unmute">Unmute</string>
+    <string name="cd_back_to_top">Back to top</string>
 
     <!-- Duplicate files -->
     <string name="duplicate_files">%1$d copies of this file</string>

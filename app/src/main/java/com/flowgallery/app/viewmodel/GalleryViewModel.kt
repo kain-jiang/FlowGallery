@@ -280,9 +280,28 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update { it.copy(pillAlignmentLeft = left) }
     }
 
+    /** Clear the last scan/connection error (after it was shown as a toast). */
+    fun clearError() = _uiState.update { it.copy(error = null) }
+
     /** Set search media-type filter (null = all). */
     fun setMediaTypeFilter(type: String?) =
         _uiState.update { it.copy(mediaTypeFilter = type) }
+
+    /**
+     * True when the viewer can cross into the adjacent subfolder in [delta]
+     * direction: the current view must be a subfolder (not All / root) and a
+     * non-empty neighbour must exist. Used to show the double-arrow affordance.
+     */
+    fun canCrossViewer(delta: Int): Boolean {
+        val st = _uiState.value
+        val subId = st.viewer.subFolderId ?: return false
+        val subs = orderedSubs(st)
+        val pos = subs.indexOfFirst { it.id == subId }
+        if (pos < 0) return false
+        val targetPos = pos + delta
+        if (targetPos !in subs.indices) return false
+        return subs[targetPos].imageCount > 0
+    }
 
     /** Set home grid sort mode (persisted). */
     fun setSortMode(mode: SortMode) {
