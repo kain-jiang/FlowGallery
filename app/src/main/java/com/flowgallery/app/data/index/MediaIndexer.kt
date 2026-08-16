@@ -62,7 +62,12 @@ class MediaIndexer(
                 cached.sizeBytes == item.sizeBytes &&
                 cached.modifiedTime == item.modifiedTime
             ) {
-                // unchanged — reuse without touching the file
+                // unchanged — reuse without touching the file, but backfill
+                // the folderId for entries created before it existed
+                // (clear → re-index must yield correct per-folder counts).
+                if (cached.folderId < 0) {
+                    result[item.uriString] = cached.copy(folderId = item.folderId)
+                }
             } else {
                 val entry = extract(item)
                 val bad = entry.width <= 0 && entry.height <= 0 && entry.durationMs == null
