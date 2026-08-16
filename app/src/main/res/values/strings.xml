@@ -31,6 +31,7 @@
     <string name="index_stat_never">Never</string>
     <string name="index_what_title">What is the index?</string>
     <string name="index_what_body">The index extracts metadata (dimensions, video duration, content hash) from your folders. The home screen uses it for correct image ratios, HD/SD badges, sorting and duplicate detection — and it only touches new or changed files, so re-running is fast.</string>
+    <string name="index_auto_notice">Indexing new content…</string>
     <string name="index_folders_title">Folders to index</string>
     <string name="index_folders_empty">No folders added — add folders in Settings first</string>
     <string name="index_select_all">Select all</string>

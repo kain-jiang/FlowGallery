@@ -49,8 +49,12 @@ class MediaIndexer(private val context: Context) {
                 return@withContext result to extracted
             }
             val cached = existing[item.uriString]
+            // Reuse only COMPLETE entries. A zero-dimension entry (failed
+            // extract) would otherwise be reused forever because its
+            // size/mtime match — the broken metadata never heals.
             if (!force &&
                 cached != null &&
+                cached.width > 0 && cached.height > 0 &&
                 cached.sizeBytes == item.sizeBytes &&
                 cached.modifiedTime == item.modifiedTime
             ) {

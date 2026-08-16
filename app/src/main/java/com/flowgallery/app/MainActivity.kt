@@ -181,6 +181,17 @@ private fun MainScaffold(
         }
     }
 
+    // One-shot index notice ("indexing new content…") as a toast.
+    val indexNotice = state.indexNotice
+    androidx.compose.runtime.LaunchedEffect(indexNotice) {
+        if (indexNotice != null) {
+            android.widget.Toast.makeText(
+                uiContext, indexNotice, android.widget.Toast.LENGTH_SHORT
+            ).show()
+            viewModel.clearIndexNotice()
+        }
+    }
+
     var showFolderModal by remember { mutableStateOf(false) }
     var folderToRemove by remember { mutableStateOf<Folder?>(null) }
     var folderToEditType by remember { mutableStateOf<Folder?>(null) }

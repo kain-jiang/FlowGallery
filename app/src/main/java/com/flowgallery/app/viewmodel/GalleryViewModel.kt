@@ -38,6 +38,8 @@ data class GalleryUiState(
     val viewer: ViewerState = ViewerState(),
     val isRefreshing: Boolean = false,
     val error: String? = null,
+    /** one-shot user notice (shown as a toast, then cleared) */
+    val indexNotice: String? = null,
     /** Default portrait grid columns (2/3/4), set in Settings (FR-1). */
     val portraitColumns: Int = 2,
     /** Default landscape grid columns (2/3/4), set in Settings (FR-1). */
@@ -213,25 +215,46 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                     repository.updateFolderSubFolders(res.folderId, res.subFolders, res.items.size)
                 }
                 val folders = repository.loadFolders()
+                // Fall back to previously-known dimensions while the index
+                // heals: applyIndex() only fills COMPLETE entries, so items
+                // whose index entry is broken keep their last good size
+                // instead of flashing to 0.
+                val oldByUri = _uiState.value.images.associateBy { it.uriString }
+                val indexedImages = applyIndex(images).map { item ->
+                    if (item.width > 0 && item.height > 0) item
+                    else oldByUri[item.uriString]?.takeIf { it.width > 0 && it.height > 0 } ?: item
+                }
                 _uiState.update {
                     it.copy(
-                        // Apply the index IMMEDIATELY — otherwise the fresh
-                        // scan's bare items (width=0) would flash wrong
-                        // ratios/badges until the background index finishes.
-                        images = applyIndex(images),
+                        images = indexedImages,
                         folders = folders,
                         isRefreshing = false
                     )
                 }
-                // Persist so the next launch shows content instantly —
-                // enriched with any indexed metadata (never store bare items
-                // over previously saved dimensions).
-                repository.saveScanCache(applyIndex(images))
-                // Incremental metadata indexing (dimensions / duration /
-                // content hash) — reused entries are free, only new/changed
-                // files are touched. Runs in the background; the UI streams
-                // the enriched items in as they're indexed.
-                indexImagesInBackground(images)
+                // Persist so the next launch shows content instantly — with
+                // the best-known dimensions (never store bare items over
+                // previously saved sizes).
+                repository.saveScanCache(indexedImages)
+                // Diagnostic: why does the fresh scan match so few entries?
+                if (images.isNotEmpty()) {
+                    val sample = images.first().uriString
+                    val indexKey = mediaIndex.keys.firstOrNull()
+                    android.util.Log.d("IndexMatch", "scanUri=$sample")
+                    android.util.Log.d("IndexMatch", "indexUri=$indexKey")
+                }
+                // Auto-index only when there IS new/changed content — if
+                // everything is already indexed, skip it entirely.
+                val missing = needsIndexing(images)
+                if (missing) {
+                    // Tell the user the background index is running.
+                    val notice = getApplication<Application>().getString(
+                        com.flowgallery.app.R.string.index_auto_notice
+                    )
+                    _uiState.update {
+                        it.copy(indexNotice = notice)
+                    }
+                    indexImagesInBackground(images)
+                }
                 // Compute All-view dedup ids in the background.
                 computeDedupInBackground(images)
             }.onFailure { e ->
@@ -474,6 +497,26 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Clear the last scan/connection error (after it was shown as a toast). */
     fun clearError() = _uiState.update { it.copy(error = null) }
+
+    /** Clear the one-shot index notice after it was toasted. */
+    fun clearIndexNotice() = _uiState.update { it.copy(indexNotice = null) }
+
+    /** True when there is genuinely NEW content to index, or a failed entry
+     *  is due for a retry. Failed extracts (zero dimensions) are kept but
+     *  throttled to one retry per day — otherwise every launch would re-index
+     *  and toast forever. */
+    private fun needsIndexing(items: List<ImageItem>): Boolean =
+        items.any { item ->
+            val e = mediaIndex[item.uriString]
+            when {
+                e == null -> true
+                e.sizeBytes != item.sizeBytes || e.modifiedTime != item.modifiedTime -> true
+                // Broken entry: retry at most once a day.
+                (e.width <= 0 || e.height <= 0) &&
+                    System.currentTimeMillis() - e.indexedAt > 24 * 3600_000L -> true
+                else -> false
+            }
+        }
 
     /** Set search media-type filter (null = all). */
     fun setMediaTypeFilter(type: String?) =
