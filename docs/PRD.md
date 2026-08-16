@@ -3,8 +3,8 @@
 | 项目 | 内容 |
 |---|---|
 | 产品名称 | FlowGallery（瀑布画廊） |
-| 文档版本 | v1.6 |
-| 状态 | 已评审（功能全部实现，M1–M3 ✅；v1.1.0 已发布，持续 UI 打磨 + 性能优化） |
+| 文档版本 | v1.7 |
+| 状态 | 已评审（功能全部实现，M1–M3 ✅；v1.1.0 已发布，v1.1.1 性能优化 + 元数据索引进行中） |
 | 设计稿 | `flowgallery-android.html`（可交互原型） |
 | 参考产品 | macOS FlowVision |
 | 平台 | Android（手机） |
@@ -609,9 +609,17 @@ GalleryUiState
 - 中央播放按钮高级化（紫环+光晕+白三角）、删除弹窗项目化、错误 Toast、空状态引导、选择器简化、导航栏过渡动画
 - 发布流程：tag `v*` → GitHub Actions 自动构建签名 APK → Release（见 `docs/RELEASE.md`）
 
-**v1.1.1（性能优化，main `6e838a4`）**：
-- **扫描结果缓存**：上次扫描结果持久化（`filesDir/scan_cache.json`）→ 启动秒显内容、后台自动刷新（解决"每次进 App 重新加载"痛点）；维度解析完成后更新缓存（重启即有 HD/SD 徽章与图片比例）
-- ArrowBack 弃用修复（AutoMirrored）
+**v1.1.1（性能优化 + 元数据索引，main `9effdad`）**：
+- **扫描结果缓存**：上次扫描结果持久化（`filesDir/scan_cache.json`）→ 启动秒显内容、后台自动刷新；维度解析完成后更新缓存（重启即有 HD/SD 徽章与图片比例）
+- **元数据索引架构**（`data/index/`：IndexEntry / IndexStore / MediaIndexer）：
+  - 增量索引：size+mtime 未变直接复用，只提取新增/变更文件（宽高、视频时长、内容哈希）
+  - 首页直接消费索引（图片比例、HD/SD 徽章、排序、去重立即生效）；去重优先用索引 hash（免重算）
+  - **视频分辨率**：MediaMetadataRetriever 提取 `VIDEO_WIDTH/HEIGHT` + 时长（一次读取）
+- **索引 Tab**（底部导航第 4 个 Tab「⚡ 索引」）：
+  - 开始索引（增量）/ 重新索引（全量强制）/ 暂停 / 继续 / 取消
+  - 进度：已索引数/总数 + 百分比 + 新增条数；统计：已索引条目数 + 上次索引时间
+  - **按文件夹选择性索引**（自定义紫色勾选框，全选/清空，索引运行时锁定选择）
+- 修复：查看器分辨率不刷新（remember 缓存导致索引完成后仍显示旧值）、ArrowBack/VolumeOff/Sort 弃用（AutoMirrored）
 
 ---
 
