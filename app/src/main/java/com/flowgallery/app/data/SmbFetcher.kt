@@ -44,26 +44,13 @@ class SmbFetcher(
         val config = SmbConfig.fromUrl(url) ?: throw IllegalStateException("bad smb url")
         val mime = mimeFromUrl(url)
 
-        // VIDEOS: download to a temp file then let SmartVideoFrameDecoder
-        // read frames LOCALLY — streaming seek over SMB is far too slow for
-        // MediaMetadataRetriever's random access (frames never arrive).
-        // Local decoding is fast; the disk cache reuses it afterwards.
-        downloadSemaphore.acquire()
-        try {
-            val tmp = java.io.File.createTempFile("smb_", ".bin", options.context.cacheDir)
-            try {
-                val file = SmbFile(url, SmbContexts.context(config))
-                file.inputStream.use { input ->
-                    tmp.outputStream().use { output -> input.copyTo(output) }
-                }
-                val imageSource = SmbImageSourceFactory.create(tmp)
-                return SourceResult(imageSource, mime, DataSource.DISK)
-            } catch (e: Exception) {
-                tmp.delete()
-                throw e
-            }
-        } finally {
-            downloadSemaphore.release()
+        // VIDEOS: return the stream directly — SmartVideoFrameDecoder reads
+        // frames via SmbMediaDataSource on demand (seek+read), no download.
+        if (mime?.startsWith("video/") == true) {
+            val file = SmbFile(url, SmbContexts.context(config))
+            val stream = file.inputStream
+            val imageSource = SmbImageSourceFactory.create(stream, options.context)
+            return SourceResult(imageSource, mime, DataSource.DISK)
         }
 
         // IMAGES: download fully to a temp file, then decode locally.

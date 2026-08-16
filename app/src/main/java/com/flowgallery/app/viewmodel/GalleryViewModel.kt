@@ -40,6 +40,8 @@ data class GalleryUiState(
     val error: String? = null,
     /** one-shot user notice (shown as a toast, then cleared) */
     val indexNotice: String? = null,
+    /** background auto-index after scans (Settings toggle) */
+    val autoIndex: Boolean = true,
     /** Default portrait grid columns (2/3/4), set in Settings (FR-1). */
     val portraitColumns: Int = 2,
     /** Default landscape grid columns (2/3/4), set in Settings (FR-1). */
@@ -60,11 +62,13 @@ data class GalleryUiState(
     val mediaTypeFilter: String? = null
 )
 
-/** State of the manual indexing job (Index tab). */
+/** State of the indexing job (Index tab) — manual AND background auto. */
 data class IndexJobState(
     val running: Boolean = false,
     val paused: Boolean = false,
     val force: Boolean = false,
+    /** true when the running job is the background auto-index */
+    val isAuto: Boolean = false,
     val done: Int = 0,
     val total: Int = 0,
     val extracted: Int = 0,
@@ -109,7 +113,8 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                 sortMode = savedSort,
                 hdThumbnails = prefs.getBoolean(KEY_HD_THUMBNAILS, true),
                 monetColors = prefs.getBoolean(KEY_MONET_COLORS, false),
-                pillAlignmentLeft = prefs.getBoolean(KEY_PILL_ALIGNMENT_LEFT, false)
+                pillAlignmentLeft = prefs.getBoolean(KEY_PILL_ALIGNMENT_LEFT, false),
+                autoIndex = prefs.getBoolean(KEY_AUTO_INDEX, true)
             )
         }
         // Load the metadata index, then show the last cached scan immediately
@@ -250,10 +255,10 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                     android.util.Log.d("IndexMatch", "scanUri=$sample")
                     android.util.Log.d("IndexMatch", "indexUri=$indexKey")
                 }
-                // Auto-index only when there IS new/changed content — if
-                // everything is already indexed, skip it entirely.
+                // Auto-index only when enabled AND there is new/changed
+                // content (throttled retries) — otherwise skip it entirely.
                 val missing = needsIndexing(images)
-                if (missing) {
+                if (missing && _uiState.value.autoIndex) {
                     // Tell the user the background index is running.
                     val notice = getApplication<Application>().getString(
                         com.flowgallery.app.R.string.index_auto_notice
@@ -288,9 +293,33 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun indexImagesInBackground(images: List<ImageItem>) {
         viewModelScope.launch(Dispatchers.IO) {
-            val (newIndex, _, _) = mediaIndexer.merge(images, mediaIndex)
+            // Reflect the background auto-index on the Index tab.
+            _indexJob.update {
+                it.copy(running = true, isAuto = true, paused = false, done = 0, total = images.size)
+            }
+            val (newIndex, extracted, failed) = mediaIndexer.merge(
+                images, mediaIndex,
+                onProgress = { done, total ->
+                    _indexJob.update { it.copy(done = done, total = total) }
+                }
+            )
             mediaIndex = newIndex
             indexStore.save(newIndex.values)
+            _indexJob.update {
+                it.copy(
+                    running = false,
+                    isAuto = false,
+                    entryCount = newIndex.size,
+                    lastIndexedAt = System.currentTimeMillis()
+                )
+            }
+            // Report success/failure counts (even when zero).
+            val app = getApplication<Application>()
+            val notice = app.getString(
+                com.flowgallery.app.R.string.index_done_notice,
+                extracted, failed
+            )
+            _uiState.update { it.copy(indexNotice = notice) }
             val enriched = applyIndex(images)
             val enrichedById = enriched.associateBy { it.id }
             // Update in chunks so the UI streams results progressively.
@@ -363,6 +392,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                 it.copy(
                     running = true,
                     paused = false,
+                    isAuto = false,
                     force = force,
                     done = 0,
                     total = items.size,
@@ -531,6 +561,13 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update { it.copy(pillAlignmentLeft = left) }
     }
 
+    /** Toggle background auto-index after scans, persisted. */
+    fun toggleAutoIndex() {
+        val newVal = !_uiState.value.autoIndex
+        prefs.edit().putBoolean(KEY_AUTO_INDEX, newVal).apply()
+        _uiState.update { it.copy(autoIndex = newVal) }
+    }
+
     /** Clear the last scan/connection error (after it was shown as a toast). */
     fun clearError() = _uiState.update { it.copy(error = null) }
 
@@ -552,6 +589,14 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                     System.currentTimeMillis() - e.indexedAt > 24 * 3600_000L -> true
                 else -> false
             }
+        }
+
+    /** Number of items of [folderId] with a COMPLETE index entry. */
+    fun indexedCount(folderId: Long): Int =
+        _uiState.value.images.count { img ->
+            img.folderId == folderId && (
+                mediaIndex[img.uriString]?.let { it.width > 0 && it.height > 0 } == true
+                )
         }
 
     /** Set search media-type filter (null = all). */
@@ -745,5 +790,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         const val KEY_HD_THUMBNAILS = "hd_thumbnails"
         const val KEY_MONET_COLORS = "monet_colors"
         const val KEY_PILL_ALIGNMENT_LEFT = "pill_alignment_left"
+        const val KEY_INDEX_CONCURRENCY = "index_concurrency"
+        const val KEY_AUTO_INDEX = "auto_index"
     }
 }

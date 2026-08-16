@@ -143,6 +143,7 @@ private fun IndexStatusCard(
             Text(
                 text = stringResource(
                     when {
+                        running && !paused && job.isAuto -> R.string.index_status_auto
                         running && !paused -> R.string.index_status_running
                         running -> R.string.index_status_paused
                         else -> R.string.index_status_idle
@@ -211,9 +212,9 @@ private fun IndexStatusCard(
             }
         }
 
-        // Actions
-        Spacer(Modifier.height(16.dp))
-        if (running) {
+        // Actions — auto-index has no controls, just progress
+        if (running && !job.isAuto) {
+            Spacer(Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -237,9 +238,10 @@ private fun IndexStatusCard(
             }
         } else {
             // Row 1: clear + re-index; Row 2: incremental index (full width)
+            Spacer(Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 ActionButton(
                     label = stringResource(R.string.index_clear),
@@ -256,7 +258,7 @@ private fun IndexStatusCard(
                     modifier = Modifier.weight(1f)
                 )
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
             ActionButton(
                 label = stringResource(R.string.index_start),
                 icon = Icons.Filled.Bolt,
@@ -381,9 +383,7 @@ private fun FolderSelectionCard(
                             .padding(start = 4.dp)
                     )
                     Text(
-                        text = stringResource(
-                            R.string.image_count, folder.imageCount
-                        ),
+                        text = "${viewModel.indexedCount(folder.id)}/${folder.imageCount}",
                         color = scheme.onSurfaceVariant,
                         fontSize = 12.sp
                     )

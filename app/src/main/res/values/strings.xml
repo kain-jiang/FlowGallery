@@ -18,6 +18,7 @@
     <!-- Index tab -->
     <string name="index_status_idle">Idle</string>
     <string name="index_status_running">Indexing…</string>
+    <string name="index_status_auto">Auto-indexing…</string>
     <string name="index_status_paused">Paused</string>
     <string name="index_progress">%1$d/%2$d</string>
     <string name="index_progress_detail">%1$d%% · %2$d new entries</string>
@@ -142,8 +143,10 @@
     <string name="settings_title">Settings</string>
     <string name="section_folders">Folders</string>
     <string name="section_display">Display</string>
-    <string name="setting_quality">Image Quality</string>
-    <string name="setting_quality_desc">High-quality thumbnails</string>
+    <string name="setting_quality">HD Thumbnails</string>
+    <string name="setting_quality_desc">Load high-definition thumbnails</string>
+    <string name="setting_auto_index">Auto index</string>
+    <string name="setting_auto_index_desc">Index new content in the background after scans</string>
     <string name="setting_monet">Monet Colors</string>
     <string name="setting_monet_desc">Material You wallpaper colors (Android 12+)</string>
     <string name="setting_pill_alignment">Floating Pills Position</string>

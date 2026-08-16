@@ -18,6 +18,7 @@
     <!-- Index tab -->
     <string name="index_status_idle">空闲</string>
     <string name="index_status_running">索引中…</string>
+    <string name="index_status_auto">自动索引中…</string>
     <string name="index_status_paused">已暂停</string>
     <string name="index_progress">%1$d/%2$d</string>
     <string name="index_progress_detail">%1$d%% · 新增 %2$d 条</string>
@@ -144,6 +145,8 @@
     <string name="section_display">显示</string>
     <string name="setting_quality">图片质量</string>
     <string name="setting_quality_desc">高清缩略图</string>
+    <string name="setting_auto_index">自动索引</string>
+    <string name="setting_auto_index_desc">扫描后后台索引新内容</string>
     <string name="setting_monet">莫奈取色</string>
     <string name="setting_monet_desc">跟随壁纸动态取色（Android 12+）</string>
     <string name="setting_pill_alignment">悬浮胶囊位置</string>
