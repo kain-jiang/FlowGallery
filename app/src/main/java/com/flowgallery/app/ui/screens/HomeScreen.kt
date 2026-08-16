@@ -38,7 +38,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -651,7 +651,7 @@ private fun SortMenuButton(
     Box {
         IconButton(onClick = { expanded = true }) {
             Icon(
-                Icons.Filled.Sort,
+                Icons.AutoMirrored.Filled.Sort,
                 contentDescription = stringResource(R.string.cd_sort),
                 tint = if (current != SortMode.DEFAULT) scheme.primary else scheme.onSurfaceVariant
             )
@@ -675,7 +675,7 @@ private fun SortMenuButton(
                     SortMode.QUALITY -> stringResource(R.string.sort_quality)
                 }
                 val icon = when (mode) {
-                    SortMode.DEFAULT -> Icons.Filled.Sort
+                    SortMode.DEFAULT -> Icons.AutoMirrored.Filled.Sort
                     SortMode.LATEST -> Icons.Filled.Schedule
                     SortMode.OLDEST -> Icons.Filled.Schedule
                     SortMode.LARGEST -> Icons.Filled.ExpandMore

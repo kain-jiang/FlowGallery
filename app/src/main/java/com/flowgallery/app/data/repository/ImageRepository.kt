@@ -411,7 +411,9 @@ class ImageRepository(private val context: Context) {
 
             val hashById = mutableMapOf<Long, String>()
             for (item in candidates) {
-                val hash = resolver.contentHash(Uri.parse(item.uriString))
+                // Prefer the indexed hash (no IO); fall back to computing it.
+                val hash = item.contentHash
+                    ?: resolver.contentHash(Uri.parse(item.uriString))
                 if (hash != null) hashById[item.id] = hash
             }
 

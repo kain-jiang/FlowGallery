@@ -4,6 +4,9 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.flowgallery.app.data.index.IndexEntry
+import com.flowgallery.app.data.index.IndexStore
+import com.flowgallery.app.data.index.MediaIndexer
 import com.flowgallery.app.data.model.Folder
 import com.flowgallery.app.data.model.FolderType
 import com.flowgallery.app.data.model.GalleryTab
@@ -55,15 +58,41 @@ data class GalleryUiState(
     val mediaTypeFilter: String? = null
 )
 
+/** State of the manual indexing job (Index tab). */
+data class IndexJobState(
+    val running: Boolean = false,
+    val paused: Boolean = false,
+    val force: Boolean = false,
+    val done: Int = 0,
+    val total: Int = 0,
+    val extracted: Int = 0,
+    val lastIndexedAt: Long = 0L,
+    val entryCount: Int = 0,
+    /** folder ids to index; null = ALL selected folders */
+    val indexFolders: Set<Long>? = null
+)
+
 class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repository = ImageRepository(app)
+    private val indexStore = IndexStore(app)
+    private val mediaIndexer = MediaIndexer(app)
+
+    /** In-memory metadata index (uri → entry). Loaded at startup. */
+    private var mediaIndex: Map<String, IndexEntry> = emptyMap()
 
     private val _uiState = MutableStateFlow(GalleryUiState())
     val uiState: StateFlow<GalleryUiState> = _uiState.asStateFlow()
 
     private val _favorites = MutableStateFlow<Set<Long>>(loadFavorites())
     val favorites: StateFlow<Set<Long>> = _favorites.asStateFlow()
+
+    /** Manual index job state (Index tab). */
+    private val _indexJob = MutableStateFlow(IndexJobState())
+    val indexJob: StateFlow<IndexJobState> = _indexJob.asStateFlow()
+
+    /** Cancellation flag for the running manual index job. */
+    private val indexCancelRequested = java.util.concurrent.atomic.AtomicBoolean(false)
 
     init {
         val savedSort = prefs.getString(KEY_SORT_MODE, null)?.let { name ->
@@ -81,11 +110,18 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                 pillAlignmentLeft = prefs.getBoolean(KEY_PILL_ALIGNMENT_LEFT, false)
             )
         }
-        // Show the last cached scan immediately (no empty flash / re-load
-        // wait), then refresh in the background.
+        // Load the metadata index, then show the last cached scan immediately
+        // (no empty flash / re-load wait), then refresh in the background.
+        mediaIndex = indexStore.load()
+        _indexJob.update {
+            it.copy(
+                entryCount = mediaIndex.size,
+                lastIndexedAt = mediaIndex.values.maxOfOrNull { e -> e.indexedAt } ?: 0L
+            )
+        }
         val cached = repository.loadScanCache()
         if (cached.isNotEmpty()) {
-            _uiState.update { it.copy(images = cached) }
+            _uiState.update { it.copy(images = applyIndex(cached)) }
         }
         refreshFolders()
     }
@@ -186,10 +222,11 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 // Persist so the next launch shows content instantly.
                 repository.saveScanCache(images)
-                // Resolve real dimensions in the background so HD/SD badges,
-                // stats and masonry ratios become accurate (zero-IO scan
-                // leaves width/height at 0).
-                resolveDimensionsInBackground(images)
+                // Incremental metadata indexing (dimensions / duration /
+                // content hash) — reused entries are free, only new/changed
+                // files are touched. Runs in the background; the UI streams
+                // the enriched items in as they're indexed.
+                indexImagesInBackground(images)
                 // Compute All-view dedup ids in the background.
                 computeDedupInBackground(images)
             }.onFailure { e ->
@@ -208,26 +245,161 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Background dimension resolution, batched to avoid excessive recomposition. */
-    private fun resolveDimensionsInBackground(images: List<ImageItem>) {
+    /**
+     * Background incremental index pass: merge scan items with the persisted
+     * index (only new/changed files get metadata extracted), persist, then
+     * stream the enriched items into the UI.
+     */
+    private fun indexImagesInBackground(images: List<ImageItem>) {
         viewModelScope.launch(Dispatchers.IO) {
-            val resolved = repository.resolveDimensions(images)
-            // Update in chunks so the UI streams results progressively
-            val chunk = 40
-            for (i in resolved.indices step chunk) {
-                val end = (i + chunk).coerceAtMost(resolved.size)
-                val partial = resolved.subList(0, end).associateBy { it.id }
+            val (newIndex, _) = mediaIndexer.merge(images, mediaIndex)
+            mediaIndex = newIndex
+            indexStore.save(newIndex.values)
+            val enriched = applyIndex(images)
+            val enrichedById = enriched.associateBy { it.id }
+            // Update in chunks so the UI streams results progressively.
+            val chunk = 60
+            for (i in enriched.indices step chunk) {
+                val end = (i + chunk).coerceAtMost(enriched.size)
                 _uiState.update { st ->
-                    st.copy(images = st.images.map { partial[it.id] ?: it })
+                    st.copy(images = st.images.map { enrichedById[it.id] ?: it })
                 }
-                if (end < resolved.size) {
-                    kotlinx.coroutines.delay(50)
+                if (end < enriched.size) {
+                    kotlinx.coroutines.delay(30)
                 }
             }
-            // Persist the resolved dimensions with the scan cache.
-            repository.saveScanCache(
-                _uiState.value.images.map { it.copy(duplicates = emptyList()) }
-            )
+            // Persist enriched items (dimensions included) for next launch.
+            repository.saveScanCache(enriched)
+        }
+    }
+
+    /** Fill items with metadata from the in-memory index. */
+    private fun applyIndex(items: List<ImageItem>): List<ImageItem> =
+        items.map { item ->
+            val e = mediaIndex[item.uriString] ?: return@map item
+            if (e.width > 0 || e.height > 0 || e.durationMs != null || e.contentHash != null) {
+                item.copy(
+                    width = e.width,
+                    height = e.height,
+                    durationMs = e.durationMs ?: item.durationMs,
+                    contentHash = e.contentHash
+                )
+            } else item
+        }
+
+    // ------------------------------------------------------------- index job
+
+    /**
+     * Start a manual full index over all selected folders (Index tab).
+     * [force] re-extracts every file ("re-index"); otherwise only new or
+     * changed files are touched. Progress is reported via [indexJob].
+     */
+    fun startIndex(force: Boolean = false) {
+        if (_indexJob.value.running) return
+        viewModelScope.launch(Dispatchers.IO) {
+            indexCancelRequested.set(false)
+            // Respect the per-folder selection (null = all selected folders).
+            val selection = _indexJob.value.indexFolders
+            val folders = _uiState.value.folders.filter {
+                it.isSelected && (selection == null || it.id in selection)
+            }
+            if (folders.isEmpty()) {
+                _indexJob.update { it.copy(running = false) }
+                return@launch
+            }
+            // File listing is cheap; metadata extraction is the slow part.
+            val items = runCatching { repository.scanAll(folders) }
+                .getOrElse { emptyList() }
+                .flatMap { it.items }
+            if (indexCancelRequested.get()) {
+                _indexJob.update { it.copy(running = false, paused = false) }
+                return@launch
+            }
+            _indexJob.update {
+                it.copy(
+                    running = true,
+                    paused = false,
+                    force = force,
+                    done = 0,
+                    total = items.size,
+                    extracted = 0
+                )
+            }
+            val (newIndex, extracted) = try {
+                mediaIndexer.merge(
+                    items = items,
+                    existing = if (force) emptyMap() else mediaIndex,
+                    force = force
+                ) { done, total ->
+                    // Pause support (onProgress runs on the IO dispatcher —
+                    // Thread.sleep is fine here).
+                    while (_indexJob.value.paused) {
+                        Thread.sleep(150)
+                    }
+                    if (indexCancelRequested.get()) {
+                        throw kotlinx.coroutines.CancellationException("index cancelled")
+                    }
+                    _indexJob.update {
+                        it.copy(done = done, total = total)
+                    }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Cancelled by the user — keep what was already indexed.
+                _indexJob.update { it.copy(running = false, paused = false) }
+                return@launch
+            }
+            if (indexCancelRequested.get()) {
+                _indexJob.update { it.copy(running = false, paused = false) }
+                return@launch
+            }
+            mediaIndex = newIndex
+            indexStore.save(newIndex.values)
+            _indexJob.update {
+                it.copy(
+                    running = false,
+                    paused = false,
+                    extracted = extracted,
+                    entryCount = newIndex.size,
+                    lastIndexedAt = System.currentTimeMillis()
+                )
+            }
+            // Refresh the home grid with the enriched metadata.
+            val enriched = applyIndex(_uiState.value.images)
+            _uiState.update { st -> st.copy(images = enriched) }
+            repository.saveScanCache(enriched)
+        }
+    }
+
+    /** Toggle pause/resume of the running index job. */
+    fun toggleIndexPause() {
+        if (!_indexJob.value.running) return
+        _indexJob.update { it.copy(paused = !it.paused) }
+    }
+
+    /** Cancel the running index job (keeps already-indexed entries). */
+    fun cancelIndex() {
+        if (!_indexJob.value.running) return
+        indexCancelRequested.set(true)
+        _indexJob.update { it.copy(running = false, paused = false) }
+    }
+
+    /**
+     * Toggle a folder in/out of the index selection. null selection means
+     * "all selected folders"; unchecking the first folder materializes the
+     * set as "everything except it", so the semantics stay intuitive.
+     */
+    fun toggleIndexFolder(id: Long) {
+        val all = _uiState.value.folders.filter { it.isSelected }.map { it.id }.toSet()
+        val cur = _indexJob.value.indexFolders
+        val effective = cur ?: all
+        val newSet = if (id in effective) effective - id else effective + id
+        _indexJob.update { it.copy(indexFolders = newSet) }
+    }
+
+    /** Select all (null = follow all selected folders) or none (empty set). */
+    fun setAllIndexFolders(selectAll: Boolean) {
+        _indexJob.update {
+            it.copy(indexFolders = if (selectAll) null else emptySet())
         }
     }
 

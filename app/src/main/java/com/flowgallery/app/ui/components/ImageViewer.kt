@@ -52,8 +52,8 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -435,8 +435,10 @@ fun ImageViewer(
         // videos (consistent browsing experience). The video control bar
         // lives inside the frame, padded above this area. Hidden in video
         // fullscreen. Uses pagerCurrent/currentItem (defined above).
-        val curResolvedW = remember(currentItem.uriString) { mutableIntStateOf(currentItem.width) }
-        val curResolvedH = remember(currentItem.uriString) { mutableIntStateOf(currentItem.height) }
+        // NOTE: read width/height directly from the item — remember() would
+        // cache stale values when the background index enriches items later.
+        val curResolvedW = currentItem.width
+        val curResolvedH = currentItem.height
         if (chromeVisible && !videoFullscreen) {
             Column(
                 modifier = Modifier
@@ -465,7 +467,7 @@ fun ImageViewer(
                         modifier = Modifier.weight(1f)
                     )
                     Text(
-                        text = stringResource(R.string.dimensions, curResolvedW.intValue, curResolvedH.intValue),
+                        text = stringResource(R.string.dimensions, curResolvedW, curResolvedH),
                         color = Color.White.copy(alpha = 0.6f),
                         fontSize = 12.sp
                     )
@@ -913,7 +915,7 @@ private fun VideoPlayerView(
                     modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
-                        imageVector = if (muted) Icons.Filled.VolumeOff else Icons.Filled.VolumeUp,
+                        imageVector = if (muted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
                         contentDescription = stringResource(
                             if (muted) R.string.cd_unmute else R.string.cd_mute
                         ),

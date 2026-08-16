@@ -7,6 +7,28 @@
     <string name="tab_search">搜索</string>
     <string name="tab_favorites">收藏</string>
     <string name="tab_settings">设置</string>
+    <string name="tab_index">索引</string>
+
+    <!-- Index tab -->
+    <string name="index_status_idle">空闲</string>
+    <string name="index_status_running">索引中…</string>
+    <string name="index_status_paused">已暂停</string>
+    <string name="index_progress">%1$d/%2$d</string>
+    <string name="index_progress_detail">%1$d%% · 新增 %2$d 条</string>
+    <string name="index_start">开始索引</string>
+    <string name="index_reindex">重新索引</string>
+    <string name="index_pause">暂停</string>
+    <string name="index_resume">继续</string>
+    <string name="index_cancel">取消</string>
+    <string name="index_stat_entries">已索引条目</string>
+    <string name="index_stat_last">上次索引</string>
+    <string name="index_stat_never">从未</string>
+    <string name="index_what_title">索引是什么？</string>
+    <string name="index_what_body">索引提取文件夹中资源的元数据（尺寸、视频时长、内容哈希）。首页用它实现正确的图片比例、HD/SD 徽章、排序与去重。索引只处理新增或变更的文件，重复执行很快。</string>
+    <string name="index_folders_title">要索引的文件夹</string>
+    <string name="index_folders_empty">暂无文件夹 — 请先在设置中添加</string>
+    <string name="index_select_all">全选</string>
+    <string name="index_select_none">清空</string>
 
     <!-- Home -->
     <string name="all">全部</string>

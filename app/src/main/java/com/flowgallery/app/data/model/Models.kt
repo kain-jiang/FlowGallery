@@ -91,7 +91,8 @@ data class ViewerState(
 enum class GalleryTab(val label: String) {
     Home("Home"),
     Favorites("Favorites"),
-    Settings("Settings")
+    Settings("Settings"),
+    Index("Index")
 }
 
 /** Gallery sort modes (home grid). */

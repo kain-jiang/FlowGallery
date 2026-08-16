@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
@@ -79,6 +80,7 @@ import com.flowgallery.app.ui.components.FolderTypeDialog
 import com.flowgallery.app.ui.components.ImageViewer
 import com.flowgallery.app.ui.screens.FavoritesScreen
 import com.flowgallery.app.ui.screens.HomeScreen
+import com.flowgallery.app.ui.screens.IndexScreen
 import com.flowgallery.app.ui.screens.SearchScreen
 import com.flowgallery.app.ui.screens.SettingsScreen
 import com.flowgallery.app.ui.theme.FlowGalleryTheme
@@ -306,6 +308,7 @@ private fun MainScaffold(
                         onRemoveFolder = { folder -> folderToRemove = folder },
                         onEditType = { folder -> folderToEditType = folder }
                     )
+                    GalleryTab.Index -> IndexScreen(viewModel = viewModel)
                 }
             }
         }
@@ -598,6 +601,7 @@ private fun tabIcon(tab: GalleryTab): ImageVector = when (tab) {
     GalleryTab.Home -> Icons.Filled.Home
     GalleryTab.Favorites -> Icons.Filled.Favorite
     GalleryTab.Settings -> Icons.Filled.Settings
+    GalleryTab.Index -> Icons.Filled.Bolt
 }
 
 @Composable
@@ -605,4 +609,5 @@ private fun tabLabel(tab: GalleryTab): String = when (tab) {
     GalleryTab.Home -> stringResource(R.string.tab_home)
     GalleryTab.Favorites -> stringResource(R.string.tab_favorites)
     GalleryTab.Settings -> stringResource(R.string.tab_settings)
+    GalleryTab.Index -> stringResource(R.string.tab_index)
 }
