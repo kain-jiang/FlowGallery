@@ -624,6 +624,7 @@ GalleryUiState
 - **索引持久化修复**：取消索引时保存已提取的部分结果（此前取消即丢弃）；扫描缓存保存前先套用索引元数据（避免未索引数据覆盖已存维度，导致重启后分辨率丢失需重新索引）；**0 维度坏条目不再被增量复用**（复用要求完整维度，坏条目自动重新提取）；**needsIndexing 检查维度**（0 维度触发自动索引 + Toast「正在索引新内容…」）；**rescan 兜底旧维度**（索引修复期间不闪变 0）
 - 修复：查看器分辨率不刷新（remember 缓存导致索引完成后仍显示旧值）、ArrowBack/VolumeOff/Sort 弃用（AutoMirrored）
 - **Tab 顺序**：首页 / 收藏 / ⚡索引 / **设置（最右固定）**（`8bbd4c8`）
+- **文件夹源抽象**（`feat/folder-source` `d6c9502`）：`data/source/` 抽象层 — `FolderSource` 接口（listFiles/openStream/testConnection）+ `SourceType`（LOCAL/SMB/FTP/SFTP/WEBDAV）+ `SourceRegistry` 注册表 + `LocalFolderSource`（SAF 实现）；Folder/ImageItem 带 `source` 字段并持久化；扫描/索引/去重读取全部经源接口分派。**新增外置源（SMB 等）只需实现 FolderSource + 注册 + 配置 UI**，详见 `docs/ARCHITECTURE.md`
 
 ---
 
