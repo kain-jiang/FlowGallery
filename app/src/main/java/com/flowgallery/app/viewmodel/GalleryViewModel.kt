@@ -78,7 +78,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repository = ImageRepository(app)
     private val indexStore = IndexStore(app)
-    private val mediaIndexer = MediaIndexer(app)
+    private val mediaIndexer = MediaIndexer(app, repository.sourceRegistry)
 
     /** In-memory metadata index (uri → entry). Loaded at startup. */
     private var mediaIndex: Map<String, IndexEntry> = emptyMap()

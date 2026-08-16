@@ -20,7 +20,10 @@ import kotlinx.coroutines.withContext
  * HD/SD badges, sort-by-time/size and content-dedup are available
  * immediately after a scan — no separate background dimension pass.
  */
-class MediaIndexer(private val context: Context) {
+class MediaIndexer(
+    private val context: Context,
+    private val sourceRegistry: com.flowgallery.app.data.source.SourceRegistry
+) {
 
     private val resolver = context.applicationContext.contentResolver
 
@@ -113,7 +116,7 @@ class MediaIndexer(private val context: Context) {
                         width = w,
                         height = h,
                         durationMs = d,
-                        contentHash = contentHash(uri)
+                        contentHash = contentHash(item)
                     )
                 } finally {
                     runCatching { mmr.release() }
@@ -121,12 +124,12 @@ class MediaIndexer(private val context: Context) {
             } catch (e: Exception) {
                 IndexEntry(
                     uriString = item.uriString,
-                    contentHash = contentHash(uri)
+                    contentHash = contentHash(item)
                 )
             }
         } else {
-            val (w, h) = dimensionOf(uri)
-            val hash = contentHash(uri)
+            val (w, h) = dimensionOf(item)
+            val hash = contentHash(item)
             IndexEntry(
                 uriString = item.uriString,
                 width = w,
@@ -137,11 +140,11 @@ class MediaIndexer(private val context: Context) {
         }
     }
 
-    /** Bitmap bounds only (no full decode). */
-    private fun dimensionOf(uri: Uri): Pair<Int, Int> = try {
+    /** Bitmap bounds only (no full decode). Reads via the item's source. */
+    private fun dimensionOf(item: ImageItem): Pair<Int, Int> = try {
         val opts = android.graphics.BitmapFactory.Options()
         opts.inJustDecodeBounds = true
-        resolver.openInputStream(uri)?.use { input ->
+        sourceRegistry.get(item.source).openStream(item)?.use { input ->
             android.graphics.BitmapFactory.decodeStream(input, null, opts)
             if (opts.outWidth > 0 && opts.outHeight > 0) {
                 opts.outWidth to opts.outHeight
@@ -152,9 +155,9 @@ class MediaIndexer(private val context: Context) {
     }
 
     /** MD5 of the file contents, or null on failure. Used for content dedup. */
-    private fun contentHash(uri: Uri): String? = try {
+    private fun contentHash(item: ImageItem): String? = try {
         val md = java.security.MessageDigest.getInstance("MD5")
-        resolver.openInputStream(uri)?.use { input ->
+        sourceRegistry.get(item.source).openStream(item)?.use { input ->
             val buf = ByteArray(64 * 1024)
             while (true) {
                 val n = input.read(buf)
