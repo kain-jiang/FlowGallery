@@ -383,7 +383,7 @@ private fun FolderSelectionCard(
                             .padding(start = 4.dp)
                     )
                     Text(
-                        text = "${viewModel.indexedCount(folder.id)}/${folder.imageCount}",
+                        text = "${viewModel.indexedCount(folder)}/${folder.imageCount}",
                         color = scheme.onSurfaceVariant,
                         fontSize = 12.sp
                     )
