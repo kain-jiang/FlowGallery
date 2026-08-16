@@ -40,6 +40,7 @@
     <string name="index_folders_empty">No folders added — add folders in Settings first</string>
     <string name="index_select_all">Select all</string>
     <string name="index_select_none">Clear all</string>
+    <string name="index_pending">Pending index</string>
 
     <!-- Home -->
     <string name="all">All</string>

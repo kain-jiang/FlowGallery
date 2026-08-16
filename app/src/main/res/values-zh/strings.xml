@@ -40,6 +40,7 @@
     <string name="index_folders_empty">暂无文件夹 — 请先在设置中添加</string>
     <string name="index_select_all">全选</string>
     <string name="index_select_none">清空</string>
+    <string name="index_pending">待索引</string>
 
     <!-- Home -->
     <string name="all">全部</string>
