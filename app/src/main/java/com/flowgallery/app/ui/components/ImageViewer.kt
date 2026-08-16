@@ -801,27 +801,43 @@ private fun VideoPlayerView(
         }
 
         // Center play button when paused (independent of chrome).
+        // Full-size button (as before) with a compact accent ring hugging
+        // the glyph — no background disc, soft accent glow.
         if (!isPlaying) {
-            IconButton(
-                onClick = { exoPlayer.play() },
+            Box(
                 modifier = Modifier
                     .align(Alignment.Center)
                     .size(72.dp)
+                    .clip(CircleShape)
+                    .clickable { exoPlayer.play() },
+                contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    Icons.Filled.PlayArrow,
-                    contentDescription = stringResource(R.string.cd_play),
-                    tint = MaterialTheme.colorScheme.primary,
+                // Slim ring, just larger than the glyph
+                Box(
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(56.dp)
                         .shadow(
-                            elevation = 14.dp,
+                            elevation = 10.dp,
                             shape = CircleShape,
-                            clip = true,
-                            ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f),
-                            spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
+                            clip = false,
+                            ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                            spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
                         )
-                )
+                        .clip(CircleShape)
+                        .border(
+                            width = 2.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Filled.PlayArrow,
+                        contentDescription = stringResource(R.string.cd_play),
+                        tint = Color.White,
+                        modifier = Modifier.size(48.dp)
+                    )
+                }
             }
         }
 
