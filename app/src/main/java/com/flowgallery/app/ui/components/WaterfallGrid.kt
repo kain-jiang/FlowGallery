@@ -152,6 +152,44 @@ private fun WaterfallCard(
         val ratio = resolvedRatio.coerceIn(0.4f, 2.5f)
         // Not indexed yet (no dimensions) → special "pending" placeholder.
         val isIndexed = image.width > 0 && image.height > 0
+        // Same placeholder for loading AND error, so the card never flashes
+        // blank while the SMB stream decodes (or fails) — stable until done.
+        val placeholder: @Composable (
+            coil.compose.SubcomposeAsyncImageScope,
+            Any
+        ) -> Unit = { _, _ ->
+            if (isIndexed) {
+                // Plain placeholder for already-indexed items.
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                )
+            } else {
+                // "Pending index" placeholder.
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        Icons.Filled.Bolt,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = stringResource(R.string.index_pending),
+                        color = MaterialTheme.colorScheme.outline,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
         SubcomposeAsyncImage(
             model = ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
                 .data(smbModel(image.uriString))
@@ -163,39 +201,8 @@ private fun WaterfallCard(
                 .build(),
             contentDescription = image.name,
             contentScale = ContentScale.Crop,
-            loading = {
-                if (isIndexed) {
-                    // Plain placeholder for already-indexed items.
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                    )
-                } else {
-                    // "Pending index" placeholder.
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            Icons.Filled.Bolt,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.outline,
-                            modifier = Modifier.size(22.dp)
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = stringResource(R.string.index_pending),
-                            color = MaterialTheme.colorScheme.outline,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            },
+            loading = placeholder,
+            error = placeholder,
             onSuccess = { state ->
                 val d = state.result.drawable
                 val w = d.intrinsicWidth
