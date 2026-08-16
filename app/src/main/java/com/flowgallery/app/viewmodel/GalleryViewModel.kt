@@ -121,16 +121,25 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         // Load the metadata index, then show the last cached scan immediately
         // (no empty flash / re-load wait), then refresh in the background.
         mediaIndex = indexStore.load()
-        // Architecture hygiene: keep only entries that BELONG to a current
-        // folder (by folderId, or by decoded uri path when folderId is stale
-        // legacy data). Orphans would pollute per-folder counts forever.
+        // Architecture hygiene + self-heal: entries whose folderId is stale
+        // (legacy data) get RE-ATTACHED by decoded uri path when they belong
+        // to a current folder; true orphans are dropped. This makes old
+        // indexes count correctly again without a manual re-index.
         val folders = repository.loadFolders()
         val folderIds = folders.map { it.id }.toSet()
-        val clean = mediaIndex.filterValues { e ->
-            e.folderId in folderIds ||
-                folders.any { uriUnderFolder(e.uriString, it.uriString) }
-        }
-        if (clean.size != mediaIndex.size) {
+        var repaired = 0
+        val clean = mediaIndex.mapNotNull { (uri, e) ->
+            if (e.folderId in folderIds) {
+                e
+            } else {
+                val owner = folders.firstOrNull { uriUnderFolder(uri, it.uriString) }
+                if (owner != null) {
+                    repaired++
+                    e.copy(folderId = owner.id)
+                } else null // true orphan
+            }
+        }.associateBy { it.uriString }
+        if (repaired > 0 || clean.size != mediaIndex.size) {
             mediaIndex = clean
             indexStore.save(clean.values)
         }
@@ -645,16 +654,21 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
 
+    /** True when an index entry carries real metadata — dimensions, OR a
+     *  video duration (videos often fail to report dimensions over network
+     *  streams while the duration succeeds). */
+    private fun isIndexedEntry(e: com.flowgallery.app.data.index.IndexEntry): Boolean =
+        (e.width > 0 && e.height > 0) || (e.durationMs ?: 0L) > 0
+
     /** Indexed count for [folder] — from the INDEX RECORD ONLY. FolderId
      *  match, plus a uri match that compares DECODED path segments (SAF tree
      *  vs document uris differ in percent-encoding; SMB uris carry
      *  credentials) — encoding/credential independent, home-independent. */
     fun indexedCount(folder: com.flowgallery.app.data.model.Folder): Int =
         maxOf(
-            mediaIndex.values.count { it.folderId == folder.id && it.width > 0 && it.height > 0 },
+            mediaIndex.values.count { it.folderId == folder.id && isIndexedEntry(it) },
             mediaIndex.values.count {
-                uriUnderFolder(it.uriString, folder.uriString) &&
-                    it.width > 0 && it.height > 0
+                uriUnderFolder(it.uriString, folder.uriString) && isIndexedEntry(it)
             }
         )
 
