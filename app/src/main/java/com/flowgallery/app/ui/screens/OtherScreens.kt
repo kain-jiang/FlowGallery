@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
@@ -51,6 +53,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -262,6 +265,8 @@ fun SettingsScreen(
     viewModel: GalleryViewModel,
     onAddFolder: () -> Unit,
     onAddSmb: () -> Unit = {},
+    onEditSmb: (Folder) -> Unit = {},
+    onIndexSmb: (Folder) -> Unit = {},
     onRemoveFolder: (Folder) -> Unit,
     onEditType: (Folder) -> Unit
 ) {
@@ -283,16 +288,19 @@ fun SettingsScreen(
 
         item { SettingsSectionTitle(stringResource(R.string.section_folders)) }
         items(state.folders, key = { it.id }) { folder ->
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surface)
                     .clickable { viewModel.toggleFolder(folder.id) }
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(16.dp)
             ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                 Box(
                     modifier = Modifier
                         .size(40.dp)
@@ -302,6 +310,8 @@ fun SettingsScreen(
                         .clickable { onEditType(folder) },
                     contentAlignment = Alignment.Center
                 ) {
+                    // Icon reflects the folder TYPE (changes when the type
+                    // changes); SMB is a small badge on the top-right corner.
                     Icon(
                         if (folder.type == com.flowgallery.app.data.model.FolderType.PACK) {
                             Icons.Filled.Collections
@@ -318,6 +328,25 @@ fun SettingsScreen(
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)
                     )
+                    if (folder.isSmb) {
+                        // SMB badge — top-right corner, does not affect layout
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .size(14.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                                .padding(2.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Filled.Lan,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(10.dp)
+                            )
+                        }
+                    }
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -344,13 +373,106 @@ fun SettingsScreen(
                         checkedThumbColor = Color.White
                     )
                 )
-                // Remove folder (FR-2)
-                IconButton(onClick = { onRemoveFolder(folder) }) {
-                    Icon(
-                        Icons.Filled.Close,
-                        contentDescription = stringResource(R.string.cd_remove_folder),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                if (folder.isSmb) {
+                    // SMB shares: edit icon (delete lives inside the editor);
+                    // the index action lives on its OWN row below.
+                    IconButton(onClick = { onEditSmb(folder) }) {
+                        Icon(
+                            Icons.Filled.Edit,
+                            contentDescription = stringResource(R.string.smb_edit),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                } else {
+                    // Local folders: remove (trash)
+                    IconButton(onClick = { onRemoveFolder(folder) }) {
+                        Icon(
+                            Icons.Filled.Delete,
+                            contentDescription = stringResource(R.string.cd_remove_folder),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+                } // end inner Row
+
+                // SMB shares: index action on its own row (button or progress)
+                if (folder.isSmb) {
+                    Spacer(Modifier.height(10.dp))
+                    val isIndexing = state.indexingFolderId == folder.id
+                    if (isIndexing) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            androidx.compose.material3.LinearProgressIndicator(
+                                progress = { state.indexingProgress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                            Spacer(Modifier.height(5.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = stringResource(
+                                        R.string.smb_indexing_progress,
+                                        state.indexingDone,
+                                        state.indexingTotal,
+                                        (state.indexingProgress * 100).toInt()
+                                    ),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                // Pause / resume
+                                TextButton(onClick = viewModel::toggleIndexPause) {
+                                    Text(
+                                        text = stringResource(
+                                            if (state.indexingPaused) R.string.smb_index_resume
+                                            else R.string.smb_index_pause
+                                        ),
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                // Cancel
+                                TextButton(onClick = viewModel::cancelIndexing) {
+                                    Text(
+                                        text = stringResource(R.string.smb_index_cancel),
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                .clickable { onIndexSmb(folder) }
+                                .padding(vertical = 10.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Filled.Bolt,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = stringResource(R.string.smb_index),
+                                color = MaterialTheme.colorScheme.primary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -603,6 +725,18 @@ fun SettingsScreen(
             )
         }
         item {
+            // SMB index download concurrency — picker (1 / 3 / 5 / 8).
+            // Higher = faster indexing but uses more connections; Windows
+            // SMB caps at ~20 concurrent connections total.
+            GridColumnsSetting(
+                title = stringResource(R.string.setting_index_concurrency),
+                current = state.indexConcurrency,
+                options = listOf(1, 3, 5, 8),
+                onChange = viewModel::setIndexConcurrency,
+                labelFor = { n -> "$n" }
+            )
+        }
+        item {
             // About — real version from BuildConfig (matches the APK)
             SettingsItem(
                 icon = Icons.Filled.Info,
@@ -676,14 +810,15 @@ private fun GridColumnsSetting(
     title: String,
     current: Int,
     options: List<Int>,
-    onChange: (Int) -> Unit
+    onChange: (Int) -> Unit,
+    labelFor: ((Int) -> String)? = null
 ) {
     var expanded by remember { mutableStateOf(false) }
     val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
         android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
     @Composable
-    fun labelOf(count: Int): String = stringResource(
+    fun labelOf(count: Int): String = labelFor?.invoke(count) ?: stringResource(
         when (count) {
             4 -> R.string.setting_grid_4
             3 -> R.string.setting_grid_3

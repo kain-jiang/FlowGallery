@@ -2,8 +2,6 @@ package com.flowgallery.app.data
 
 import com.flowgallery.app.data.model.SmbConfig
 import jcifs.CIFSContext
-import jcifs.context.BaseContext
-import jcifs.smb.NtlmPasswordAuthenticator
 import jcifs.smb.SmbFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -16,16 +14,7 @@ import kotlinx.coroutines.withContext
 object SmbClient {
 
     /** Create a CIFS context with the share's credentials. */
-    private fun context(config: SmbConfig): CIFSContext {
-        val base = BaseContext(jcifs.config.PropertyConfiguration(java.util.Properties()))
-        if (config.username.isNotEmpty()) {
-            val auth = NtlmPasswordAuthenticator(
-                config.domain, config.username, config.password
-            )
-            return base.withCredentials(auth)
-        }
-        return base
-    }
+    private fun context(config: SmbConfig): CIFSContext = SmbContexts.context(config)
 
     /** List a directory; returns file entries (name, dir, size, lastModified). */
     data class Entry(
@@ -37,19 +26,15 @@ object SmbClient {
 
     suspend fun list(config: SmbConfig, subPath: String = ""): List<Entry> =
         withContext(Dispatchers.IO) {
-            try {
-                val dirUrl = joinUrl(config.url, subPath)
-                val file = SmbFile(dirUrl, context(config))
-                file.listFiles().map { f ->
-                    Entry(
-                        name = f.name,
-                        isDirectory = f.isDirectory,
-                        size = f.length(),
-                        lastModified = f.lastModified
-                    )
-                }
-            } catch (e: Exception) {
-                emptyList()
+            val dirUrl = joinUrl(config.url, subPath)
+            val file = SmbFile(dirUrl, context(config))
+            file.listFiles().map { f ->
+                Entry(
+                    name = f.name,
+                    isDirectory = f.isDirectory,
+                    size = f.length(),
+                    lastModified = f.lastModified
+                )
             }
         }
 
@@ -87,6 +72,7 @@ object SmbClient {
 
     private fun joinUrl(base: String, subPath: String): String {
         val clean = base.trimEnd('/')
+        // Raw path (Chinese names stay as-is — jcifs-ng handles them).
         val sub = subPath.trim('/')
         return if (sub.isEmpty()) "$clean/" else "$clean/$sub/"
     }

@@ -7,6 +7,9 @@
     <string name="tab_search">搜索</string>
     <string name="tab_favorites">收藏</string>
     <string name="tab_settings">设置</string>
+    <string name="tab_logs">日志</string>
+    <string name="logs_empty">暂无日志</string>
+    <string name="logs_clear">清空日志</string>
 
     <!-- Home -->
     <string name="all">全部</string>
@@ -42,6 +45,15 @@
     <string name="add_new_folder">添加新文件夹</string>
     <string name="add_smb_share">添加 SMB 共享</string>
     <string name="smb_title">SMB 网络共享</string>
+    <string name="smb_edit_title">编辑 SMB 共享</string>
+    <string name="smb_edit">编辑</string>
+    <string name="smb_save">保存</string>
+    <string name="smb_delete">删除</string>
+    <string name="smb_index">索引缩略图</string>
+    <string name="smb_indexing_progress">正在索引… %1$d/%2$d（%3$d%%）</string>
+    <string name="smb_index_pause">暂停</string>
+    <string name="smb_index_resume">继续</string>
+    <string name="smb_index_cancel">取消</string>
     <string name="smb_host">服务器</string>
     <string name="smb_host_hint">例如 192.168.1.10 或 nas.local</string>
     <string name="smb_share">共享名</string>
@@ -133,6 +145,7 @@
     <string name="setting_grid_columns">网格列数</string>
     <string name="setting_grid_columns_portrait">竖屏列数</string>
     <string name="setting_grid_columns_landscape">横屏列数</string>
+    <string name="setting_index_concurrency">索引并发数</string>
     <string name="setting_grid_2">2 列</string>
     <string name="setting_grid_3">3 列</string>
     <string name="setting_grid_4">4 列</string>

@@ -90,11 +90,16 @@ class ImageRepository(private val context: Context) {
         val ids = folders.map { it.id to treeDocumentId(Uri.parse(it.uriString)) }
         val result = mutableListOf<Folder>()
         for (folder in folders) {
-            val fid = ids.firstOrNull { it.first == folder.id }?.second ?: continue
+            val fid = ids.firstOrNull { it.first == folder.id }?.second
+            // SMB shares / anything without an SAF tree id can't be overlap-
+            // pruned — keep them as-is.
+            if (fid == null) {
+                result.add(folder)
+                continue
+            }
             val coveredByParent = ids.any { (otherId, otherFid) ->
                 otherId != folder.id &&
                     otherFid != null &&
-                    fid != null &&
                     (fid.startsWith("$otherFid/") || fid == otherFid)
             }
             if (!coveredByParent) {
@@ -192,6 +197,29 @@ class ImageRepository(private val context: Context) {
                 source = FolderSource.SMB,
                 smbConfig = config
             )
+        )
+        saveFolders(folders)
+        return true
+    }
+
+    /** Update an existing SMB share's connection settings, name and type. */
+    fun updateSmbFolder(
+        id: Long,
+        config: com.flowgallery.app.data.model.SmbConfig,
+        displayName: String?,
+        type: FolderType
+    ): Boolean {
+        val folders = loadFolders().toMutableList()
+        val idx = folders.indexOfFirst { it.id == id && it.source == FolderSource.SMB }
+        if (idx < 0) return false
+        val old = folders[idx]
+        val name = displayName?.takeIf { it.isNotBlank() }
+            ?: "${config.host}/${config.share}${if (config.path.isNotBlank()) "/${config.path}" else ""}"
+        folders[idx] = old.copy(
+            name = name,
+            uriString = config.url,
+            type = type,
+            smbConfig = config
         )
         saveFolders(folders)
         return true
@@ -384,7 +412,13 @@ class ImageRepository(private val context: Context) {
             subFolderName: String?,
             out: MutableList<ImageItem>
         ) {
-            val entries = SmbClient.list(config, subPath)
+            // Subfolder listing failures are skipped (the folder may be
+            // locked/unreadable); only the ROOT failure is surfaced.
+            val entries = try {
+                SmbClient.list(config, subPath)
+            } catch (e: Exception) {
+                return
+            }
             for (e in entries) {
                 val childPath = if (subPath.isEmpty()) e.name else "$subPath/${e.name}"
                 if (isImageName(e.name) || isVideoName(e.name)) {
@@ -411,7 +445,20 @@ class ImageRepository(private val context: Context) {
             }
         }
 
-        val rootEntries = SmbClient.list(config)
+        // Root listing failure = connection/auth problem → surface it so the
+        // UI can toast the error (subfolder recursion failures are skipped
+        // silently inside collectRecursive).
+        val rootEntries = try {
+            SmbClient.list(config)
+        } catch (e: Exception) {
+            // Toast shows a short hint; the full reason goes to the Logs tab.
+            val reason = (e.message ?: "未知错误")
+                .lineSequence().first().take(120)
+            throw IllegalStateException(
+                "SMB ${folder.name} 连接失败: $reason",
+                e
+            )
+        }
         val subGroups = LinkedHashMap<String, Pair<SubFolder, List<ImageItem>>>()
         for (e in rootEntries) {
             if (isImageName(e.name) || isVideoName(e.name)) {
@@ -453,6 +500,7 @@ class ImageRepository(private val context: Context) {
     /** Full smb:// URL for a file under the share (credentials embedded). */
     private fun fileUrl(config: com.flowgallery.app.data.model.SmbConfig, childPath: String): String {
         val base = config.url.trimEnd('/')
+        // Raw path (Chinese names stay as-is — jcifs-ng handles them).
         val sub = childPath.trim('/')
         return if (sub.isEmpty()) "$base/" else "$base/$sub"
     }

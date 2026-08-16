@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Lan
 import androidx.compose.material3.Icon
@@ -48,26 +49,31 @@ import kotlinx.coroutines.launch
 private const val OK_MARKER = "OK"
 
 /**
- * Add an SMB share: connection fields + "Test" button + type choice.
- * Matches the app's dialog style (drag handle, rounded surface, primary
- * action button).
+ * SMB share dialog. Add mode (initialConfig = null) or edit mode
+ * (initialConfig set — fields pre-filled, a Delete action is offered).
+ * Matches the app's dialog style.
  */
 @Composable
 fun SmbAddDialog(
+    initialConfig: SmbConfig? = null,
+    initialName: String = "",
+    initialType: FolderType = FolderType.PACK,
     onConfirm: (SmbConfig, String?, FolderType) -> Unit,
+    onDelete: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
     val scope = rememberCoroutineScope()
+    val isEdit = initialConfig != null
 
-    var host by remember { mutableStateOf("") }
-    var share by remember { mutableStateOf("") }
-    var path by remember { mutableStateOf("") }
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var domain by remember { mutableStateOf("") }
-    var name by remember { mutableStateOf("") }
-    var type by remember { mutableStateOf(FolderType.PACK) }
+    var host by remember { mutableStateOf(initialConfig?.host ?: "") }
+    var share by remember { mutableStateOf(initialConfig?.share ?: "") }
+    var path by remember { mutableStateOf(initialConfig?.path ?: "") }
+    var username by remember { mutableStateOf(initialConfig?.username ?: "") }
+    var password by remember { mutableStateOf(initialConfig?.password ?: "") }
+    var domain by remember { mutableStateOf(initialConfig?.domain ?: "") }
+    var name by remember { mutableStateOf(initialName) }
+    var type by remember { mutableStateOf(initialType) }
     var testing by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf<String?>(null) }
 
@@ -103,7 +109,9 @@ fun SmbAddDialog(
                 }
                 Spacer(Modifier.width(12.dp))
                 Text(
-                    text = stringResource(R.string.smb_title),
+                    text = stringResource(
+                        if (isEdit) R.string.smb_edit_title else R.string.smb_title
+                    ),
                     style = MaterialTheme.typography.titleLarge,
                     color = scheme.onSurface
                 )
@@ -153,33 +161,55 @@ fun SmbAddDialog(
                 Spacer(Modifier.height(8.dp))
             }
 
-            // Buttons: Test / Cancel / Add
+            // Test connection — own row (kept in both modes)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(scheme.surfaceVariant)
+                    .clickable {
+                        scope.launch {
+                            testing = true
+                            // null from SmbClient.test = connected → OK marker
+                            testResult = SmbClient.test(currentConfig()) ?: OK_MARKER
+                            testing = false
+                        }
+                    }
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (testing) stringResource(R.string.smb_testing) else stringResource(R.string.smb_test),
+                    color = scheme.onSurfaceVariant,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+
+            // Buttons: Cancel / Save (edit mode also offers Delete)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(scheme.surfaceVariant)
-                        .clickable {
-                            scope.launch {
-                                testing = true
-                                // null from SmbClient.test = connected → OK marker
-                                testResult = SmbClient.test(currentConfig()) ?: OK_MARKER
-                                testing = false
-                            }
-                        }
-                        .padding(vertical = 14.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (testing) stringResource(R.string.smb_testing) else stringResource(R.string.smb_test),
-                        color = scheme.onSurfaceVariant,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                if (isEdit && onDelete != null) {
+                    // Delete — destructive text button, same style family
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.error.copy(alpha = 0.15f))
+                            .clickable(onClick = onDelete)
+                            .padding(vertical = 14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.smb_delete),
+                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
                 Box(
                     modifier = Modifier
@@ -211,7 +241,9 @@ fun SmbAddDialog(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = stringResource(R.string.smb_add),
+                        text = stringResource(
+                            if (isEdit) R.string.smb_save else R.string.smb_add
+                        ),
                         color = Color.White,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold

@@ -43,6 +43,7 @@ import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.flowgallery.app.R
 import com.flowgallery.app.data.SmartVideoFrameDecoder
+import com.flowgallery.app.data.smbModel
 import com.flowgallery.app.data.model.ImageItem
 import com.flowgallery.app.data.model.MediaType
 import com.flowgallery.app.data.model.SortMode
@@ -148,7 +149,7 @@ private fun WaterfallCard(
         val ratio = resolvedRatio.coerceIn(0.4f, 2.5f)
         SubcomposeAsyncImage(
             model = ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
-                .data(image.uriString)
+                .data(smbModel(image.uriString))
                 .apply {
                     if (image.type.isVideo) {
                         setParameter(SmartVideoFrameDecoder.KEY_VIDEO_URI, image.uriString)

@@ -26,9 +26,13 @@ data class SmbConfig(
                     "${java.net.URLEncoder.encode(username, "UTF-8")}:" +
                     java.net.URLEncoder.encode(password, "UTF-8") + "@"
             } else ""
+            // NOTE: share/path are NOT URL-encoded — jcifs-ng expects the raw
+            // (possibly Chinese) names here; encoding breaks share resolution
+            // ("The network name cannot be found").
             val sharePath = share.trim('/')
             val sub = path.trim('/')
-            return "smb://$auth$host/$sharePath" + if (sub.isNotEmpty()) "/$sub" else "" + "/"
+            val base = "smb://$auth$host/$sharePath"
+            return if (sub.isNotEmpty()) "$base/$sub/" else "$base/"
         }
 }
 
@@ -123,8 +127,15 @@ data class ViewerState(
 enum class GalleryTab(val label: String) {
     Home("Home"),
     Favorites("Favorites"),
-    Settings("Settings")
+    Settings("Settings"),
+    Logs("Logs")
 }
+
+/** A single entry in the error/log history (shown in the Logs tab). */
+data class LogEntry(
+    val time: Long,
+    val message: String
+)
 
 /** Gallery sort modes (home grid). */
 enum class SortMode {

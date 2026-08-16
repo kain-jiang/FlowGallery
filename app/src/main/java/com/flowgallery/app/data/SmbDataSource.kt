@@ -72,16 +72,8 @@ class SmbDataSource : BaseDataSource(false) {
         input = null
     }
 
-    private fun smbContext(config: SmbConfig): jcifs.CIFSContext {
-        val base = jcifs.context.BaseContext(jcifs.config.PropertyConfiguration(java.util.Properties()))
-        return if (config.username.isNotEmpty()) {
-            base.withCredentials(
-                jcifs.smb.NtlmPasswordAuthenticator(
-                    config.domain, config.username, config.password
-                )
-            )
-        } else base
-    }
+    private fun smbContext(config: SmbConfig): jcifs.CIFSContext =
+        SmbContexts.context(config)
 
     companion object {
         /** Length unknown (-1). */

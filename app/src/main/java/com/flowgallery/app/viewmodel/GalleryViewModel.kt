@@ -4,15 +4,19 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.flowgallery.app.data.SmbContexts
 import com.flowgallery.app.data.model.Folder
 import com.flowgallery.app.data.model.FolderType
 import com.flowgallery.app.data.model.GalleryTab
 import com.flowgallery.app.data.model.HomeFilter
 import com.flowgallery.app.data.model.ImageItem
+import com.flowgallery.app.data.model.LogEntry
 import com.flowgallery.app.data.model.SortMode
 import com.flowgallery.app.data.model.ViewerState
 import com.flowgallery.app.data.repository.ImageRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,6 +39,20 @@ data class GalleryUiState(
     val viewer: ViewerState = ViewerState(),
     val isRefreshing: Boolean = false,
     val error: String? = null,
+    /** error/log history shown in the Logs tab (newest first) */
+    val logs: List<LogEntry> = emptyList(),
+    /** SMB thumbnail indexing progress: folder id being indexed (null = idle) */
+    val indexingFolderId: Long? = null,
+    /** 0f..1f progress of the ongoing index */
+    val indexingProgress: Float = 0f,
+    /** total items being indexed (for "done/total" display) */
+    val indexingTotal: Int = 0,
+    /** items already indexed */
+    val indexingDone: Int = 0,
+    /** true while indexing is paused by the user */
+    val indexingPaused: Boolean = false,
+    /** SMB index download concurrency (1/3/5/8), set in Settings */
+    val indexConcurrency: Int = 3,
     /** Default portrait grid columns (2/3/4), set in Settings (FR-1). */
     val portraitColumns: Int = 2,
     /** Default landscape grid columns (2/3/4), set in Settings (FR-1). */
@@ -62,6 +80,9 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     private val _uiState = MutableStateFlow(GalleryUiState())
     val uiState: StateFlow<GalleryUiState> = _uiState.asStateFlow()
 
+    /** Cancellation flag for the running SMB index (checked by workers). */
+    private val indexCancelRequested = java.util.concurrent.atomic.AtomicBoolean(false)
+
     private val _favorites = MutableStateFlow<Set<Long>>(loadFavorites())
     val favorites: StateFlow<Set<Long>> = _favorites.asStateFlow()
 
@@ -78,7 +99,8 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                 sortMode = savedSort,
                 hdThumbnails = prefs.getBoolean(KEY_HD_THUMBNAILS, true),
                 monetColors = prefs.getBoolean(KEY_MONET_COLORS, false),
-                pillAlignmentLeft = prefs.getBoolean(KEY_PILL_ALIGNMENT_LEFT, false)
+                pillAlignmentLeft = prefs.getBoolean(KEY_PILL_ALIGNMENT_LEFT, false),
+                indexConcurrency = prefs.getInt(KEY_INDEX_CONCURRENCY, 3).coerceIn(1, 8)
             )
         }
         refreshFolders()
@@ -185,7 +207,12 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                 // Compute All-view dedup ids in the background.
                 computeDedupInBackground(images)
             }.onFailure { e ->
-                _uiState.update { it.copy(isRefreshing = false, error = e.message) }
+                val msg = e.message ?: "扫描失败"
+                // Toast: short hint only ("SMB xxx 连接失败"); the full
+                // reason is recorded in the Logs tab.
+                val short = msg.substringBefore(":").ifBlank { msg }.take(40)
+                _uiState.update { it.copy(isRefreshing = false, error = short) }
+                addLog(msg)
             }
         }
     }
@@ -267,6 +294,13 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update { it.copy(hdThumbnails = newVal) }
     }
 
+    /** Set SMB index concurrency (Settings picker), persisted. */
+    fun setIndexConcurrency(count: Int) {
+        val c = count.coerceIn(1, 8)
+        prefs.edit().putInt(KEY_INDEX_CONCURRENCY, c).apply()
+        _uiState.update { it.copy(indexConcurrency = c) }
+    }
+
     /** Toggle Monet (Material You) dynamic colors, persisted. */
     fun toggleMonetColors() {
         val newVal = !_uiState.value.monetColors
@@ -286,9 +320,143 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         if (ok) refreshFolders()
     }
 
+    /** Update an existing SMB share, then rescan. */
+    fun updateSmbFolder(id: Long, config: com.flowgallery.app.data.model.SmbConfig, name: String?, type: FolderType) {
+        val ok = repository.updateSmbFolder(id, config, name, type)
+        if (ok) refreshFolders()
+    }
+
     /** Set search media-type filter (null = all). */
     fun setMediaTypeFilter(type: String?) =
         _uiState.update { it.copy(mediaTypeFilter = type) }
+
+    /** Clear the last scan/connection error (after it was shown). */
+    fun clearError() = _uiState.update { it.copy(error = null) }
+
+    /** Record a log entry (newest first, capped at 100). */
+    fun addLog(message: String) {
+        _uiState.update {
+            it.copy(logs = (listOf(LogEntry(System.currentTimeMillis(), message)) + it.logs).take(100))
+        }
+    }
+
+    /** Clear the log history. */
+    fun clearLogs() = _uiState.update { it.copy(logs = emptyList()) }
+
+    /**
+     * Manually pre-index an SMB share: download every image's thumbnail into
+     * the persistent smb_cache so browsing is instant afterwards. Runs in the
+     * background with bounded concurrency (5) — enough to saturate the link
+     * without blowing past the server's connection cap (typically 20). Progress is
+     * reported via indexingFolderId/indexingProgress; the run can be paused
+     * (indexingPaused) or cancelled (cancelIndexing).
+     */
+    fun indexSmbFolder(folder: Folder) {
+        if (_uiState.value.indexingFolderId != null) return // already indexing
+        val config = folder.smbConfig ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            val items = _uiState.value.images
+                .filter { it.folderId == folder.id && !it.type.isVideo }
+            if (items.isEmpty()) {
+                addLog("索引 ${folder.name}: 无图片可索引")
+                return@launch
+            }
+            indexCancelRequested.set(false)
+            _uiState.update {
+                it.copy(
+                    indexingFolderId = folder.id,
+                    indexingProgress = 0f,
+                    indexingTotal = items.size,
+                    indexingDone = 0,
+                    indexingPaused = false
+                )
+            }
+            val cacheDir = java.io.File(getApplication<Application>().filesDir, "smb_cache")
+                .apply { mkdirs() }
+            val semaphore = java.util.concurrent.Semaphore(
+                _uiState.value.indexConcurrency
+            )
+            val counter = java.util.concurrent.atomic.AtomicInteger(0)
+            val failed = java.util.concurrent.atomic.AtomicInteger(0)
+            val jobs = items.map { item ->
+                async {
+                    // Pause support: wait while paused.
+                    while (_uiState.value.indexingPaused) {
+                        kotlinx.coroutines.delay(150)
+                    }
+                    if (indexCancelRequested.get()) return@async
+                    semaphore.acquire()
+                    try {
+                        val cacheFile = java.io.File(
+                            cacheDir,
+                            item.uriString.hashCode().toUInt().toString(16)
+                        )
+                        if (!cacheFile.exists() || cacheFile.length() == 0L) {
+                            try {
+                                val smbFile = jcifs.smb.SmbFile(
+                                    item.uriString,
+                                    SmbContexts.context(config)
+                                )
+                                smbFile.inputStream.use { input ->
+                                    cacheFile.outputStream().use { output -> input.copyTo(output) }
+                                }
+                                if (cacheFile.length() == 0L) failed.incrementAndGet()
+                            } catch (e: Exception) {
+                                failed.incrementAndGet()
+                                cacheFile.delete()
+                            }
+                        }
+                    } finally {
+                        semaphore.release()
+                    }
+                    if (indexCancelRequested.get()) return@async
+                    val done = counter.incrementAndGet()
+                    _uiState.update {
+                        it.copy(
+                            indexingProgress = done.toFloat() / items.size,
+                            indexingDone = done
+                        )
+                    }
+                }
+            }
+            jobs.awaitAll()
+            val cancelled = indexCancelRequested.get()
+            _uiState.update {
+                it.copy(
+                    indexingFolderId = null,
+                    indexingProgress = 0f,
+                    indexingTotal = 0,
+                    indexingDone = 0,
+                    indexingPaused = false
+                )
+            }
+            val total = items.size
+            if (cancelled) {
+                addLog("索引已取消 ${folder.name}: ${total - failed.get()}/$total 张")
+            } else {
+                addLog("索引完成 ${folder.name}: ${total - failed.get()}/$total 张")
+            }
+        }
+    }
+
+    /** Toggle pause/resume of the running index. */
+    fun toggleIndexPause() {
+        _uiState.update { it.copy(indexingPaused = !it.indexingPaused) }
+    }
+
+    /** Cancel the running index (keeps already-downloaded thumbnails). */
+    fun cancelIndexing() {
+        indexCancelRequested.set(true)
+        _uiState.update {
+            it.copy(
+                indexingFolderId = null,
+                indexingProgress = 0f,
+                indexingTotal = 0,
+                indexingDone = 0,
+                indexingPaused = false
+            )
+        }
+    }
 
     /**
      * True when the viewer can cross into the adjacent subfolder in [delta]
@@ -477,5 +645,6 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         const val KEY_HD_THUMBNAILS = "hd_thumbnails"
         const val KEY_MONET_COLORS = "monet_colors"
         const val KEY_PILL_ALIGNMENT_LEFT = "pill_alignment_left"
+        const val KEY_INDEX_CONCURRENCY = "index_concurrency"
     }
 }
