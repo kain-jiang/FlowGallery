@@ -346,7 +346,7 @@ private fun MainScaffold(
                         viewModel = viewModel,
                         onImageClick = { img ->
                             // Browse ONLY the favorited sequence in the viewer
-                            val favList = state.images.filter { it.id in favorites }
+                            val favList = state.images.filter { it.uriString in favorites }
                             val idx = favList.indexOfFirst { it.id == img.id }
                             if (idx >= 0) viewModel.openViewer(idx, favoritesOnly = true)
                         }

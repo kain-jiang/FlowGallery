@@ -341,7 +341,7 @@ private fun HomeHeader(
             folders = selectedFolders,
             currentFilter = state.currentFilter,
             currentSubFolderId = state.currentSubFolderId,
-            totalCount = state.dedupedIds.size,
+            totalCount = state.dedupedUris.size,
             onSelectFolder = onSelectFolder,
             onSelectSubFolder = onSelectSubFolder
         )

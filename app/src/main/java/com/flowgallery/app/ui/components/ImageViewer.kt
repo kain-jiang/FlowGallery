@@ -109,14 +109,14 @@ import kotlinx.coroutines.launch
 fun ImageViewer(
     images: List<ImageItem>,
     currentIndex: Int,
-    favoriteIds: Set<Long>,
+    favoriteIds: Set<String>,
     onNavigate: (Int) -> Unit,
     onNavigateDelta: ((Int) -> Unit)? = null,
     /** true when an adjacent subfolder exists in that direction (double arrow) */
     canCrossBackward: Boolean = false,
     canCrossForward: Boolean = false,
     onClose: () -> Unit,
-    onToggleFavorite: (Long) -> Unit,
+    onToggleFavorite: (String) -> Unit,
     onShare: ((ImageItem) -> Unit)? = null,
     onSaveToGallery: ((ImageItem) -> Unit)? = null
 ) {
@@ -354,13 +354,13 @@ fun ImageViewer(
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     IconButton(
-                        onClick = { onToggleFavorite(currentItem.id) },
+                        onClick = { onToggleFavorite(currentItem.uriString) },
                         modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
-                            imageVector = if (currentItem.id in favoriteIds) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                            imageVector = if (currentItem.uriString in favoriteIds) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                             contentDescription = stringResource(R.string.cd_favorite),
-                            tint = if (currentItem.id in favoriteIds) Color(0xFFEF4444) else Color.White,
+                            tint = if (currentItem.uriString in favoriteIds) Color(0xFFEF4444) else Color.White,
                             modifier = Modifier
                                 .size(22.dp)
                                 .shadow(

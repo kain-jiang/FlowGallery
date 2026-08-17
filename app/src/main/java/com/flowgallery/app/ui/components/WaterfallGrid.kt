@@ -62,9 +62,9 @@ import com.flowgallery.app.ui.theme.Warning
 @Composable
 fun WaterfallGrid(
     images: List<ImageItem>,
-    favoriteIds: Set<Long>,
+    favoriteIds: Set<String>,
     onImageClick: (ImageItem) -> Unit,
-    onToggleFavorite: (Long) -> Unit,
+    onToggleFavorite: (String) -> Unit,
     modifier: Modifier = Modifier,
     columnCount: Int = 2,
     sortMode: SortMode = SortMode.DEFAULT,
@@ -118,10 +118,10 @@ fun WaterfallGrid(
             val img = images[index]
             WaterfallCard(
                 image = img,
-                isFavorite = img.id in favoriteIds,
+                isFavorite = img.uriString in favoriteIds,
                 sortMode = sortMode,
                 onClick = { onImageClick(img) },
-                onToggleFavorite = { onToggleFavorite(img.id) }
+                onToggleFavorite = { onToggleFavorite(img.uriString) }
             )
         }
     }

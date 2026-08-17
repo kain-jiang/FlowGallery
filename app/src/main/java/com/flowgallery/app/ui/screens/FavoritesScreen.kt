@@ -46,7 +46,7 @@ fun FavoritesScreen(
     val state by viewModel.uiState.collectAsState()
     val favorites by viewModel.favorites.collectAsState()
 
-    val favImages = state.images.filter { it.id in favorites }
+    val favImages = state.images.filter { it.uriString in favorites }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
