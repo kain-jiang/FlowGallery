@@ -21,15 +21,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 data class GalleryUiState(
     val folders: List<Folder> = emptyList(),
     /** FULL set of scanned media — subfolder/folder views must keep every
      *  item even if it duplicates one elsewhere (dedup applies ONLY to the
-     *  "All" view via [dedupedIds]). */
+     *  "All" view via [dedupedUris]). */
     val images: List<ImageItem> = emptyList(),
-    /** ids kept after content-dedup — used exclusively by the All view */
-    val dedupedIds: Set<Long> = emptySet(),
+    /** URIs kept after content-dedup — used exclusively by the All view.
+     *  Keyed by URI (ids drift between scans); persisted so the All view is
+     *  correct immediately on cold start. */
+    val dedupedUris: Set<String> = emptySet(),
     val currentTab: GalleryTab = GalleryTab.Home,
     /** null = All, HomeFilter.FAVORITES = favorites, else root folder id */
     val currentFilter: Long? = null,
@@ -40,6 +44,8 @@ data class GalleryUiState(
     val error: String? = null,
     /** one-shot user notice (shown as a toast, then cleared) */
     val indexNotice: String? = null,
+    /** background auto-index after scans (Settings toggle) */
+    val autoIndex: Boolean = true,
     /** Default portrait grid columns (2/3/4), set in Settings (FR-1). */
     val portraitColumns: Int = 2,
     /** Default landscape grid columns (2/3/4), set in Settings (FR-1). */
@@ -60,18 +66,21 @@ data class GalleryUiState(
     val mediaTypeFilter: String? = null
 )
 
-/** State of the manual indexing job (Index tab). */
+/** State of the indexing job (Index tab) — manual AND background auto. */
 data class IndexJobState(
     val running: Boolean = false,
     val paused: Boolean = false,
     val force: Boolean = false,
+    /** true when the running job is the background auto-index */
+    val isAuto: Boolean = false,
     val done: Int = 0,
     val total: Int = 0,
     val extracted: Int = 0,
     val lastIndexedAt: Long = 0L,
     val entryCount: Int = 0,
-    /** folder ids to index; null = ALL selected folders */
-    val indexFolders: Set<Long>? = null
+    /** folder ids to index; defaults to the ENABLED folders (init), so the
+     *  Index tab never opens with everything selected */
+    val indexFolders: Set<Long> = emptySet()
 )
 
 class GalleryViewModel(app: Application) : AndroidViewModel(app) {
@@ -80,14 +89,28 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     private val indexStore = IndexStore(app)
     private val mediaIndexer = MediaIndexer(app, repository.sourceRegistry)
 
-    /** In-memory metadata index (uri → entry). Loaded at startup. */
+    /** In-memory metadata index (uri → entry). Loaded at startup. All writes
+     *  happen under [indexMutex] (P0: concurrent merge passes must never
+     *  overwrite each other's entries). */
     private var mediaIndex: Map<String, IndexEntry> = emptyMap()
+
+    /** Precomputed per-folder indexed counts (SUCCESS entries) — rebuilt only
+     *  when the index changes, never per recomposition (P0: was O(folders ×
+     *  entries) per frame). */
+    private var indexCountsByFolder: Map<Long, Int> = emptyMap()
+
+    /** Serializes every index mutation (merge passes, cleanup, clear) —
+     *  P0: without it, rescan + per-folder refresh could run two merges
+     *  concurrently and the last write silently dropped the other's entries. */
+    private val indexMutex = Mutex()
 
     private val _uiState = MutableStateFlow(GalleryUiState())
     val uiState: StateFlow<GalleryUiState> = _uiState.asStateFlow()
 
-    private val _favorites = MutableStateFlow<Set<Long>>(loadFavorites())
-    val favorites: StateFlow<Set<Long>> = _favorites.asStateFlow()
+    /** Favorites keyed by STABLE uriString — image ids drift between scans
+     *  (folder.id*1M+seq) and would silently drop favorites (P0). */
+    private val _favorites = MutableStateFlow<Set<String>>(emptySet())
+    val favorites: StateFlow<Set<String>> = _favorites.asStateFlow()
 
     /** Manual index job state (Index tab). */
     private val _indexJob = MutableStateFlow(IndexJobState())
@@ -109,23 +132,75 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                 sortMode = savedSort,
                 hdThumbnails = prefs.getBoolean(KEY_HD_THUMBNAILS, true),
                 monetColors = prefs.getBoolean(KEY_MONET_COLORS, false),
-                pillAlignmentLeft = prefs.getBoolean(KEY_PILL_ALIGNMENT_LEFT, false)
+                pillAlignmentLeft = prefs.getBoolean(KEY_PILL_ALIGNMENT_LEFT, false),
+                autoIndex = prefs.getBoolean(KEY_AUTO_INDEX, true)
             )
         }
         // Load the metadata index, then show the last cached scan immediately
         // (no empty flash / re-load wait), then refresh in the background.
         mediaIndex = indexStore.load()
+        // Architecture hygiene + self-heal: entries whose folderId is stale
+        // (legacy data) get RE-ATTACHED by decoded uri path when they belong
+        // to a current folder; true orphans are dropped. This makes old
+        // indexes count correctly again without a manual re-index.
+        val folders = repository.loadFolders()
+        val folderIds = folders.map { it.id }.toSet()
+        var repaired = 0
+        val clean = mediaIndex.mapNotNull { (uri, e) ->
+            if (e.folderId in folderIds) {
+                e
+            } else {
+                val owner = folders.firstOrNull { uriUnderFolder(uri, it.uriString) }
+                if (owner != null) {
+                    repaired++
+                    e.copy(folderId = owner.id)
+                } else null // true orphan
+            }
+        }.associateBy { it.uriString }
+        if (repaired > 0 || clean.size != mediaIndex.size) {
+            mediaIndex = clean
+            indexStore.save(clean.values)
+        }
+        rebuildIndexCounts()
         _indexJob.update {
             it.copy(
-                entryCount = mediaIndex.size,
-                lastIndexedAt = mediaIndex.values.maxOfOrNull { e -> e.indexedAt } ?: 0L
+                entryCount = mediaIndex.values.count {
+                    it.status == com.flowgallery.app.data.index.IndexStatus.SUCCESS
+                },
+                lastIndexedAt = mediaIndex.values.maxOfOrNull { e -> e.indexedAt } ?: 0L,
+                // Default selection = ENABLED folders (never everything).
+                indexFolders = repository.loadFolders()
+                    .filter { it.isSelected }.map { it.id }.toSet()
             )
         }
         val cached = repository.loadScanCache()
         if (cached.isNotEmpty()) {
             _uiState.update { it.copy(images = applyIndex(cached)) }
         }
+        // P0: restore the persisted dedup result so the All view shows the
+        // right items IMMEDIATELY (no empty flash while dedup re-runs).
+        _uiState.update { it.copy(dedupedUris = repository.loadDedupUris()) }
+        // P0: migrate legacy favorites (stored as numeric image ids that
+        // drift between scans) to stable uris — best effort against the
+        // current cached scan.
+        migrateLegacyFavorites(cached)
         refreshFolders()
+    }
+
+    /** One-time migration: pre-uri favorites were stored as image ids; map
+     *  them through the last known scan (id → uri) and persist the uris. */
+    private fun migrateLegacyFavorites(cached: List<ImageItem>) {
+        val raw = prefs.getStringSet(KEY_FAVORITES, emptySet()) ?: emptySet()
+        val legacyIds = raw.mapNotNull { it.toLongOrNull() }
+        if (legacyIds.isEmpty()) {
+            _favorites.value = raw.filter { it.isNotBlank() }.toSet()
+            return
+        }
+        val idToUri = cached.associate { it.id to it.uriString }
+        val migrated = legacyIds.mapNotNull(idToUri::get).toSet()
+        _favorites.value = migrated
+        saveFavorites(migrated)
+        android.util.Log.d("FavMigrate", "migrated ${legacyIds.size} legacy ids -> ${migrated.size} uris")
     }
 
     // ------------------------------------------------------------------ folders
@@ -144,6 +219,58 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val added = repository.addFolder(uri, displayName, type)
             if (added) refreshFolders()
+        }
+    }
+
+    /** Add an SMB share folder, then rescan. */
+    fun addSmbFolder(config: com.flowgallery.app.data.source.SmbConfig, name: String?, type: FolderType) {
+        viewModelScope.launch {
+            val added = repository.addSmbFolder(config, name, type)
+            if (added) refreshFolders()
+        }
+    }
+
+    /** Re-scan ONE folder (Settings refresh button): replaces its items,
+     *  clears stale index entries for it, then re-indexes it if auto-index
+     *  is enabled. Result is toasted. */
+    fun refreshFolder(id: Long) {
+        viewModelScope.launch {
+            val folder = _uiState.value.folders.find { it.id == id } ?: return@launch
+            val result = runCatching { repository.scanFolder(folder) }
+            result.onFailure { e ->
+                _uiState.update {
+                    it.copy(indexNotice = "刷新失败：${(e.message ?: "未知错误").take(60)}")
+                }
+                return@launch
+            }
+            val scan = result.getOrNull() ?: return@launch
+            repository.updateFolderSubFolders(id, scan.subFolders, scan.items.size)
+            // Replace this folder's items; keep the others.
+            val others = _uiState.value.images.filter { it.folderId != id }
+            val images = others + scan.items
+            _uiState.update { it.copy(images = images, folders = repository.loadFolders()) }
+            repository.saveScanCache(applyIndex(images))
+            // P0: serialize with any running index pass — drop this folder's
+            // stale entries then ALWAYS re-index it (refresh must leave it
+            // indexed), all under the same mutex.
+            viewModelScope.launch(Dispatchers.IO) {
+                indexMutex.withLock {
+                    mediaIndex = mediaIndex.filterValues { it.folderId != id }
+                    if (scan.items.isNotEmpty()) {
+                        runIndexPass(scan.items)
+                    } else {
+                        indexStore.save(mediaIndex.values)
+                        rebuildIndexCounts()
+                    }
+                }
+            }
+            // Feedback
+            val app = getApplication<Application>()
+            val msg = app.getString(
+                com.flowgallery.app.R.string.folder_refreshed_notice,
+                folder.name, scan.items.size
+            )
+            _uiState.update { it.copy(indexNotice = msg) }
         }
     }
 
@@ -189,6 +316,13 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     fun removeFolder(id: Long) {
         viewModelScope.launch {
             repository.removeFolder(id)
+            // Drop this folder's index entries (no orphans left behind) —
+            // serialized with any running index pass (P0).
+            indexMutex.withLock {
+                mediaIndex = mediaIndex.filterValues { it.folderId != id }
+                indexStore.save(mediaIndex.values)
+                rebuildIndexCounts()
+            }
             val folders = repository.loadFolders()
             val st = _uiState.value
             val filterReset = if (st.currentFilter == id) null else st.currentFilter
@@ -242,10 +376,10 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                     android.util.Log.d("IndexMatch", "scanUri=$sample")
                     android.util.Log.d("IndexMatch", "indexUri=$indexKey")
                 }
-                // Auto-index only when there IS new/changed content — if
-                // everything is already indexed, skip it entirely.
+                // Auto-index only when enabled AND there is new/changed
+                // content (throttled retries) — otherwise skip it entirely.
                 val missing = needsIndexing(images)
-                if (missing) {
+                if (missing && _uiState.value.autoIndex) {
                     // Tell the user the background index is running.
                     val notice = getApplication<Application>().getString(
                         com.flowgallery.app.R.string.index_auto_notice
@@ -263,42 +397,80 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Background content-dedup for the All view (size + MD5). */
+    /** Background content-dedup for the All view (size + MD5). Result is a
+     *  set of KEPT URIs (ids drift between scans), persisted so a cold start
+     *  shows the correct All view immediately (P0). */
     private fun computeDedupInBackground(images: List<ImageItem>) {
         viewModelScope.launch(Dispatchers.IO) {
             val uriDeduped = images.distinctBy { it.uriString }
             val deduped = repository.dedupByContent(uriDeduped)
-            val ids = deduped.map { it.id }.toSet()
-            _uiState.update { it.copy(dedupedIds = ids) }
+            val uris = deduped.map { it.uriString }.toSet()
+            _uiState.update { it.copy(dedupedUris = uris) }
+            repository.saveDedupUris(uris)
+        }
+    }
+
+    /** Serialized background index pass — every index mutation runs under
+     *  [indexMutex] so concurrent scans/refreshes never clobber each other
+     *  (P0: lost-update race). */
+    private fun indexImagesInBackground(images: List<ImageItem>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            indexMutex.withLock {
+                runIndexPass(images)
+            }
         }
     }
 
     /**
-     * Background incremental index pass: merge scan items with the persisted
-     * index (only new/changed files get metadata extracted), persist, then
-     * stream the enriched items into the UI.
+     * The actual incremental merge + persist + stream pass.
+     * MUST be called while holding [indexMutex].
      */
-    private fun indexImagesInBackground(images: List<ImageItem>) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val (newIndex, _) = mediaIndexer.merge(images, mediaIndex)
-            mediaIndex = newIndex
-            indexStore.save(newIndex.values)
-            val enriched = applyIndex(images)
-            val enrichedById = enriched.associateBy { it.id }
-            // Update in chunks so the UI streams results progressively.
-            val chunk = 60
-            for (i in enriched.indices step chunk) {
-                val end = (i + chunk).coerceAtMost(enriched.size)
-                _uiState.update { st ->
-                    st.copy(images = st.images.map { enrichedById[it.id] ?: it })
-                }
-                if (end < enriched.size) {
-                    kotlinx.coroutines.delay(30)
-                }
-            }
-            // Persist enriched items (dimensions included) for next launch.
-            repository.saveScanCache(enriched)
+    private suspend fun runIndexPass(images: List<ImageItem>) {
+        // Reflect the background auto-index on the Index tab.
+        _indexJob.update {
+            it.copy(running = true, isAuto = true, paused = false, done = 0, total = images.size)
         }
+        val (newIndex, extracted, failed) = mediaIndexer.merge(
+            images, mediaIndex,
+            onProgress = { done, total ->
+                _indexJob.update { it.copy(done = done, total = total) }
+            }
+        )
+        mediaIndex = newIndex
+        indexStore.save(newIndex.values)
+        rebuildIndexCounts()
+        _indexJob.update {
+            it.copy(
+                running = false,
+                isAuto = false,
+                entryCount = newIndex.values.count {
+                    it.status == com.flowgallery.app.data.index.IndexStatus.SUCCESS
+                },
+                lastIndexedAt = System.currentTimeMillis()
+            )
+        }
+        // Report success/failure counts (even when zero).
+        val app = getApplication<Application>()
+        val notice = app.getString(
+            com.flowgallery.app.R.string.index_done_notice,
+            extracted, failed
+        )
+        _uiState.update { it.copy(indexNotice = notice) }
+        val enriched = applyIndex(images)
+        val enrichedById = enriched.associateBy { it.id }
+        // Update in chunks so the UI streams results progressively.
+        val chunk = 60
+        for (i in enriched.indices step chunk) {
+            val end = (i + chunk).coerceAtMost(enriched.size)
+            _uiState.update { st ->
+                st.copy(images = st.images.map { enrichedById[it.id] ?: it })
+            }
+            if (end < enriched.size) {
+                kotlinx.coroutines.delay(30)
+            }
+        }
+        // Persist enriched items (dimensions included) for next launch.
+        repository.saveScanCache(enriched)
     }
 
     /** Fill items with metadata from the in-memory index. */
@@ -333,16 +505,18 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         if (_indexJob.value.running) return
         viewModelScope.launch(Dispatchers.IO) {
             indexCancelRequested.set(false)
-            // Respect the per-folder selection (null = all selected folders).
+            // Respect the per-folder selection (defaults to enabled folders).
             val selection = _indexJob.value.indexFolders
             val folders = _uiState.value.folders.filter {
-                it.isSelected && (selection == null || it.id in selection)
+                it.id in selection
             }
             if (folders.isEmpty()) {
                 _indexJob.update { it.copy(running = false) }
                 return@launch
             }
             // File listing is cheap; metadata extraction is the slow part.
+            // Listing runs OUTSIDE the mutex (doesn't touch the index); the
+            // merge + persist runs INSIDE it (P0: no concurrent index writes).
             val items = runCatching { repository.scanAll(folders) }
                 .getOrElse { emptyList() }
                 .flatMap { it.items }
@@ -350,51 +524,65 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                 _indexJob.update { it.copy(running = false, paused = false) }
                 return@launch
             }
-            _indexJob.update {
-                it.copy(
-                    running = true,
-                    paused = false,
+            indexMutex.withLock {
+                _indexJob.update {
+                    it.copy(
+                        running = true,
+                        paused = false,
+                        isAuto = false,
+                        force = force,
+                        done = 0,
+                        total = items.size,
+                        extracted = 0
+                    )
+                }
+                val (newIndex, extracted, failed) = mediaIndexer.merge(
+                    items = items,
+                    existing = if (force) emptyMap() else mediaIndex,
                     force = force,
-                    done = 0,
-                    total = items.size,
-                    extracted = 0
+                    onProgress = { done, total ->
+                        // Pause support (onProgress runs on the IO dispatcher —
+                        // Thread.sleep is fine here).
+                        while (_indexJob.value.paused) {
+                            Thread.sleep(150)
+                        }
+                        _indexJob.update {
+                            it.copy(done = done, total = total)
+                        }
+                    },
+                    onCancelCheck = { indexCancelRequested.get() }
                 )
-            }
-            val (newIndex, extracted) = mediaIndexer.merge(
-                items = items,
-                existing = if (force) emptyMap() else mediaIndex,
-                force = force,
-                onProgress = { done, total ->
-                    // Pause support (onProgress runs on the IO dispatcher —
-                    // Thread.sleep is fine here).
-                    while (_indexJob.value.paused) {
-                        Thread.sleep(150)
-                    }
-                    _indexJob.update {
-                        it.copy(done = done, total = total)
-                    }
-                },
-                onCancelCheck = { indexCancelRequested.get() }
-            )
-            // Save whatever was indexed — including a cancelled run's partial
-            // results (so a re-open keeps what was already done).
-            mediaIndex = newIndex
-            indexStore.save(newIndex.values)
-            val cancelled = indexCancelRequested.get()
-            if (cancelled) {
-                _indexJob.update { it.copy(running = false, paused = false) }
-                return@launch
-            }
-            _indexJob.update {
-                it.copy(
-                    running = false,
-                    paused = false,
-                    extracted = extracted,
-                    entryCount = newIndex.size,
-                    lastIndexedAt = System.currentTimeMillis()
+                // Save whatever was indexed — including a cancelled run's partial
+                // results (so a re-open keeps what was already done).
+                mediaIndex = newIndex
+                indexStore.save(newIndex.values)
+                rebuildIndexCounts()
+                val cancelled = indexCancelRequested.get()
+                if (cancelled) {
+                    _indexJob.update { it.copy(running = false, paused = false) }
+                    return@launch
+                }
+                _indexJob.update {
+                    it.copy(
+                        running = false,
+                        paused = false,
+                        extracted = extracted,
+                        entryCount = newIndex.values.count {
+                            it.status == com.flowgallery.app.data.index.IndexStatus.SUCCESS
+                        },
+                        lastIndexedAt = System.currentTimeMillis()
+                    )
+                }
+                // Report success/failure counts (even when zero).
+                val app = getApplication<Application>()
+                val notice = app.getString(
+                    if (cancelled) com.flowgallery.app.R.string.index_cancelled_notice
+                    else com.flowgallery.app.R.string.index_done_notice,
+                    extracted, failed
                 )
+                _uiState.update { it.copy(indexNotice = notice) }
             }
-            // Refresh the home grid with the enriched metadata.
+            // Refresh the home grid with the enriched metadata (outside lock).
             val enriched = applyIndex(_uiState.value.images)
             _uiState.update { st -> st.copy(images = enriched) }
             repository.saveScanCache(enriched)
@@ -414,23 +602,43 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         _indexJob.update { it.copy(running = false, paused = false) }
     }
 
-    /**
-     * Toggle a folder in/out of the index selection. null selection means
-     * "all selected folders"; unchecking the first folder materializes the
-     * set as "everything except it", so the semantics stay intuitive.
-     */
-    fun toggleIndexFolder(id: Long) {
-        val all = _uiState.value.folders.filter { it.isSelected }.map { it.id }.toSet()
-        val cur = _indexJob.value.indexFolders
-        val effective = cur ?: all
-        val newSet = if (id in effective) effective - id else effective + id
-        _indexJob.update { it.copy(indexFolders = newSet) }
+    /** Wipe the whole index (entries + persisted store) and strip indexed
+     *  dimensions from the home items. */
+    fun clearIndex() {
+        if (_indexJob.value.running) return
+        viewModelScope.launch {
+            indexMutex.withLock {
+                mediaIndex = emptyMap()
+                indexStore.save(emptyList())
+                rebuildIndexCounts()
+            }
+            // Strip indexed dimensions from current items (bare scan data stays).
+            val bare = _uiState.value.images.map { it.copy(width = 0, height = 0, contentHash = null) }
+            _uiState.update { st -> st.copy(images = bare) }
+            repository.saveScanCache(bare)
+            _indexJob.update {
+                it.copy(
+                    running = false, paused = false,
+                    entryCount = 0, lastIndexedAt = 0L,
+                    done = 0, total = 0, extracted = 0
+                )
+            }
+        }
     }
 
-    /** Select all (null = follow all selected folders) or none (empty set). */
-    fun setAllIndexFolders(selectAll: Boolean) {
+    /** Toggle a folder in/out of the index selection (explicit set). */
+    fun toggleIndexFolder(id: Long) {
+        val cur = _indexJob.value.indexFolders
         _indexJob.update {
-            it.copy(indexFolders = if (selectAll) null else emptySet())
+            it.copy(indexFolders = if (id in cur) cur - id else cur + id)
+        }
+    }
+
+    /** Select all folders (or clear the selection). */
+    fun setAllIndexFolders(selectAll: Boolean) {
+        val all = _uiState.value.folders.map { it.id }.toSet()
+        _indexJob.update {
+            it.copy(indexFolders = if (selectAll) all else emptySet())
         }
     }
 
@@ -495,6 +703,13 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update { it.copy(pillAlignmentLeft = left) }
     }
 
+    /** Toggle background auto-index after scans, persisted. */
+    fun toggleAutoIndex() {
+        val newVal = !_uiState.value.autoIndex
+        prefs.edit().putBoolean(KEY_AUTO_INDEX, newVal).apply()
+        _uiState.update { it.copy(autoIndex = newVal) }
+    }
+
     /** Clear the last scan/connection error (after it was shown as a toast). */
     fun clearError() = _uiState.update { it.copy(error = null) }
 
@@ -517,6 +732,54 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                 else -> false
             }
         }
+
+    /** Indexed count for [folder] — straight from the PRECOMPUTED per-folder
+     *  table (SUCCESS entries only; FAILED markers never count). Rebuilt once
+     *  per index change, so IndexScreen rows are O(1) per recomposition
+     *  (P0: was O(entries) twice per folder per frame). */
+    fun indexedCount(folder: com.flowgallery.app.data.model.Folder): Int =
+        indexCountsByFolder[folder.id] ?: 0
+
+    /** Rebuild [indexCountsByFolder] from the in-memory index. Regular entries
+     *  count by folderId; legacy entries without a valid folderId fall back
+     *  to decoded-path matching (same semantics as the old per-call scan, but
+     *  O(n) once per index change instead of O(folders×n) per frame). */
+    private fun rebuildIndexCounts() {
+        val folders = _uiState.value.folders.ifEmpty { repository.loadFolders() }
+        val validIds = folders.map { it.id }.toSet()
+        val byFolderId = HashMap<Long, Int>()
+        val byUri = HashMap<Long, Int>()
+        for (e in mediaIndex.values) {
+            if (e.status != com.flowgallery.app.data.index.IndexStatus.SUCCESS) continue
+            if (e.folderId in validIds) {
+                byFolderId.merge(e.folderId, 1, Int::plus)
+            } else {
+                for (f in folders) {
+                    if (uriUnderFolder(e.uriString, f.uriString)) {
+                        byUri.merge(f.id, 1, Int::plus)
+                        break
+                    }
+                }
+            }
+        }
+        val ids = byFolderId.keys + byUri.keys
+        indexCountsByFolder = ids.associateWith {
+            maxOf(byFolderId[it] ?: 0, byUri[it] ?: 0)
+        }
+    }
+
+    /** True when [itemUri] lives under [folderUri]: compares DECODED path
+     *  segments so percent-encoding (tree/document) and SMB credentials
+     *  never break the match. */
+    private fun uriUnderFolder(itemUri: String, folderUri: String): Boolean = try {
+        val item = android.net.Uri.parse(itemUri)
+        val folder = android.net.Uri.parse(folderUri)
+        val ip = item.pathSegments
+        val fp = folder.pathSegments
+        fp.isNotEmpty() && ip.size >= fp.size && ip.take(fp.size) == fp
+    } catch (e: Exception) {
+        false
+    }
 
     /** Set search media-type filter (null = all). */
     fun setMediaTypeFilter(type: String?) =
@@ -609,19 +872,16 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     // ------------------------------------------------------------------ favorites
 
-    fun toggleFavorite(imageId: Long) {
+    fun toggleFavorite(uriString: String) {
         val newSet = _favorites.value.let { favs ->
-            if (imageId in favs) favs - imageId else favs + imageId
+            if (uriString in favs) favs - uriString else favs + uriString
         }
         _favorites.value = newSet
         saveFavorites(newSet)
     }
 
-    private fun loadFavorites(): Set<Long> =
-        prefs.getStringSet(KEY_FAVORITES, emptySet())?.mapNotNull { it.toLongOrNull() }?.toSet() ?: emptySet()
-
-    private fun saveFavorites(set: Set<Long>) {
-        prefs.edit().putStringSet(KEY_FAVORITES, set.map { it.toString() }.toSet()).apply()
+    private fun saveFavorites(set: Set<String>) {
+        prefs.edit().putStringSet(KEY_FAVORITES, set).apply()
     }
 
     // ------------------------------------------------------------------ derived
@@ -631,8 +891,8 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     fun visibleImages(state: GalleryUiState = _uiState.value): List<ImageItem> {
         var list = state.images
         when (state.currentFilter) {
-            null -> list = list.filter { it.id in state.dedupedIds } // All: deduped
-            HomeFilter.FAVORITES -> list = list.filter { it.id in _favorites.value }
+            null -> list = list.filter { it.uriString in state.dedupedUris } // All: deduped
+            HomeFilter.FAVORITES -> list = list.filter { it.uriString in _favorites.value }
             else -> {
                 list = if (state.currentSubFolderId != null) {
                     // Match by stable subfolder URI — ids drift between scans
@@ -662,7 +922,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         // Opened from Favorites: the browsing sequence is the favorites list
         // only — never cross into non-favorited items.
         if (state.viewer.favoritesOnly) {
-            return state.images.filter { it.id in _favorites.value }
+            return state.images.filter { it.uriString in _favorites.value }
         }
         val subId = state.viewer.subFolderId ?: return visibleImages(state)
         val activeSub = state.folders
@@ -709,5 +969,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         const val KEY_HD_THUMBNAILS = "hd_thumbnails"
         const val KEY_MONET_COLORS = "monet_colors"
         const val KEY_PILL_ALIGNMENT_LEFT = "pill_alignment_left"
+        const val KEY_INDEX_CONCURRENCY = "index_concurrency"
+        const val KEY_AUTO_INDEX = "auto_index"
     }
 }

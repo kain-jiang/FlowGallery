@@ -28,10 +28,25 @@ class SmartVideoFrameDecoder(
 
     override suspend fun decode(): DecodeResult {
         val uri = options.parameters.value<String>(KEY_VIDEO_URI)?.let { Uri.parse(it) }
+        android.util.Log.d("SmartVideo", "decode: uri=$uri mime=${options.parameters.value<String>("mime")}")
         val retriever = MediaMetadataRetriever()
         try {
-            if (uri != null) {
-                retriever.setDataSource(options.context, uri)
+            // Prefer the LOCAL file (SmbFetcher downloads videos to a temp
+            // file) — decoding locally is fast; streaming seek over SMB is
+            // too slow for frame extraction.
+            val localFile = source.fileOrNull()
+            if (localFile != null) {
+                android.util.Log.d("SmartVideo", "local file: $localFile")
+                retriever.setDataSource(localFile.toString())
+            } else if (uri != null) {
+                if (uri.scheme == "smb") {
+                    android.util.Log.d("SmartVideo", "SMB: SmbMediaDataSource")
+                    retriever.setDataSource(
+                        SmbMediaDataSource(uri.toString())
+                    )
+                } else {
+                    retriever.setDataSource(options.context, uri)
+                }
             } else {
                 source.fileOrNull()?.let { retriever.setDataSource(it.toString()) }
             }
@@ -40,6 +55,7 @@ class SmartVideoFrameDecoder(
                 retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
                     ?.toLong()?.times(1000L) ?: 0L
             }.getOrDefault(0L)
+            android.util.Log.d("SmartVideo", "durationUs=$durationUs")
 
             // Sample times: 0, 1s, 2s, 4s, 8s, 16s (cap at clip length).
             val sampleTimes = mutableListOf(0L)

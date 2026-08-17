@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -141,6 +143,7 @@ private fun IndexStatusCard(
             Text(
                 text = stringResource(
                     when {
+                        running && !paused && job.isAuto -> R.string.index_status_auto
                         running && !paused -> R.string.index_status_running
                         running -> R.string.index_status_paused
                         else -> R.string.index_status_idle
@@ -209,9 +212,9 @@ private fun IndexStatusCard(
             }
         }
 
-        // Actions
-        Spacer(Modifier.height(16.dp))
-        if (running) {
+        // Actions — auto-index has no controls, just progress
+        if (running && !job.isAuto) {
+            Spacer(Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -234,15 +237,17 @@ private fun IndexStatusCard(
                 )
             }
         } else {
+            // Row 1: clear + re-index; Row 2: incremental index (full width)
+            Spacer(Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 ActionButton(
-                    label = stringResource(R.string.index_start),
-                    icon = Icons.Filled.Bolt,
-                    tint = scheme.primary,
-                    onClick = { viewModel.startIndex(false) },
+                    label = stringResource(R.string.index_clear),
+                    icon = Icons.Filled.DeleteSweep,
+                    tint = scheme.error,
+                    onClick = viewModel::clearIndex,
                     modifier = Modifier.weight(1f)
                 )
                 ActionButton(
@@ -253,6 +258,14 @@ private fun IndexStatusCard(
                     modifier = Modifier.weight(1f)
                 )
             }
+            Spacer(Modifier.height(10.dp))
+            ActionButton(
+                label = stringResource(R.string.index_start),
+                icon = Icons.Filled.Bolt,
+                tint = scheme.primary,
+                onClick = { viewModel.startIndex(false) },
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
@@ -264,8 +277,9 @@ private fun FolderSelectionCard(
 ) {
     val scheme = MaterialTheme.colorScheme
     val state by viewModel.uiState.collectAsState()
-    val folders = state.folders.filter { it.isSelected }
-    val selection = job.indexFolders // null = all
+    // ALL folders are selectable — regardless of their enabled state.
+    val folders = state.folders
+    val selection = job.indexFolders
 
     Column(
         modifier = Modifier
@@ -285,7 +299,7 @@ private fun FolderSelectionCard(
             if (!job.running) {
                 Text(
                     text = stringResource(
-                        if (selection == null || selection.size == folders.size)
+                        if (selection.size == folders.size)
                             R.string.index_select_none
                         else R.string.index_select_all
                     ),
@@ -297,7 +311,7 @@ private fun FolderSelectionCard(
                         .clickable {
                             // All-selected → tap clears; partial → tap selects all.
                             viewModel.setAllIndexFolders(
-                                selection != null && selection.size != folders.size
+                                selection.size != folders.size
                             )
                         }
                         .padding(horizontal = 8.dp, vertical = 4.dp)
@@ -314,7 +328,7 @@ private fun FolderSelectionCard(
             )
         } else {
             folders.forEach { folder ->
-                val checked = selection == null || folder.id in selection
+                val checked = folder.id in selection
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -351,18 +365,25 @@ private fun FolderSelectionCard(
                             )
                         }
                     }
+                    Spacer(Modifier.width(10.dp))
+                    // Source icon (consistent with settings/home)
+                    Icon(
+                        com.flowgallery.app.ui.components.sourceBadgeIcon(folder.source),
+                        contentDescription = folder.source.label,
+                        tint = scheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         text = folder.name,
                         color = scheme.onSurface,
                         fontSize = 14.sp,
                         modifier = Modifier
                             .weight(1f)
-                            .padding(start = 10.dp)
+                            .padding(start = 4.dp)
                     )
                     Text(
-                        text = stringResource(
-                            R.string.image_count, folder.imageCount
-                        ),
+                        text = "${viewModel.indexedCount(folder)}/${folder.imageCount}",
                         color = scheme.onSurfaceVariant,
                         fontSize = 12.sp
                     )

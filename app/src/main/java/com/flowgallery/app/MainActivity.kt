@@ -79,6 +79,7 @@ import com.flowgallery.app.R
 import com.flowgallery.app.ui.components.FolderSelectionModal
 import com.flowgallery.app.ui.components.FolderTypeDialog
 import com.flowgallery.app.ui.components.ImageViewer
+import com.flowgallery.app.ui.components.SmbAddDialog
 import com.flowgallery.app.ui.components.SourcePickerDialog
 import com.flowgallery.app.ui.screens.FavoritesScreen
 import com.flowgallery.app.ui.screens.HomeScreen
@@ -227,6 +228,10 @@ private fun MainScaffold(
     var pendingExitConfirm by remember { mutableStateOf(false) }
     var scrollToTopSignal by remember { mutableStateOf(0) }
     var showSourcePicker by remember { mutableStateOf(false) }
+    var showSmbDialog by remember { mutableStateOf(false) }
+    var folderInfo by remember { mutableStateOf<Folder?>(null) }
+    var pendingSmbConfig by remember { mutableStateOf<com.flowgallery.app.data.source.SmbConfig?>(null) }
+    var pendingSmbName by remember { mutableStateOf<String?>(null) }
     // Bottom nav + system bars auto-hide while browsing down (Home only)
     var bottomBarVisible by remember { mutableStateOf(true) }
 
@@ -341,7 +346,7 @@ private fun MainScaffold(
                         viewModel = viewModel,
                         onImageClick = { img ->
                             // Browse ONLY the favorited sequence in the viewer
-                            val favList = state.images.filter { it.id in favorites }
+                            val favList = state.images.filter { it.uriString in favorites }
                             val idx = favList.indexOfFirst { it.id == img.id }
                             if (idx >= 0) viewModel.openViewer(idx, favoritesOnly = true)
                         }
@@ -349,6 +354,7 @@ private fun MainScaffold(
                     GalleryTab.Settings -> SettingsScreen(
                         viewModel = viewModel,
                         onAddFolder = { showSourcePicker = true },
+                        onShowInfo = { folder -> folderInfo = folder },
                         onRemoveFolder = { folder -> folderToRemove = folder },
                         onEditType = { folder -> folderToEditType = folder }
                     )
@@ -641,7 +647,80 @@ private fun MainScaffold(
         }
     }
 
-    // Source picker before adding a folder (only LOCAL implemented)
+    // Folder info dialog — project-styled
+    folderInfo?.let { folder ->
+        val scheme = MaterialTheme.colorScheme
+        androidx.compose.ui.window.Dialog(onDismissRequest = { folderInfo = null }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(scheme.surface)
+                    .padding(24.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(width = 40.dp, height = 4.dp)
+                        .align(Alignment.CenterHorizontally)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(scheme.outline)
+                )
+                Spacer(Modifier.height(20.dp))
+                Text(
+                    text = stringResource(R.string.folder_info_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = scheme.onSurface
+                )
+                Spacer(Modifier.height(16.dp))
+                InfoRow(
+                    label = stringResource(R.string.folder_info_name),
+                    value = folder.name
+                )
+                InfoRow(
+                    label = stringResource(R.string.folder_info_source),
+                    value = folder.source.label
+                )
+                InfoRow(
+                    label = stringResource(R.string.folder_info_type),
+                    value = stringResource(
+                        if (folder.type == com.flowgallery.app.data.model.FolderType.PACK)
+                            R.string.folder_type_pack else R.string.folder_type_normal
+                    )
+                )
+                InfoRow(
+                    label = stringResource(R.string.folder_info_path),
+                    value = folder.uriString
+                )
+                InfoRow(
+                    label = stringResource(R.string.folder_info_files),
+                    value = "${folder.imageCount}"
+                )
+                InfoRow(
+                    label = stringResource(R.string.folder_info_indexed),
+                    value = "${viewModel.indexedCount(folder)}"
+                )
+                Spacer(Modifier.height(20.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(scheme.surfaceVariant)
+                        .clickable { folderInfo = null }
+                        .padding(vertical = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(R.string.close),
+                        color = scheme.onSurfaceVariant,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+    }
+
+    // Source picker before adding a folder (LOCAL = SAF, SMB = config dialog)
     if (showSourcePicker) {
         SourcePickerDialog(
             onPickLocal = {
@@ -650,16 +729,45 @@ private fun MainScaffold(
             },
             onPickExternal = { type ->
                 showSourcePicker = false
-                android.widget.Toast.makeText(
-                    uiContext,
-                    uiContext.getString(
-                        com.flowgallery.app.R.string.source_wip,
-                        type.label
-                    ),
-                    android.widget.Toast.LENGTH_SHORT
-                ).show()
+                if (type == com.flowgallery.app.data.source.SourceType.SMB) {
+                    showSmbDialog = true
+                } else {
+                    android.widget.Toast.makeText(
+                        uiContext,
+                        uiContext.getString(
+                            com.flowgallery.app.R.string.source_wip,
+                            type.label
+                        ),
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
             },
             onDismiss = { showSourcePicker = false }
+        )
+    }
+
+    // SMB share config dialog → then folder-type dialog (like local flow)
+    if (showSmbDialog) {
+        SmbAddDialog(
+            onConfirm = { config, name ->
+                showSmbDialog = false
+                pendingSmbConfig = config
+                pendingSmbName = name
+            },
+            onDismiss = { showSmbDialog = false }
+        )
+    }
+
+    // Folder-type selection for a pending SMB share (recommended = PACK)
+    pendingSmbConfig?.let { config ->
+        FolderTypeDialog(
+            folderName = pendingSmbName ?: "${config.host}/${config.share}",
+            recommended = com.flowgallery.app.data.model.FolderType.PACK,
+            onConfirm = { type ->
+                pendingSmbConfig = null
+                viewModel.addSmbFolder(config, pendingSmbName, type)
+            },
+            onDismiss = { pendingSmbConfig = null }
         )
     }
 
@@ -784,6 +892,25 @@ private fun tabIcon(tab: GalleryTab): ImageVector = when (tab) {
     GalleryTab.Favorites -> Icons.Filled.Favorite
     GalleryTab.Settings -> Icons.Filled.Settings
     GalleryTab.Index -> Icons.Filled.Bolt
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    val scheme = MaterialTheme.colorScheme
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            color = scheme.onSurfaceVariant,
+            fontSize = 11.sp
+        )
+        Text(
+            text = value,
+            color = scheme.onSurface,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium
+        )
+        Spacer(Modifier.height(10.dp))
+    }
 }
 
 @Composable

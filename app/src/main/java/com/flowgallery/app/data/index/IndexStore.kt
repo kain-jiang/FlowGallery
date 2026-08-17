@@ -32,13 +32,16 @@ class IndexStore(private val context: Context) {
                             uri,
                             IndexEntry(
                                 uriString = uri,
+                                folderId = if (o.isNull("f")) -1L else o.optLong("f", -1L),
                                 width = o.optInt("w"),
                                 height = o.optInt("h"),
                                 durationMs = if (o.isNull("d")) null else o.optLong("d"),
                                 sizeBytes = o.optLong("s"),
                                 modifiedTime = o.optLong("m"),
                                 contentHash = if (o.isNull("h")) null else o.optString("h"),
-                                indexedAt = o.optLong("t")
+                                indexedAt = o.optLong("t"),
+                                status = if (o.optString("st") == "FAILED")
+                                    IndexStatus.FAILED else IndexStatus.SUCCESS
                             )
                         )
                     }
@@ -60,6 +63,7 @@ class IndexStore(private val context: Context) {
                 arr.put(
                     JSONObject().apply {
                         put("uri", e.uriString)
+                        put("f", e.folderId)
                         put("w", e.width)
                         put("h", e.height)
                         put("d", e.durationMs)
@@ -67,6 +71,7 @@ class IndexStore(private val context: Context) {
                         put("m", e.modifiedTime)
                         put("h", e.contentHash)
                         put("t", e.indexedAt)
+                        put("st", e.status.name)
                     }
                 )
             }

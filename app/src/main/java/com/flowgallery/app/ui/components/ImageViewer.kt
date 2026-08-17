@@ -94,6 +94,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.compose.SubcomposeAsyncImage
 import com.flowgallery.app.R
+import com.flowgallery.app.data.smbModel
 import com.flowgallery.app.data.model.ImageItem
 import com.flowgallery.app.data.model.MediaType
 import com.flowgallery.app.ui.theme.Surface2
@@ -108,14 +109,14 @@ import kotlinx.coroutines.launch
 fun ImageViewer(
     images: List<ImageItem>,
     currentIndex: Int,
-    favoriteIds: Set<Long>,
+    favoriteIds: Set<String>,
     onNavigate: (Int) -> Unit,
     onNavigateDelta: ((Int) -> Unit)? = null,
     /** true when an adjacent subfolder exists in that direction (double arrow) */
     canCrossBackward: Boolean = false,
     canCrossForward: Boolean = false,
     onClose: () -> Unit,
-    onToggleFavorite: (Long) -> Unit,
+    onToggleFavorite: (String) -> Unit,
     onShare: ((ImageItem) -> Unit)? = null,
     onSaveToGallery: ((ImageItem) -> Unit)? = null
 ) {
@@ -353,13 +354,13 @@ fun ImageViewer(
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     IconButton(
-                        onClick = { onToggleFavorite(currentItem.id) },
+                        onClick = { onToggleFavorite(currentItem.uriString) },
                         modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
-                            imageVector = if (currentItem.id in favoriteIds) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                            imageVector = if (currentItem.uriString in favoriteIds) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                             contentDescription = stringResource(R.string.cd_favorite),
-                            tint = if (currentItem.id in favoriteIds) Color(0xFFEF4444) else Color.White,
+                            tint = if (currentItem.uriString in favoriteIds) Color(0xFFEF4444) else Color.White,
                             modifier = Modifier
                                 .size(22.dp)
                                 .shadow(
@@ -533,7 +534,7 @@ fun ImageViewer(
                                 model = coil.request.ImageRequest.Builder(
                                     androidx.compose.ui.platform.LocalContext.current
                                 )
-                                    .data(img.uriString)
+                                    .data(smbModel(img.uriString))
                                     .apply {
                                         if (img.type.isVideo) {
                                             setParameter(
@@ -714,7 +715,16 @@ private fun VideoPlayerView(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val exoPlayer = remember(uriString) {
-        ExoPlayer.Builder(context).build().apply {
+        val builder = ExoPlayer.Builder(context)
+        // SMB videos stream through jcifs-ng (smb:// DataSource).
+        if (uriString.startsWith("smb://")) {
+            builder.setMediaSourceFactory(
+                androidx.media3.exoplayer.source.DefaultMediaSourceFactory(
+                    androidx.media3.datasource.DataSource.Factory { com.flowgallery.app.data.SmbDataSource() }
+                )
+            )
+        }
+        builder.build().apply {
             setMediaItem(MediaItem.fromUri(uriString))
             prepare()
             playWhenReady = false
@@ -798,7 +808,7 @@ private fun VideoPlayerView(
         if (!isPlaying) {
             SubcomposeAsyncImage(
                 model = coil.request.ImageRequest.Builder(context)
-                    .data(uriString)
+                    .data(smbModel(uriString))
                     .setParameter(
                         com.flowgallery.app.data.SmartVideoFrameDecoder.KEY_VIDEO_URI,
                         uriString
@@ -1170,7 +1180,7 @@ private fun ZoomableImage(
         // Keep 1x as a complete Fit view (no cropping). Double-tap zooms to
         // coverScale() which fills the whole viewport (no black band).
         SubcomposeAsyncImage(
-            model = item.uriString,
+            model = smbModel(item.uriString),
             contentDescription = item.name,
             contentScale = ContentScale.Fit,
             onSuccess = { state ->

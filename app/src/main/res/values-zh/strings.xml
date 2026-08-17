@@ -18,11 +18,13 @@
     <!-- Index tab -->
     <string name="index_status_idle">空闲</string>
     <string name="index_status_running">索引中…</string>
+    <string name="index_status_auto">自动索引中…</string>
     <string name="index_status_paused">已暂停</string>
     <string name="index_progress">%1$d/%2$d</string>
     <string name="index_progress_detail">%1$d%% · 新增 %2$d 条</string>
-    <string name="index_start">开始索引</string>
+    <string name="index_start">增量索引</string>
     <string name="index_reindex">重新索引</string>
+    <string name="index_clear">清空索引</string>
     <string name="index_pause">暂停</string>
     <string name="index_resume">继续</string>
     <string name="index_cancel">取消</string>
@@ -30,12 +32,15 @@
     <string name="index_stat_last">上次索引</string>
     <string name="index_stat_never">从未</string>
     <string name="index_what_title">索引是什么？</string>
-    <string name="index_what_body">索引提取文件夹中资源的元数据（尺寸、视频时长、内容哈希）。首页用它实现正确的图片比例、HD/SD 徽章、排序与去重。索引只处理新增或变更的文件，重复执行很快。</string>
+    <string name="index_what_body">索引提取资源的元数据（尺寸、视频时长、内容哈希），用于正确的图片比例、HD/SD 徽章、排序与去重。增量索引只处理新增/变更文件；重新索引全量重建；清空索引移除全部条目。</string>
     <string name="index_auto_notice">正在索引新内容…</string>
+    <string name="index_done_notice">索引完成：成功 %1$d 条，失败 %2$d 条</string>
+    <string name="index_cancelled_notice">索引已取消：成功 %1$d 条，失败 %2$d 条</string>
     <string name="index_folders_title">要索引的文件夹</string>
     <string name="index_folders_empty">暂无文件夹 — 请先在设置中添加</string>
     <string name="index_select_all">全选</string>
     <string name="index_select_none">清空</string>
+    <string name="index_pending">待索引</string>
 
     <!-- Home -->
     <string name="all">全部</string>
@@ -56,6 +61,22 @@
     <string name="source_sftp">SFTP 服务器</string>
     <string name="source_webdav">WebDAV 服务器</string>
     <string name="source_wip">%1$s — 开发中</string>
+
+    <!-- SMB dialog -->
+    <string name="smb_title">SMB 网络共享</string>
+    <string name="smb_host">服务器</string>
+    <string name="smb_host_hint">例如 192.168.1.10 或 nas.local</string>
+    <string name="smb_share">共享名</string>
+    <string name="smb_path">路径（可选）</string>
+    <string name="smb_path_hint">例如 照片/2024</string>
+    <string name="smb_username">用户名</string>
+    <string name="smb_password">密码</string>
+    <string name="smb_domain">域（可选）</string>
+    <string name="smb_test">测试连接</string>
+    <string name="smb_testing">测试中…</string>
+    <string name="smb_test_ok">连接成功 ✓</string>
+    <string name="smb_name">显示名称（可选）</string>
+    <string name="smb_add">添加共享</string>
     <string name="cd_search">搜索</string>
     <string name="cd_grid_toggle">切换网格视图</string>
     <string name="cd_add_folder">添加文件夹</string>
@@ -125,6 +146,8 @@
     <string name="section_display">显示</string>
     <string name="setting_quality">图片质量</string>
     <string name="setting_quality_desc">高清缩略图</string>
+    <string name="setting_auto_index">自动索引</string>
+    <string name="setting_auto_index_desc">扫描后后台索引新内容</string>
     <string name="setting_monet">莫奈取色</string>
     <string name="setting_monet_desc">跟随壁纸动态取色（Android 12+）</string>
     <string name="setting_pill_alignment">悬浮胶囊位置</string>
@@ -171,4 +194,17 @@
     <string name="remove_folder_confirm">移出</string>
     <string name="remove_folder_cancel">取消</string>
     <string name="cd_remove_folder">移出文件夹</string>
+    <string name="cd_refresh_folder">重新扫描</string>
+    <string name="cd_folder_info">文件夹信息</string>
+
+    <!-- Folder info dialog + refresh feedback -->
+    <string name="folder_info_title">文件夹信息</string>
+    <string name="folder_info_name">名称</string>
+    <string name="folder_info_source">来源</string>
+    <string name="folder_info_type">类型</string>
+    <string name="folder_info_path">路径</string>
+    <string name="folder_info_files">文件数</string>
+    <string name="folder_info_indexed">已索引</string>
+    <string name="folder_refreshed_notice">已刷新 %1$s：%2$d 个文件</string>
+    <string name="close">关闭</string>
 </resources>

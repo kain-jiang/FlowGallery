@@ -4,12 +4,15 @@ import android.app.Application
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.decode.VideoFrameDecoder
+import com.flowgallery.app.data.SmbFetcher
+import com.flowgallery.app.data.SmbUriKeyer
 import com.flowgallery.app.data.SmartVideoFrameDecoder
 
 class FlowGalleryApp : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        com.flowgallery.app.data.source.SmbCredentialStore.init(this)
     }
 
     /** Single shared ImageLoader — also used by "Clear Cache" in settings. */
@@ -25,6 +28,9 @@ class FlowGalleryApp : Application(), ImageLoaderFactory {
     private fun buildImageLoader(): ImageLoader =
         ImageLoader.Builder(this)
             .components {
+                // SMB shares (smb:// URLs via SmbUri wrapper) — stable cache key
+                add(SmbUriKeyer())
+                add(SmbFetcher.Factory())
                 // Smart decoder first (handles video/*), default as fallback
                 add(SmartVideoFrameDecoder.Factory())
                 add(VideoFrameDecoder.Factory())

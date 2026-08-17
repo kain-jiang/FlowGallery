@@ -94,6 +94,9 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
+    // SMB network share source (jcifs-ng)
+    implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
+
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

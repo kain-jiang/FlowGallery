@@ -625,7 +625,9 @@ GalleryUiState
 - 修复：查看器分辨率不刷新（remember 缓存导致索引完成后仍显示旧值）、ArrowBack/VolumeOff/Sort 弃用（AutoMirrored）
 - **莫奈取色自动刷新**：壁纸颜色变化监听（OnColorsChangedListener）→ 启用莫奈时自动 recreate Activity 应用新动态配色（此前壁纸变更后主题色不变）
 - **Tab 顺序**：首页 / 收藏 / ⚡索引 / **设置（最右固定）**（`8bbd4c8`）
-- **文件夹源抽象**（`feat/folder-source` `d6c9502`）：`data/source/` 抽象层 — `FolderSource` 接口（listFiles/openStream/testConnection）+ `SourceType`（LOCAL/SMB/FTP/SFTP/WEBDAV）+ `SourceRegistry` 注册表 + `LocalFolderSource`（SAF 实现）；Folder/ImageItem 带 `source` 字段并持久化；扫描/索引/去重读取全部经源接口分派。**新增外置源（SMB 等）只需实现 FolderSource + 注册 + 配置 UI**，详见 `docs/ARCHITECTURE.md`；设置页文件夹行**主图标=源类型**、**右上角徽标=文件夹类型**（普通=Folder、图包=Collections，抽象 `folderTypeIcon()` 统一设置徽标/类型弹窗/首页；GridView 保留给首页"全部"）；首页文件夹选择框图标与源类型一致（共用 sourceBadgeIcon，子文件夹图标与标题对齐+半透明）；**添加文件夹先弹源类型选择**（LOCAL 走 SAF，SMB/FTP/SFTP/WebDAV Toast「开发中」）
+- **设置页文件夹管理（架构划分）**：文件夹 = 设置页管理（添加自动快速扫描 / **行内 2×2 操作块**（启用/刷新/信息/移出，项目风格圆角大块；**刷新 → Toast 结果反馈** + **无条件重新索引该文件夹**（不依赖自动索引开关 — 刷新后计数不丢）；**信息 → 项目风格弹窗**（名称/来源/类型/路径/文件数/已索引数））；索引 = 索引页单独管理；**索引结构卫生**：删除文件夹清理其索引条目、启动时清理**无法归属**的条目（folderId 或 uri pathSegments 归属）— 旧数据不影响计数
+- **SMB 源实现**（feat/smb-support）：`SmbFolderSource`（jcifs-ng 列目录/读流/测试连接）+ `SmbConfig`（host/share/path/账号，url 含凭据为 folder.uriString）+ `SmbContexts`（超时/DNS/context 缓存复用连接）+ 注册；`SmbAddDialog`（服务器/共享/路径/账号/密码/域 + 测试连接 + 可滚动，**添加后弹类型选择弹窗（同本地流程）**）；Coil `SmbFetcher`（SmbUri 包装绕过 String→Uri 映射 + **SmbUriKeyer 稳定磁盘缓存**；**图片下载临时文件解码，视频流式取帧**（SmbMediaDataSource 按需 seek+read，零下载）；并发限 3）；视频播放 `SmbDataSource`（Media3 流式）；**SmbMediaDataSource 修复**（向后 seek 重开流后用新流读取，修复 "Bad file descriptor"）；pruneOverlaps 保留非 SAF 源；**索引提取不算 MD5**（哈希全文件读取在 SMB 上极慢，改为去重时按需计算，仅大小重复候选）
+- **索引 Tab 全文件夹可选**：索引范围不看文件夹启用状态（所有文件夹都可勾选索引，行内显示源类型图标 + **已索引数/文件数**（**索引数据带状态**：IndexEntry.status = SUCCESS/FAILED（架构字段，持久化；提取失败的存 FAILED 标记 + 24h 节流重试，不再丢弃）；**已索引 = status==SUCCESS 的条目数**（folderId + uri pathSegments 匹配；失败不计入）；**启动自愈**：旧数据按 uri 重挂 folderId，孤儿删除）；**默认选中已启用的文件夹**（不默认全选；显式集合增删）；**三功能**：清空索引 / 重新索引（全量）/ 增量索引（两行布局）；说明文案同步；**完成后 Toast 成功/失败数量**；**自动索引在索引页显示状态/进度**；**设置页自动索引开关**；自动索引完成 Toast；**首页缩略图只从索引取**（未索引 → 固定「待索引」占位，不发起加载；索引状态与首页一一对应）
 
 ---
 

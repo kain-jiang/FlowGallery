@@ -5,7 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,6 +20,7 @@ import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
@@ -43,6 +46,7 @@ import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.flowgallery.app.R
 import com.flowgallery.app.data.SmartVideoFrameDecoder
+import com.flowgallery.app.data.smbModel
 import com.flowgallery.app.data.model.ImageItem
 import com.flowgallery.app.data.model.MediaType
 import com.flowgallery.app.data.model.SortMode
@@ -58,9 +62,9 @@ import com.flowgallery.app.ui.theme.Warning
 @Composable
 fun WaterfallGrid(
     images: List<ImageItem>,
-    favoriteIds: Set<Long>,
+    favoriteIds: Set<String>,
     onImageClick: (ImageItem) -> Unit,
-    onToggleFavorite: (Long) -> Unit,
+    onToggleFavorite: (String) -> Unit,
     modifier: Modifier = Modifier,
     columnCount: Int = 2,
     sortMode: SortMode = SortMode.DEFAULT,
@@ -114,10 +118,10 @@ fun WaterfallGrid(
             val img = images[index]
             WaterfallCard(
                 image = img,
-                isFavorite = img.id in favoriteIds,
+                isFavorite = img.uriString in favoriteIds,
                 sortMode = sortMode,
                 onClick = { onImageClick(img) },
-                onToggleFavorite = { onToggleFavorite(img.id) }
+                onToggleFavorite = { onToggleFavorite(img.uriString) }
             )
         }
     }
@@ -146,29 +150,73 @@ private fun WaterfallCard(
             .clickable(onClick = onClick)
     ) {
         val ratio = resolvedRatio.coerceIn(0.4f, 2.5f)
-        SubcomposeAsyncImage(
-            model = ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
-                .data(image.uriString)
-                .apply {
-                    if (image.type.isVideo) {
-                        setParameter(SmartVideoFrameDecoder.KEY_VIDEO_URI, image.uriString)
+        // Index state drives the home card: only INDEXED items load their
+        // thumbnail; unindexed ones show a fixed "pending" placeholder and
+        // never hit the source (index status ↔ home status, 1:1).
+        val isIndexed = image.width > 0 && image.height > 0
+        if (isIndexed) {
+            // Same placeholder for loading AND error, so the card never
+            // flashes blank while the SMB stream decodes (or fails).
+            val placeholder: @Composable (
+                coil.compose.SubcomposeAsyncImageScope,
+                Any
+            ) -> Unit = { _, _ ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                )
+            }
+            SubcomposeAsyncImage(
+                model = ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                    .data(smbModel(image.uriString))
+                    .apply {
+                        if (image.type.isVideo) {
+                            setParameter(SmartVideoFrameDecoder.KEY_VIDEO_URI, image.uriString)
+                        }
                     }
-                }
-                .build(),
-            contentDescription = image.name,
-            contentScale = ContentScale.Crop,
-            onSuccess = { state ->
-                val d = state.result.drawable
-                val w = d.intrinsicWidth
-                val h = d.intrinsicHeight
-                if (w > 0 && h > 0) {
-                    resolvedRatio = w.toFloat() / h
-                }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(ratio)
-        )
+                    .build(),
+                contentDescription = image.name,
+                contentScale = ContentScale.Crop,
+                loading = placeholder,
+                error = placeholder,
+                onSuccess = { state ->
+                    val d = state.result.drawable
+                    val w = d.intrinsicWidth
+                    val h = d.intrinsicHeight
+                    if (w > 0 && h > 0) {
+                        resolvedRatio = w.toFloat() / h
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(ratio)
+            )
+        } else {
+            // "Pending index" placeholder — no Coil request at all.
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(ratio)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    Icons.Filled.Bolt,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = stringResource(R.string.index_pending),
+                    color = MaterialTheme.colorScheme.outline,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
 
         // Bottom gradient overlay
         Box(
