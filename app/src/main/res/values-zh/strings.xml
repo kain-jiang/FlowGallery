@@ -79,6 +79,8 @@
     <string name="smb_add">添加共享</string>
     <string name="cd_search">搜索</string>
     <string name="cd_grid_toggle">切换网格视图</string>
+    <string name="refresh_done">刷新完成，共 %1$d 张图片</string>
+    <string name="refresh_done_with_new">刷新完成，新增 %1$d 张图片</string>
     <string name="cd_add_folder">添加文件夹</string>
     <string name="cd_sort">排序</string>
     <string name="default_folder_name">文件夹</string>
@@ -92,6 +94,9 @@
     <string name="folder_type_recommended">推荐</string>
     <string name="folder_type_confirm">添加文件夹</string>
     <string name="folder_type_ok">确认</string>
+    <string name="folder_type_scanning">正在扫描…</string>
+    <string name="folder_added_notice">已添加文件夹：%1$s，共 %2$d 张图片</string>
+    <string name="folder_add_failed">添加失败：无法扫描该文件夹</string>
     <string name="folder_type_normal_short">普通</string>
     <string name="folder_type_pack_short">图包</string>
 
@@ -145,9 +150,7 @@
     <string name="section_folders">文件夹</string>
     <string name="section_display">显示</string>
     <string name="setting_quality">图片质量</string>
-    <string name="setting_quality_desc">高清缩略图</string>
-    <string name="setting_auto_index">自动索引</string>
-    <string name="setting_auto_index_desc">扫描后后台索引新内容</string>
+    <string name="setting_quality_desc">加载高清缩略图</string>
     <string name="setting_monet">莫奈取色</string>
     <string name="setting_monet_desc">跟随壁纸动态取色（Android 12+）</string>
     <string name="setting_pill_alignment">悬浮胶囊位置</string>
@@ -185,6 +188,13 @@
     <string name="sort_largest">文件最大</string>
     <string name="sort_smallest">文件最小</string>
     <string name="sort_quality">画质优先（HD）</string>
+    <string name="sort_quality_asc">画质优先（SD）</string>
+    <string name="sort_by_time">时间</string>
+    <string name="sort_by_size">大小</string>
+    <string name="sort_by_quality">画质</string>
+    <string name="menu_more">更多</string>
+    <string name="menu_sort">排序</string>
+    <string name="menu_single_column">单列模式</string>
     <string name="sort_value_time">%1$s</string>
     <string name="sort_value_size">%1$s</string>
 

@@ -46,7 +46,10 @@ fun FavoritesScreen(
     val state by viewModel.uiState.collectAsState()
     val favorites by viewModel.favorites.collectAsState()
 
-    val favImages = state.images.filter { it.uriString in favorites }
+    // Favorites from ENABLED folders only — disabled folders' images are
+    // hidden from the whole app (toggle in settings, no rescan).
+    val enabledIds = state.folders.filter { it.isSelected }.map { it.id }.toSet()
+    val favImages = state.images.filter { it.uriString in favorites && it.folderId in enabledIds }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
