@@ -5,8 +5,8 @@ import coil.fetch.FetchResult
 import coil.fetch.Fetcher
 import coil.fetch.SourceResult
 import coil.request.Options
-import com.flowgallery.app.data.source.SmbConfig
 import com.flowgallery.app.data.source.SmbContexts
+import com.flowgallery.app.data.source.SmbCredentialStore
 import jcifs.smb.SmbFile
 
 /**
@@ -41,7 +41,7 @@ class SmbFetcher(
 
     override suspend fun fetch(): FetchResult {
         val url = uri.value
-        val config = SmbConfig.fromUrl(url) ?: throw IllegalStateException("bad smb url")
+        val config = SmbCredentialStore.configFor(url) ?: throw IllegalStateException("bad smb url")
         val mime = mimeFromUrl(url)
 
         // VIDEOS: return the stream directly — SmartVideoFrameDecoder reads

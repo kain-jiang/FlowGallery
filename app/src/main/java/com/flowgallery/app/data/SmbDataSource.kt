@@ -2,8 +2,8 @@ package com.flowgallery.app.data
 
 import androidx.media3.datasource.BaseDataSource
 import androidx.media3.datasource.DataSpec
-import com.flowgallery.app.data.source.SmbConfig
 import com.flowgallery.app.data.source.SmbContexts
+import com.flowgallery.app.data.source.SmbCredentialStore
 import jcifs.smb.SmbFile
 
 /**
@@ -21,7 +21,7 @@ class SmbDataSource : BaseDataSource(/* isNetwork = */ true) {
     override fun open(dataSpec: DataSpec): Long {
         val url = dataSpec.uri.toString()
         currentUri = dataSpec.uri
-        val config = SmbConfig.fromUrl(url) ?: throw IllegalStateException("bad smb url")
+        val config = SmbCredentialStore.configFor(url) ?: throw IllegalStateException("bad smb url")
         val f = SmbFile(url, SmbContexts.context(config))
         val stream = f.inputStream
         if (dataSpec.position > 0) {

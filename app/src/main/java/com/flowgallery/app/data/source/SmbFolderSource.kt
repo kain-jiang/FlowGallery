@@ -7,9 +7,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * SMB network share backend (jcifs-ng). The folder's uriString is a full
- * smb:// URL with embedded credentials; item uriStrings are smb:// file
- * URLs under it (also with credentials, inherited from the share).
+ * SMB network share backend (jcifs-ng). The folder's uriString is a
+ * CREDENTIAL-FREE smb:// URL (`smb://host/share[/path]`); credentials come
+ * from [SmbCredentialStore] at connect time and are never persisted in
+ * URLs, index keys or cache files.
  */
 class SmbFolderSource : FolderSource {
 
@@ -20,11 +21,16 @@ class SmbFolderSource : FolderSource {
         folder: Folder,
         onProgress: ((done: Int, total: Int) -> Unit)?
     ): List<ScanEntry> = withContext(Dispatchers.IO) {
-        val config = SmbConfig.fromUrl(folder.uriString) ?: return@withContext emptyList()
+        // Attach stored credentials (if any) for the traversal; the URLs we
+        // emit stay credential-free.
+        val rootConfig = SmbCredentialStore.configFor(folder.uriString)
+            ?: return@withContext emptyList()
+        val rootUrl = rootConfig.urlNoCreds
         val out = mutableListOf<ScanEntry>()
         val counter = intArrayOf(0)
 
         fun collect(dirUrl: String, depth: Int, subUri: String?, subName: String?) {
+            val config = SmbCredentialStore.configFor(dirUrl) ?: return
             val dir = runCatching { SmbFile(dirUrl, SmbContexts.context(config)) }
                 .getOrNull() ?: return
             val entries = runCatching { dir.listFiles() }.getOrNull() ?: return
@@ -53,13 +59,13 @@ class SmbFolderSource : FolderSource {
             }
         }
 
-        collect(config.url, 0, null, null)
+        collect(rootUrl, 0, null, null)
         onProgress?.invoke(counter[0], counter[0])
         out
     }
 
     override fun openStream(item: ImageItem): java.io.InputStream? = runCatching {
-        val config = SmbConfig.fromUrl(item.uriString) ?: return null
+        val config = SmbCredentialStore.configFor(item.uriString) ?: return null
         SmbFile(item.uriString, SmbContexts.context(config)).inputStream
     }.getOrNull()
 

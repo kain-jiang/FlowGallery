@@ -1,8 +1,8 @@
 package com.flowgallery.app.data
 
 import android.media.MediaDataSource
-import com.flowgallery.app.data.source.SmbConfig
 import com.flowgallery.app.data.source.SmbContexts
+import com.flowgallery.app.data.source.SmbCredentialStore
 import jcifs.smb.SmbFile
 
 /**
@@ -12,7 +12,7 @@ import jcifs.smb.SmbFile
  */
 class SmbMediaDataSource(private val fileUrl: String) : MediaDataSource() {
 
-    private val config = SmbConfig.fromUrl(fileUrl)
+    private val config = SmbCredentialStore.configFor(fileUrl)
     private val smbFile = config?.let { SmbFile(fileUrl, SmbContexts.context(it)) }
     private var stream = smbFile?.inputStream
     private var streamPos = 0L

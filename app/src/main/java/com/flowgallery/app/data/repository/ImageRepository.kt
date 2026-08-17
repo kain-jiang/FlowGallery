@@ -32,6 +32,40 @@ class ImageRepository(private val context: Context) {
     private val scanCacheFile: java.io.File
         get() = java.io.File(context.filesDir, "scan_cache.json")
 
+    /** Persisted dedup result (kept URIs) — survives restarts so the "All"
+     *  view is correct IMMEDIATELY on cold start (P0: no empty flash while
+     *  the background dedup pass re-runs). Keyed by URI because item ids
+     *  drift between scans. */
+    private val dedupUrisFile: java.io.File
+        get() = java.io.File(context.filesDir, "dedup_uris.json")
+
+    fun saveDedupUris(uris: Set<String>) {
+        runCatching {
+            val arr = org.json.JSONArray(uris.toList())
+            dedupUrisFile.writeText(arr.toString())
+            android.util.Log.d("DedupCache", "saved ${uris.size} kept uris")
+        }.onFailure { e ->
+            android.util.Log.e("DedupCache", "save failed", e)
+        }
+    }
+
+    fun loadDedupUris(): Set<String> {
+        return try {
+            if (!dedupUrisFile.exists()) emptySet()
+            else {
+                val arr = org.json.JSONArray(dedupUrisFile.readText())
+                buildSet {
+                    for (i in 0 until arr.length()) {
+                        arr.optString(i).takeIf { it.isNotBlank() }?.let(::add)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("DedupCache", "load failed", e)
+            emptySet()
+        }
+    }
+
     /**
      * Persist the last scan result so the app can show content instantly on
      * startup, then refresh in the background (avoids the "reloads every
@@ -101,10 +135,17 @@ class ImageRepository(private val context: Context) {
                     }
                 }
                 android.util.Log.d("ScanCache", "loaded ${list.size} items, withDim=${list.count { it.width > 0 }}")
+                // SECURITY MIGRATION (P0): a legacy cache may still hold
+                // smb:// URLs WITH embedded credentials — strip them so the
+                // index keys line up with the new credential-free scans.
+                val sanitized = list.map { it.copy(uriString = stripSmbCreds(it.uriString)) }
+                    .map {
+                        if (it.subFolderUri != null) it.copy(subFolderUri = stripSmbCreds(it.subFolderUri)) else it
+                    }
                 // Sanitize half-baked entries: a (w>0, h==0) or (w==0, h>0)
                 // dimension is garbage from a broken extract and must not be
                 // shown — zero both so the UI falls back to unknown.
-                list.map {
+                sanitized.map {
                     if (it.width > 0 && it.height > 0) it
                     else if (it.width > 0 || it.height > 0) it.copy(width = 0, height = 0)
                     else it
@@ -155,10 +196,27 @@ class ImageRepository(private val context: Context) {
         } catch (e: Exception) {
             emptyList()
         }
+        // SECURITY MIGRATION (P0): legacy SMB folders persisted their full
+        // smb:// URL WITH credentials. Strip the credentials into the
+        // encrypted store and persist the clean URL — one-time per folder.
+        var migrated = false
+        val sanitized = folders.map { f ->
+            if (f.source == com.flowgallery.app.data.source.SourceType.SMB &&
+                f.uriString.contains('@')
+            ) {
+                val cfg = com.flowgallery.app.data.source.SmbConfig.fromUrl(f.uriString)
+                if (cfg != null) {
+                    com.flowgallery.app.data.source.SmbCredentialStore.save(cfg)
+                    migrated = true
+                    f.copy(uriString = cfg.urlNoCreds)
+                } else f
+            } else f
+        }
+        if (migrated) saveFolders(sanitized)
         // Self-heal: drop entries whose tree is covered by another entry
         // (e.g. a subfolder also added as a separate library item), which
         // would otherwise duplicate media in the "All" view.
-        return pruneOverlaps(folders)
+        return pruneOverlaps(sanitized)
     }
 
     /**
@@ -247,10 +305,12 @@ class ImageRepository(private val context: Context) {
         return true
     }
 
-    /** Add an SMB share folder (source = SMB), dedup by smb url. */
+    /** Add an SMB share folder (source = SMB), dedup by smb url. The stored
+     *  uriString is CREDENTIAL-FREE; the password goes to the encrypted
+     *  [SmbCredentialStore] instead (never in URLs / index keys / caches). */
     fun addSmbFolder(config: com.flowgallery.app.data.source.SmbConfig, displayName: String?, type: FolderType): Boolean {
         val folders = loadFolders().toMutableList()
-        val url = config.url
+        val url = config.urlNoCreds
         if (folders.any { it.uriString == url }) return false
         val name = displayName?.takeIf { it.isNotBlank() } ?: "${config.host}/${config.share}"
         val nextId = (folders.maxOfOrNull { it.id } ?: 0L) + 1
@@ -264,6 +324,7 @@ class ImageRepository(private val context: Context) {
             )
         )
         saveFolders(folders)
+        com.flowgallery.app.data.source.SmbCredentialStore.save(config)
         return true
     }
 
@@ -274,6 +335,12 @@ class ImageRepository(private val context: Context) {
         } catch (e: Exception) {
             null
         }
+    }
+
+    /** Strip embedded SMB credentials from a legacy URL (P0 migration). */
+    private fun stripSmbCreds(uri: String): String {
+        if (!uri.startsWith("smb://") || !uri.contains('@')) return uri
+        return com.flowgallery.app.data.source.SmbConfig.fromUrl(uri)?.urlNoCreds ?: uri
     }
 
     /**
@@ -317,8 +384,9 @@ class ImageRepository(private val context: Context) {
     }
 
     /**
-     * Remove a folder from the library AND release its SAF persistable
-     * permission (FR-2). Returns the removed folder.
+     * Remove a folder from the library entirely (FR-2): releases its SAF
+     * persistable permission AND drops its SMB credentials (if any).
+     * Returns the removed folder.
      */
     fun removeFolder(id: Long): Folder? {
         val folders = loadFolders().toMutableList()
@@ -326,10 +394,17 @@ class ImageRepository(private val context: Context) {
         folders.removeIf { it.id == id }
         saveFolders(folders)
         runCatching {
-            val uri = Uri.parse(removed.uriString)
-            resolver.releasePersistableUriPermission(
-                uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-            )
+            if (removed.source == com.flowgallery.app.data.source.SourceType.SMB) {
+                val cfg = com.flowgallery.app.data.source.SmbCredentialStore.configFor(removed.uriString)
+                if (cfg != null) {
+                    com.flowgallery.app.data.source.SmbCredentialStore.delete(cfg.host, cfg.share)
+                }
+            } else {
+                val uri = Uri.parse(removed.uriString)
+                resolver.releasePersistableUriPermission(
+                    uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
         }
         return removed
     }

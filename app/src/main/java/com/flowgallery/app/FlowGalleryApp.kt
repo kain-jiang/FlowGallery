@@ -12,6 +12,7 @@ class FlowGalleryApp : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        com.flowgallery.app.data.source.SmbCredentialStore.init(this)
     }
 
     /** Single shared ImageLoader — also used by "Clear Cache" in settings. */

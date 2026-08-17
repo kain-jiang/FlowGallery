@@ -13,6 +13,8 @@ data class SmbConfig(
     val password: String = "",
     val domain: String = ""
 ) {
+    /** Full URL WITH embedded credentials (in-memory use only — test
+     *  connection, direct jcifs calls). NEVER persisted. */
     val url: String
         get() {
             val auth = if (username.isNotEmpty()) {
@@ -27,6 +29,19 @@ data class SmbConfig(
             val base = "smb://$auth$host/$sharePath"
             return if (sub.isNotEmpty()) "$base/$sub/" else "$base/"
         }
+
+    /** URL WITHOUT credentials — the ONLY form persisted (folder uriString,
+     *  item uriString, index keys, scan cache, Coil cache keys). */
+    val urlNoCreds: String
+        get() {
+            val sharePath = share.trim('/')
+            val sub = path.trim('/')
+            val base = "smb://$host/$sharePath"
+            return if (sub.isNotEmpty()) "$base/$sub/" else "$base/"
+        }
+
+    /** Stable credential key (host/share) used by the encrypted store. */
+    val credKey: String get() = "$host/${share.trim('/')}"
 
     /** Parse a full smb:// URL (with credentials) back into a config. */
     companion object {
