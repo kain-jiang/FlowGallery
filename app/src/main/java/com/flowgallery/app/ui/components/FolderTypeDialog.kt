@@ -37,18 +37,21 @@ import com.flowgallery.app.data.model.FolderType
 /**
  * Folder-type picker shown right after the SAF folder selection.
  * [recommended] is pre-selected; the user can switch to the other type.
+ * While [addingFolder], the confirm button shows a scanning spinner and
+ * is disabled (the folder is being scanned before being added).
  */
 @Composable
 fun FolderTypeDialog(
     folderName: String,
     recommended: FolderType,
+    addingFolder: Boolean = false,
     onConfirm: (FolderType) -> Unit,
     onDismiss: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
     var selected by remember { mutableStateOf(recommended) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(onDismissRequest = { if (!addingFolder) onDismiss() }) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -86,6 +89,7 @@ fun FolderTypeDialog(
                 desc = stringResource(R.string.folder_type_normal_desc),
                 isSelected = selected == FolderType.NORMAL,
                 isRecommended = recommended == FolderType.NORMAL,
+                enabled = !addingFolder,
                 onClick = { selected = FolderType.NORMAL }
             )
             Spacer(Modifier.height(10.dp))
@@ -97,28 +101,44 @@ fun FolderTypeDialog(
                 desc = stringResource(R.string.folder_type_pack_desc),
                 isSelected = selected == FolderType.PACK,
                 isRecommended = recommended == FolderType.PACK,
+                enabled = !addingFolder,
                 onClick = { selected = FolderType.PACK }
             )
 
             Spacer(Modifier.height(20.dp))
 
-            // Confirm
+            // Confirm — turns into a scanning spinner while adding.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(scheme.primaryContainer)
-                    .clickable { onConfirm(selected) }
+                    .clickable(enabled = !addingFolder) { onConfirm(selected) }
                     .padding(16.dp),
                 horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = stringResource(R.string.folder_type_ok),
-                    color = scheme.primary,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
+                if (addingFolder) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        color = scheme.primary,
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.folder_type_scanning),
+                        color = scheme.primary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                } else {
+                    Text(
+                        text = stringResource(R.string.folder_type_ok),
+                        color = scheme.primary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
     }
@@ -131,6 +151,7 @@ private fun TypeOption(
     desc: String,
     isSelected: Boolean,
     isRecommended: Boolean,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -139,7 +160,7 @@ private fun TypeOption(
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(if (isSelected) scheme.primaryContainer else scheme.surfaceVariant)
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

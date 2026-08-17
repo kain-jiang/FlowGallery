@@ -41,11 +41,16 @@ data class GalleryUiState(
     val currentSubFolderId: Long? = null,
     val viewer: ViewerState = ViewerState(),
     val isRefreshing: Boolean = false,
+    /** true while a folder-add is being scanned — the folder is persisted
+     *  ONLY after its scan succeeds (loading state on the add dialog). */
+    val addingFolder: Boolean = false,
+    /** true only while a USER-triggered refresh (home tab click) runs —
+     *  automatic scans (startup, folder changes) keep this false so the
+     *  tab icon only swaps to the refresh glyph for real user actions. */
+    val userRefreshing: Boolean = false,
     val error: String? = null,
     /** one-shot user notice (shown as a toast, then cleared) */
     val indexNotice: String? = null,
-    /** background auto-index after scans (Settings toggle) */
-    val autoIndex: Boolean = true,
     /** Default portrait grid columns (2/3/4), set in Settings (FR-1). */
     val portraitColumns: Int = 2,
     /** Default landscape grid columns (2/3/4), set in Settings (FR-1). */
@@ -132,8 +137,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                 sortMode = savedSort,
                 hdThumbnails = prefs.getBoolean(KEY_HD_THUMBNAILS, true),
                 monetColors = prefs.getBoolean(KEY_MONET_COLORS, false),
-                pillAlignmentLeft = prefs.getBoolean(KEY_PILL_ALIGNMENT_LEFT, false),
-                autoIndex = prefs.getBoolean(KEY_AUTO_INDEX, true)
+                pillAlignmentLeft = prefs.getBoolean(KEY_PILL_ALIGNMENT_LEFT, false)
             )
         }
         // Load the metadata index, then show the last cached scan immediately
@@ -144,6 +148,10 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         // to a current folder; true orphans are dropped. This makes old
         // indexes count correctly again without a manual re-index.
         val folders = repository.loadFolders()
+        // Publish the persisted folder list into the UI state — WITHOUT this
+        // the home screen would show an empty library after a restart (the
+        // old refreshFolders() used to do it; refresh is now user-driven).
+        _uiState.update { it.copy(folders = folders) }
         val folderIds = folders.map { it.id }.toSet()
         var repaired = 0
         val clean = mediaIndex.mapNotNull { (uri, e) ->
@@ -184,7 +192,9 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         // drift between scans) to stable uris — best effort against the
         // current cached scan.
         migrateLegacyFavorites(cached)
-        refreshFolders()
+        // NOTE: no automatic startup scan — the cached scan is shown as-is.
+        // Refreshing is user-driven only (home tab click / settings folder
+        // refresh / index tab), so startup stays instant and silent.
     }
 
     /** One-time migration: pre-uri favorites were stored as image ids; map
@@ -205,28 +215,98 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     // ------------------------------------------------------------------ folders
 
-    /** Reload persisted folders and rescan their images. */
-    fun refreshFolders() {
-        viewModelScope.launch {
-            val folders = repository.loadFolders()
-            _uiState.update { it.copy(folders = folders) }
-            if (folders.isNotEmpty()) rescan()
-        }
-    }
-
-    /** Add a folder from SAF picker result with an explicit type. */
+    /** Add a folder from SAF picker result with an explicit type. The folder
+     *  is persisted ONLY after its scan succeeds: the add dialog shows a
+     *  loading state ([GalleryUiState.addingFolder]) while the scan runs. */
     fun addFolder(uri: Uri, displayName: String, type: FolderType) {
         viewModelScope.launch {
-            val added = repository.addFolder(uri, displayName, type)
-            if (added) refreshFolders()
+            _uiState.update { it.copy(addingFolder = true) }
+            // Compute the id the same way addFolder will (max+1) so item ids
+            // built during the pre-scan line up with the persisted folder.
+            val nextId = (repository.loadFolders().maxOfOrNull { it.id } ?: 0L) + 1
+            val temp = Folder(
+                id = nextId,
+                name = displayName.ifBlank { uri.lastPathSegment ?: "Folder" },
+                uriString = uri.toString(),
+                type = type
+            )
+            val scan = runCatching { repository.scanFolder(temp) }.getOrNull()
+            val added = scan != null && repository.addFolder(uri, displayName, type)
+            if (added && scan != null) {
+                repository.updateFolderSubFolders(nextId, scan.subFolders, scan.items.size)
+                val images = _uiState.value.images + scan.items
+                val indexed = applyIndex(images)
+                _uiState.update {
+                    it.copy(images = indexed, folders = repository.loadFolders(), addingFolder = false)
+                }
+                repository.saveScanCache(indexed)
+                computeDedupInBackground(images)
+                _uiState.update {
+                    it.copy(
+                        indexNotice = getApplication<Application>().getString(
+                            com.flowgallery.app.R.string.folder_added_notice,
+                            displayName.ifBlank { uri.lastPathSegment ?: "Folder" },
+                            scan.items.size
+                        )
+                    )
+                }
+            } else {
+                _uiState.update { it.copy(addingFolder = false) }
+                _uiState.update {
+                    it.copy(
+                        indexNotice = getApplication<Application>().getString(
+                            com.flowgallery.app.R.string.folder_add_failed
+                        )
+                    )
+                }
+            }
         }
     }
 
-    /** Add an SMB share folder, then rescan. */
+    /** Add an SMB share folder, then rescan. Scanned BEFORE persisting, so a
+     *  bad host/credentials never leaves a broken entry in the list. */
     fun addSmbFolder(config: com.flowgallery.app.data.source.SmbConfig, name: String?, type: FolderType) {
         viewModelScope.launch {
-            val added = repository.addSmbFolder(config, name, type)
-            if (added) refreshFolders()
+            _uiState.update { it.copy(addingFolder = true) }
+            val nextId = (repository.loadFolders().maxOfOrNull { it.id } ?: 0L) + 1
+            val displayName = name?.takeIf { it.isNotBlank() } ?: "${config.host}/${config.share}"
+            val temp = Folder(
+                id = nextId,
+                name = displayName,
+                uriString = config.urlNoCreds,
+                source = com.flowgallery.app.data.source.SourceType.SMB,
+                type = type
+            )
+            val scan = runCatching { repository.scanFolder(temp) }.getOrNull()
+            val added = scan != null && repository.addSmbFolder(config, name, type)
+            if (added && scan != null) {
+                repository.updateFolderSubFolders(nextId, scan.subFolders, scan.items.size)
+                val images = _uiState.value.images + scan.items
+                val indexed = applyIndex(images)
+                _uiState.update {
+                    it.copy(images = indexed, folders = repository.loadFolders(), addingFolder = false)
+                }
+                repository.saveScanCache(indexed)
+                computeDedupInBackground(images)
+                _uiState.update {
+                    it.copy(
+                        indexNotice = getApplication<Application>().getString(
+                            com.flowgallery.app.R.string.folder_added_notice,
+                            displayName,
+                            scan.items.size
+                        )
+                    )
+                }
+            } else {
+                _uiState.update { it.copy(addingFolder = false) }
+                _uiState.update {
+                    it.copy(
+                        indexNotice = getApplication<Application>().getString(
+                            com.flowgallery.app.R.string.folder_add_failed
+                        )
+                    )
+                }
+            }
         }
     }
 
@@ -250,20 +330,9 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             val images = others + scan.items
             _uiState.update { it.copy(images = images, folders = repository.loadFolders()) }
             repository.saveScanCache(applyIndex(images))
-            // P0: serialize with any running index pass — drop this folder's
-            // stale entries then ALWAYS re-index it (refresh must leave it
-            // indexed), all under the same mutex.
-            viewModelScope.launch(Dispatchers.IO) {
-                indexMutex.withLock {
-                    mediaIndex = mediaIndex.filterValues { it.folderId != id }
-                    if (scan.items.isNotEmpty()) {
-                        runIndexPass(scan.items)
-                    } else {
-                        indexStore.save(mediaIndex.values)
-                        rebuildIndexCounts()
-                    }
-                }
-            }
+            // NOTE: refresh does NOT touch the index — no stale-entry drop,
+            // no forced re-index. Indexed counts stay as the Index tab left
+            // them; new files get indexed only when the user runs indexing.
             // Feedback
             val app = getApplication<Application>()
             val msg = app.getString(
@@ -286,7 +355,10 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Toggle a folder's selected flag and rescan. */
+    /** Toggle a folder's selected flag. Pure UI state — NO rescan: the home
+     *  grid filters by enabled folders at display time, so toggling a folder
+     *  instantly hides/shows its cached images without touching the scan
+     *  cache or the network. */
     fun toggleFolder(id: Long) {
         viewModelScope.launch {
             val state0 = _uiState.value
@@ -305,7 +377,6 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                     it.copy(folders = folders)
                 }
             }
-            rescan()
         }
     }
 
@@ -335,11 +406,19 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     // ------------------------------------------------------------------ scanning
 
-    /** Rescan all selected folders (pull-to-refresh / after folder changes). */
-    fun rescan() {
+    /** Rescan all selected folders (home-tab refresh / folder changes).
+     *  When [userTriggered], [GalleryUiState.userRefreshing] is raised for
+     *  the duration so the home tab icon can show the refresh glyph. */
+    fun rescan(userTriggered: Boolean = false) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isRefreshing = true, error = null) }
+            val startedAt = System.currentTimeMillis()
+            _uiState.update {
+                it.copy(isRefreshing = true, error = null, userRefreshing = userTriggered)
+            }
             val selected = _uiState.value.folders.filter { it.isSelected }
+            // Snapshot the current URI set BEFORE the scan so we can report
+            // how many new images the refresh found.
+            val oldUris = _uiState.value.images.mapTo(HashSet()) { it.uriString }
             val result = runCatching { repository.scanAll(selected) }
             result.onSuccess { scanResults ->
                 // Keep the FULL set — dedup applies only to the All view.
@@ -363,8 +442,25 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                         images = indexedImages,
                         folders = folders,
                         isRefreshing = false
+                        // userRefreshing stays true here — cleared by
+                        // finishUserRefresh below after the minimum spin.
                     )
                 }
+                // Feedback: report the refresh result (new count or total).
+                val app = getApplication<Application>()
+                val newCount = indexedImages.count { it.uriString !in oldUris }
+                val doneNotice = if (newCount > 0) {
+                    app.getString(
+                        com.flowgallery.app.R.string.refresh_done_with_new,
+                        newCount
+                    )
+                } else {
+                    app.getString(
+                        com.flowgallery.app.R.string.refresh_done,
+                        indexedImages.size
+                    )
+                }
+                _uiState.update { it.copy(indexNotice = doneNotice) }
                 // Persist so the next launch shows content instantly — with
                 // the best-known dimensions (never store bare items over
                 // previously saved sizes).
@@ -376,25 +472,28 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
                     android.util.Log.d("IndexMatch", "scanUri=$sample")
                     android.util.Log.d("IndexMatch", "indexUri=$indexKey")
                 }
-                // Auto-index only when enabled AND there is new/changed
-                // content (throttled retries) — otherwise skip it entirely.
-                val missing = needsIndexing(images)
-                if (missing && _uiState.value.autoIndex) {
-                    // Tell the user the background index is running.
-                    val notice = getApplication<Application>().getString(
-                        com.flowgallery.app.R.string.index_auto_notice
-                    )
-                    _uiState.update {
-                        it.copy(indexNotice = notice)
-                    }
-                    indexImagesInBackground(images)
-                }
+                // NOTE: refresh does NOT touch the index — new/changed files
+                // keep their pending placeholder until the user runs the
+                // Index tab (index and refresh are fully decoupled).
                 // Compute All-view dedup ids in the background.
                 computeDedupInBackground(images)
+                finishUserRefresh(userTriggered, startedAt)
             }.onFailure { e ->
                 _uiState.update { it.copy(isRefreshing = false, error = e.message) }
+                finishUserRefresh(userTriggered, startedAt)
             }
         }
+    }
+
+    /** After a scan settles: keep [GalleryUiState.userRefreshing] raised for
+     *  at least [REFRESH_ICON_MIN_MS] total (fast scans still show the tab
+     *  icon spinning a full turn), then clear it. No-op for non-user scans. */
+    private suspend fun finishUserRefresh(userTriggered: Boolean, startedAt: Long) {
+        if (!userTriggered) return
+        val elapsed = System.currentTimeMillis() - startedAt
+        val remaining = REFRESH_ICON_MIN_MS - elapsed
+        if (remaining > 0) kotlinx.coroutines.delay(remaining)
+        _uiState.update { it.copy(userRefreshing = false) }
     }
 
     /** Background content-dedup for the All view (size + MD5). Result is a
@@ -408,69 +507,6 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             _uiState.update { it.copy(dedupedUris = uris) }
             repository.saveDedupUris(uris)
         }
-    }
-
-    /** Serialized background index pass — every index mutation runs under
-     *  [indexMutex] so concurrent scans/refreshes never clobber each other
-     *  (P0: lost-update race). */
-    private fun indexImagesInBackground(images: List<ImageItem>) {
-        viewModelScope.launch(Dispatchers.IO) {
-            indexMutex.withLock {
-                runIndexPass(images)
-            }
-        }
-    }
-
-    /**
-     * The actual incremental merge + persist + stream pass.
-     * MUST be called while holding [indexMutex].
-     */
-    private suspend fun runIndexPass(images: List<ImageItem>) {
-        // Reflect the background auto-index on the Index tab.
-        _indexJob.update {
-            it.copy(running = true, isAuto = true, paused = false, done = 0, total = images.size)
-        }
-        val (newIndex, extracted, failed) = mediaIndexer.merge(
-            images, mediaIndex,
-            onProgress = { done, total ->
-                _indexJob.update { it.copy(done = done, total = total) }
-            }
-        )
-        mediaIndex = newIndex
-        indexStore.save(newIndex.values)
-        rebuildIndexCounts()
-        _indexJob.update {
-            it.copy(
-                running = false,
-                isAuto = false,
-                entryCount = newIndex.values.count {
-                    it.status == com.flowgallery.app.data.index.IndexStatus.SUCCESS
-                },
-                lastIndexedAt = System.currentTimeMillis()
-            )
-        }
-        // Report success/failure counts (even when zero).
-        val app = getApplication<Application>()
-        val notice = app.getString(
-            com.flowgallery.app.R.string.index_done_notice,
-            extracted, failed
-        )
-        _uiState.update { it.copy(indexNotice = notice) }
-        val enriched = applyIndex(images)
-        val enrichedById = enriched.associateBy { it.id }
-        // Update in chunks so the UI streams results progressively.
-        val chunk = 60
-        for (i in enriched.indices step chunk) {
-            val end = (i + chunk).coerceAtMost(enriched.size)
-            _uiState.update { st ->
-                st.copy(images = st.images.map { enrichedById[it.id] ?: it })
-            }
-            if (end < enriched.size) {
-                kotlinx.coroutines.delay(30)
-            }
-        }
-        // Persist enriched items (dimensions included) for next launch.
-        repository.saveScanCache(enriched)
     }
 
     /** Fill items with metadata from the in-memory index. */
@@ -703,35 +739,11 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update { it.copy(pillAlignmentLeft = left) }
     }
 
-    /** Toggle background auto-index after scans, persisted. */
-    fun toggleAutoIndex() {
-        val newVal = !_uiState.value.autoIndex
-        prefs.edit().putBoolean(KEY_AUTO_INDEX, newVal).apply()
-        _uiState.update { it.copy(autoIndex = newVal) }
-    }
-
     /** Clear the last scan/connection error (after it was shown as a toast). */
     fun clearError() = _uiState.update { it.copy(error = null) }
 
     /** Clear the one-shot index notice after it was toasted. */
     fun clearIndexNotice() = _uiState.update { it.copy(indexNotice = null) }
-
-    /** True when there is genuinely NEW content to index, or a failed entry
-     *  is due for a retry. Failed extracts (zero dimensions) are kept but
-     *  throttled to one retry per day — otherwise every launch would re-index
-     *  and toast forever. */
-    private fun needsIndexing(items: List<ImageItem>): Boolean =
-        items.any { item ->
-            val e = mediaIndex[item.uriString]
-            when {
-                e == null -> true
-                e.sizeBytes != item.sizeBytes || e.modifiedTime != item.modifiedTime -> true
-                // Broken entry: retry at most once a day.
-                (e.width <= 0 || e.height <= 0) &&
-                    System.currentTimeMillis() - e.indexedAt > 24 * 3600_000L -> true
-                else -> false
-            }
-        }
 
     /** Indexed count for [folder] — straight from the PRECOMPUTED per-folder
      *  table (SUCCESS entries only; FAILED markers never count). Rebuilt once
@@ -887,9 +899,12 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     // ------------------------------------------------------------------ derived
 
     /** Images visible under the current tab + filter, sorted by the active mode.
-     *  Dedup applies ONLY to the All view; folder/subfolder views keep full set. */
+     *  Dedup applies ONLY to the All view; folder/subfolder views keep full set.
+     *  Only images from ENABLED folders are shown — toggling a folder in
+     *  settings hides/shows its cached media instantly, no rescan needed. */
     fun visibleImages(state: GalleryUiState = _uiState.value): List<ImageItem> {
-        var list = state.images
+        val enabledIds = state.folders.filter { it.isSelected }.map { it.id }.toSet()
+        var list = state.images.filter { it.folderId in enabledIds }
         when (state.currentFilter) {
             null -> list = list.filter { it.uriString in state.dedupedUris } // All: deduped
             HomeFilter.FAVORITES -> list = list.filter { it.uriString in _favorites.value }
@@ -919,10 +934,13 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
      * sort mode as the Home grid so viewer order matches the grid.
      */
     fun viewerImages(state: GalleryUiState = _uiState.value): List<ImageItem> {
+        val enabledIds = state.folders.filter { it.isSelected }.map { it.id }.toSet()
         // Opened from Favorites: the browsing sequence is the favorites list
         // only — never cross into non-favorited items.
         if (state.viewer.favoritesOnly) {
-            return state.images.filter { it.uriString in _favorites.value }
+            return state.images.filter {
+                it.uriString in _favorites.value && it.folderId in enabledIds
+            }
         }
         val subId = state.viewer.subFolderId ?: return visibleImages(state)
         val activeSub = state.folders
@@ -949,11 +967,12 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         SortMode.LARGEST -> list.sortedByDescending { it.sizeBytes }
         SortMode.SMALLEST -> list.sortedBy { it.sizeBytes }
         SortMode.QUALITY -> list.sortedByDescending {
-            when {
-                it.type.isVideo -> 0
-                it.isHd -> 2
-                else -> 1
-            }
+            // Videos last; images rank by resolution tier (7 levels).
+            if (it.type.isVideo) -1 else it.qualityLevel.order
+        }
+        SortMode.QUALITY_ASC -> list.sortedBy {
+            // Videos last (forced to the end), images by resolution ascending.
+            if (it.type.isVideo) Int.MAX_VALUE else it.qualityLevel.order
         }
     }
 
@@ -970,6 +989,9 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
         const val KEY_MONET_COLORS = "monet_colors"
         const val KEY_PILL_ALIGNMENT_LEFT = "pill_alignment_left"
         const val KEY_INDEX_CONCURRENCY = "index_concurrency"
-        const val KEY_AUTO_INDEX = "auto_index"
+
+        /** Minimum time the user-triggered refresh icon stays visible, so a
+         *  fast scan still shows the tab icon spinning a full turn (PRD §7.4). */
+        const val REFRESH_ICON_MIN_MS = 1000L
     }
 }

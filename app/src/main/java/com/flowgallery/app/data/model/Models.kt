@@ -45,6 +45,31 @@ enum class MediaType {
     val isVideo: Boolean get() = this == VIDEO
 }
 
+/** Resolution quality tiers — derived from the SHORTER edge so portrait and
+ *  landscape media are judged on the same scale (video convention). */
+enum class QualityLevel(val label: String, val order: Int) {
+    BELOW_480("<480P", 0),
+    P480("480P", 1),
+    P720("720P", 2),
+    P1080("1080P", 3),
+    K2("2K", 4),
+    K4("4K", 5),
+    ABOVE_4K(">4K", 6);
+
+    companion object {
+        /** Short-edge → tier, following standard resolution steps. */
+        fun fromShortEdge(px: Int): QualityLevel = when {
+            px < 480 -> BELOW_480
+            px < 720 -> P480
+            px < 1080 -> P720
+            px < 1440 -> P1080
+            px < 2160 -> K2
+            px < 4320 -> K4
+            else -> ABOVE_4K
+        }
+    }
+}
+
 /**
  * A single media item discovered inside a [Folder].
  *
@@ -74,7 +99,16 @@ data class ImageItem(
     val contentHash: String? = null,
     val duplicates: List<ImageItem> = emptyList()
 ) {
-    val isHd: Boolean get() = width >= 1920 || height >= 1080
+    /** Resolution tier by short edge; 0 dimensions fall back to the lowest. */
+    val qualityLevel: QualityLevel
+        get() = if (width > 0 && height > 0) {
+            QualityLevel.fromShortEdge(minOf(width, height))
+        } else {
+            QualityLevel.BELOW_480
+        }
+
+    /** True when the tier is 1080P or better (kept for stats/sorting compat). */
+    val isHd: Boolean get() = qualityLevel.order >= QualityLevel.P1080.order
 
     /** Aspect ratio used by the waterfall layout; guard against corrupt metadata. */
     val aspectRatio: Float
@@ -101,12 +135,13 @@ enum class GalleryTab(val label: String) {
 
 /** Gallery sort modes (home grid). */
 enum class SortMode {
-    DEFAULT,   // scan order
-    LATEST,    // modified time, newest first
-    OLDEST,    // modified time, oldest first
-    LARGEST,   // file size, biggest first
-    SMALLEST,  // file size, smallest first
-    QUALITY    // HD first
+    DEFAULT,      // scan order
+    LATEST,       // modified time, newest first
+    OLDEST,       // modified time, oldest first
+    LARGEST,      // file size, biggest first
+    SMALLEST,     // file size, smallest first
+    QUALITY,      // resolution, highest first
+    QUALITY_ASC   // resolution, lowest first
 }
 
 /** Special home-tab filters that are not real folders. */

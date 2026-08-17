@@ -50,8 +50,6 @@ import com.flowgallery.app.data.smbModel
 import com.flowgallery.app.data.model.ImageItem
 import com.flowgallery.app.data.model.MediaType
 import com.flowgallery.app.data.model.SortMode
-import com.flowgallery.app.ui.theme.Success
-import com.flowgallery.app.ui.theme.Warning
 
 /**
  * Pinterest-style waterfall (staggered) grid. Items keep their natural aspect
@@ -231,10 +229,12 @@ private fun WaterfallCard(
                 )
         )
 
-        // Quality badge (HD / SD) — only for images; videos show type badge only
+        // Quality badge (resolution tier, e.g. 480P/720P/1080P/2K/4K/4K+) —
+        // only for images; videos show type badge only. Color ramps from
+        // orange (low) through green to purple (4K+) — gradient across tiers.
         if (!image.type.isVideo) {
             Text(
-                text = if (image.isHd) "HD" else "SD",
+                text = image.qualityLevel.label,
                 color = Color.White,
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Medium,
@@ -242,7 +242,7 @@ private fun WaterfallCard(
                     .align(Alignment.BottomStart)
                     .padding(8.dp)
                     .clip(RoundedCornerShape(4.dp))
-                    .background(if (image.isHd) Success.copy(alpha = 0.85f) else Warning.copy(alpha = 0.85f))
+                    .background(qualityTierColor(image.qualityLevel).copy(alpha = 0.85f))
                     .padding(horizontal = 6.dp, vertical = 3.dp)
             )
         }
@@ -360,4 +360,16 @@ private fun formatSize(bytes: Long): String {
     }
     return if (unit == 0) "${bytes} B"
     else String.format(java.util.Locale.US, "%.1f %s", value, units[unit])
+}
+
+/** Badge color per resolution tier — a warm→cool gradient (orange low →
+ *  green mid → purple 4K+), matching the accent-forward design language. */
+private fun qualityTierColor(level: com.flowgallery.app.data.model.QualityLevel): Color = when (level) {
+    com.flowgallery.app.data.model.QualityLevel.BELOW_480 -> Color(0xFFF59E0B) // amber
+    com.flowgallery.app.data.model.QualityLevel.P480 -> Color(0xFFFBBF24)      // amber-yellow
+    com.flowgallery.app.data.model.QualityLevel.P720 -> Color(0xFFA3E635)      // lime
+    com.flowgallery.app.data.model.QualityLevel.P1080 -> Color(0xFF22C55E)     // green
+    com.flowgallery.app.data.model.QualityLevel.K2 -> Color(0xFF06B6D4)        // cyan
+    com.flowgallery.app.data.model.QualityLevel.K4 -> Color(0xFF3B82F6)        // blue
+    com.flowgallery.app.data.model.QualityLevel.ABOVE_4K -> Color(0xFF8B6DFF)  // accent purple
 }

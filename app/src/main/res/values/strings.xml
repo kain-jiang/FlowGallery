@@ -79,6 +79,8 @@
     <string name="smb_add">Add share</string>
     <string name="cd_search">Search</string>
     <string name="cd_grid_toggle">Grid toggle</string>
+    <string name="refresh_done">Refresh complete — %1$d images</string>
+    <string name="refresh_done_with_new">Refresh complete — %1$d new images</string>
     <string name="cd_add_folder">Add folder</string>
     <string name="cd_sort">Sort</string>
     <string name="default_folder_name">Folder</string>
@@ -92,6 +94,9 @@
     <string name="folder_type_recommended">Recommended</string>
     <string name="folder_type_confirm">Add Folder</string>
     <string name="folder_type_ok">OK</string>
+    <string name="folder_type_scanning">Scanning…</string>
+    <string name="folder_added_notice">Added folder — %1$s, %2$d images</string>
+    <string name="folder_add_failed">Add failed — could not scan folder</string>
     <string name="folder_type_normal_short">Normal</string>
     <string name="folder_type_pack_short">Pack</string>
 
@@ -146,8 +151,6 @@
     <string name="section_display">Display</string>
     <string name="setting_quality">HD Thumbnails</string>
     <string name="setting_quality_desc">Load high-definition thumbnails</string>
-    <string name="setting_auto_index">Auto index</string>
-    <string name="setting_auto_index_desc">Index new content in the background after scans</string>
     <string name="setting_monet">Monet Colors</string>
     <string name="setting_monet_desc">Material You wallpaper colors (Android 12+)</string>
     <string name="setting_pill_alignment">Floating Pills Position</string>
@@ -185,6 +188,13 @@
     <string name="sort_largest">Largest first</string>
     <string name="sort_smallest">Smallest first</string>
     <string name="sort_quality">Quality (HD first)</string>
+    <string name="sort_quality_asc">Quality (SD first)</string>
+    <string name="sort_by_time">Time</string>
+    <string name="sort_by_size">Size</string>
+    <string name="sort_by_quality">Quality</string>
+    <string name="menu_more">More</string>
+    <string name="menu_sort">Sort</string>
+    <string name="menu_single_column">Single column</string>
     <string name="sort_value_time">%1$s</string>
     <string name="sort_value_size">%1$s</string>
 

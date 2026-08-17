@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -21,32 +20,33 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.ViewAgenda
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -61,8 +61,8 @@ import kotlin.math.roundToInt
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
@@ -115,13 +115,9 @@ fun HomeScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Pull-to-refresh wraps the whole home content (FR-9)
-        PullToRefreshBox(
-            isRefreshing = state.isRefreshing,
-            onRefresh = viewModel::rescan,
-            modifier = Modifier.fillMaxSize()
-        ) {
-        // Waterfall grid or empty state
+        // Waterfall grid or empty state. Refresh is triggered from the
+        // header's refresh button (FR-9, click-to-refresh) — no pull
+        // gesture.
         // fillMaxWidth: without it the Box collapses to its content
         // width inside the Column, so align(Center) centers within a
         // narrow box and the spinner / empty state appear off-center.
@@ -130,7 +126,7 @@ fun HomeScreen(
                 .fillMaxWidth()
         ) {
             // Empty content (refreshing or not) shows the guide state —
-            // no endless spinner; pull-to-refresh provides its own indicator.
+            // the header's refresh icon spins while rescanning.
             if (visible.isEmpty()) {
                 // Empty state must KEEP the header (title + folder selector)
                 // visible, otherwise the user cannot switch folders back.
@@ -181,7 +177,6 @@ fun HomeScreen(
                 )
             }
         }
-        } // PullToRefreshBox
 
         // Floating folder pill — top-center, shown only while the header has
         // fully scrolled away (shows the current path). Fades in/out.
@@ -314,26 +309,15 @@ private fun HomeHeader(
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.weight(1f)
             )
-            IconButton(onClick = onOpenSearch) {
-                Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.cd_search), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            // Add-folder button (moved from the removed FAB)
-            IconButton(onClick = onOpenFolderModal) {
-                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.cd_add_folder), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            // Sort menu (deep-style dropdown matching the app language)
-            SortMenuButton(
-                current = state.sortMode,
-                onSelect = onSetSortMode
+            // All header actions live in one ⋮ overflow menu (FR-8 cleanup):
+            // search / add folder / single-column toggle / sort (submenu).
+            HomeMoreMenu(
+                state = state,
+                onOpenSearch = onOpenSearch,
+                onOpenFolderModal = onOpenFolderModal,
+                onSetSortMode = onSetSortMode,
+                onToggleSingleColumn = onToggleSingleColumn
             )
-            // Single-column force toggle (overrides the default columns)
-            IconButton(onClick = onToggleSingleColumn) {
-                Icon(
-                    Icons.Filled.ViewAgenda,
-                    contentDescription = stringResource(R.string.cd_grid_toggle),
-                    tint = if (state.singleColumn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
         }
 
         // Folder selector: dropdown (All / folders / subfolders)
@@ -658,71 +642,218 @@ private fun menuItemColors(scheme: androidx.compose.material3.ColorScheme)
     )
 }
 
-/** Sort-mode dropdown button, styled like the folder selector menu. */
+/** Header ⋮ overflow menu — search / add folder / single-column toggle /
+ *  sort. The sort list is rendered INSIDE the same dropdown (view switch),
+ *  so the panel position never jumps — it stays anchored to the ⋮ button. */
 @Composable
-private fun SortMenuButton(
-    current: SortMode,
-    onSelect: (SortMode) -> Unit
+private fun HomeMoreMenu(
+    state: com.flowgallery.app.viewmodel.GalleryUiState,
+    onOpenSearch: () -> Unit,
+    onOpenFolderModal: () -> Unit,
+    onSetSortMode: (SortMode) -> Unit,
+    onToggleSingleColumn: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
     var expanded by remember { mutableStateOf(false) }
+    var showSort by remember { mutableStateOf(false) }
 
     Box {
         IconButton(onClick = { expanded = true }) {
             Icon(
-                Icons.AutoMirrored.Filled.Sort,
-                contentDescription = stringResource(R.string.cd_sort),
-                tint = if (current != SortMode.DEFAULT) scheme.primary else scheme.onSurfaceVariant
+                Icons.Filled.MoreVert,
+                contentDescription = stringResource(R.string.menu_more),
+                tint = scheme.onSurfaceVariant
             )
         }
         DropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false },
+            onDismissRequest = { expanded = false; showSort = false },
             modifier = Modifier.clip(RoundedCornerShape(16.dp)),
             containerColor = scheme.surface,
             shape = RoundedCornerShape(16.dp),
             tonalElevation = 0.dp,
             shadowElevation = 0.dp
         ) {
-            SortMode.entries.forEach { mode ->
-                val label = when (mode) {
-                    SortMode.DEFAULT -> stringResource(R.string.sort_default)
-                    SortMode.LATEST -> stringResource(R.string.sort_latest)
-                    SortMode.OLDEST -> stringResource(R.string.sort_oldest)
-                    SortMode.LARGEST -> stringResource(R.string.sort_largest)
-                    SortMode.SMALLEST -> stringResource(R.string.sort_smallest)
-                    SortMode.QUALITY -> stringResource(R.string.sort_quality)
-                }
-                val icon = when (mode) {
-                    SortMode.DEFAULT -> Icons.AutoMirrored.Filled.Sort
-                    SortMode.LATEST -> Icons.Filled.Schedule
-                    SortMode.OLDEST -> Icons.Filled.Schedule
-                    SortMode.LARGEST -> Icons.Filled.ExpandMore
-                    SortMode.SMALLEST -> Icons.Filled.ExpandLess
-                    SortMode.QUALITY -> Icons.Filled.HighQuality
-                }
+            if (showSort) {
+                // Sort view: back item first, then the merged categories.
+                DropdownMenuItem(
+                    text = { MenuText(stringResource(R.string.menu_sort)) },
+                    leadingIcon = { MenuIcon(Icons.AutoMirrored.Filled.Sort, scheme) },
+                    trailingIcon = {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = null,
+                            tint = scheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    onClick = { showSort = false },
+                    colors = menuItemColors(scheme)
+                )
+                SortMenuItems(
+                    current = state.sortMode,
+                    onSelect = { mode ->
+                        showSort = false
+                        expanded = false
+                        onSetSortMode(mode)
+                    }
+                )
+            } else {
+                // Main view
+                DropdownMenuItem(
+                    text = { MenuText(stringResource(R.string.cd_search)) },
+                    leadingIcon = { MenuIcon(Icons.Filled.Search, scheme) },
+                    onClick = { expanded = false; onOpenSearch() },
+                    colors = menuItemColors(scheme)
+                )
+                DropdownMenuItem(
+                    text = { MenuText(stringResource(R.string.cd_add_folder)) },
+                    leadingIcon = { MenuIcon(Icons.Filled.Add, scheme) },
+                    onClick = { expanded = false; onOpenFolderModal() },
+                    colors = menuItemColors(scheme)
+                )
+                DropdownMenuItem(
+                    text = { MenuText(stringResource(R.string.menu_single_column)) },
+                    // Active state shown by swapping the icon itself:
+                    // multi-column = grid (ViewModule), single column = agenda.
+                    leadingIcon = {
+                        MenuIcon(
+                            if (state.singleColumn) Icons.Filled.ViewAgenda else Icons.Filled.ViewModule,
+                            scheme
+                        )
+                    },
+                    onClick = { expanded = false; onToggleSingleColumn() },
+                    colors = menuItemColors(scheme)
+                )
                 DropdownMenuItem(
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(label, color = scheme.onSurface, fontSize = 15.sp, modifier = Modifier.weight(1f, fill = false))
-                            if (mode == current) {
-                                Spacer(Modifier.width(10.dp))
-                                Icon(
-                                    Icons.Filled.Check,
-                                    contentDescription = null,
-                                    tint = scheme.primary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
+                            MenuText(stringResource(R.string.menu_sort))
+                            Spacer(Modifier.width(10.dp))
+                            Icon(
+                                Icons.Filled.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = scheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     },
-                    leadingIcon = { Icon(icon, contentDescription = null, tint = scheme.primary) },
-                    onClick = { onSelect(mode); expanded = false },
+                    leadingIcon = {
+                        MenuIcon(Icons.AutoMirrored.Filled.Sort, scheme)
+                    },
+                    onClick = { showSort = true },
                     colors = menuItemColors(scheme)
                 )
             }
         }
     }
+}
+
+/** Sort menu items — merged categories (time / size / quality) with an arrow
+ *  showing the active direction; tapping an active category flips it.
+ *  Rendered inside the parent dropdown (same panel, same position). */
+@Composable
+private fun SortMenuItems(
+    current: SortMode,
+    onSelect: (SortMode) -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    // Category → current mode if active, or the default direction mode.
+    data class SortCategory(
+        val label: String,
+        val icon: androidx.compose.ui.graphics.vector.ImageVector,
+        val active: SortMode?,
+        val down: SortMode,
+        val up: SortMode
+    )
+    val categories = listOf(
+        SortCategory(
+            label = stringResource(R.string.sort_by_time),
+            icon = Icons.Filled.Schedule,
+            active = when (current) { SortMode.LATEST, SortMode.OLDEST -> current; else -> null },
+            down = SortMode.LATEST,
+            up = SortMode.OLDEST
+        ),
+        SortCategory(
+            label = stringResource(R.string.sort_by_size),
+            icon = Icons.AutoMirrored.Filled.Sort,
+            active = when (current) { SortMode.LARGEST, SortMode.SMALLEST -> current; else -> null },
+            down = SortMode.LARGEST,
+            up = SortMode.SMALLEST
+        ),
+        SortCategory(
+            label = stringResource(R.string.sort_by_quality),
+            icon = Icons.Filled.HighQuality,
+            active = when (current) { SortMode.QUALITY, SortMode.QUALITY_ASC -> current; else -> null },
+            down = SortMode.QUALITY,
+            up = SortMode.QUALITY_ASC
+        )
+    )
+    // Default
+    DropdownMenuItem(
+        text = { MenuText(stringResource(R.string.sort_default)) },
+        leadingIcon = { MenuIcon(Icons.AutoMirrored.Filled.Sort, scheme) },
+        trailingIcon = {
+            if (current == SortMode.DEFAULT) {
+                Icon(Icons.Filled.Check, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(16.dp))
+            }
+        },
+        onClick = { onSelect(SortMode.DEFAULT) },
+        colors = menuItemColors(scheme)
+    )
+    categories.forEach { cat ->
+        val isActive = cat.active != null
+        val arrow = if (isActive) {
+            if (cat.active == cat.down) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward
+        } else null
+        DropdownMenuItem(
+            text = { MenuText(cat.label) },
+            leadingIcon = { MenuIcon(cat.icon, scheme) },
+            trailingIcon = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (arrow != null) {
+                        Icon(
+                            arrow,
+                            contentDescription = null,
+                            tint = scheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    if (isActive) {
+                        Spacer(Modifier.width(6.dp))
+                        Icon(Icons.Filled.Check, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(16.dp))
+                    }
+                }
+            },
+            onClick = {
+                onSelect(
+                    if (isActive) {
+                        // Flip direction within the active category.
+                        if (cat.active == cat.down) cat.up else cat.down
+                    } else {
+                        cat.down // not active → default (descending) direction
+                    }
+                )
+            },
+            colors = menuItemColors(scheme)
+        )
+    }
+}
+
+/** Small helper: menu label text in the app's standard tone. */
+@Composable
+private fun MenuText(text: String) {
+    Text(text = text, color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp)
+}
+
+/** Small helper: menu leading icon with the accent/muted tint. */
+@Composable
+private fun MenuIcon(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    scheme: androidx.compose.material3.ColorScheme,
+    tint: androidx.compose.ui.graphics.Color = scheme.primary
+) {
+    Icon(icon, contentDescription = null, tint = tint)
 }
 
 @Composable

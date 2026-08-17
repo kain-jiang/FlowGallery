@@ -8,6 +8,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.launch
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -47,6 +52,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
@@ -68,6 +74,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -271,8 +278,19 @@ private fun MainScaffold(
                         GalleryTab.entries.forEach { tab ->
                             NavigationBarItem(
                                 selected = state.currentTab == tab,
-                                onClick = { viewModel.selectTab(tab) },
-                                icon = { Icon(tabIcon(tab), contentDescription = tabLabel(tab)) },
+                                onClick = {
+                                    onTabClick(
+                                        tab = tab,
+                                        currentTab = state.currentTab,
+                                        viewModel = viewModel
+                                    )
+                                },
+                                icon = {
+                                    TabIcon(
+                                        tab = tab,
+                                        refreshing = state.userRefreshing
+                                    )
+                                },
                                 label = { Text(tabLabel(tab)) }
                             )
                         }
@@ -298,8 +316,19 @@ private fun MainScaffold(
                     GalleryTab.entries.forEach { tab ->
                         NavigationRailItem(
                             selected = state.currentTab == tab,
-                            onClick = { viewModel.selectTab(tab) },
-                            icon = { Icon(tabIcon(tab), contentDescription = tabLabel(tab)) },
+                            onClick = {
+                                onTabClick(
+                                    tab = tab,
+                                    currentTab = state.currentTab,
+                                    viewModel = viewModel
+                                )
+                            },
+                            icon = {
+                                TabIcon(
+                                    tab = tab,
+                                    refreshing = state.userRefreshing
+                                )
+                            },
                             label = { Text(tabLabel(tab), fontSize = 10.sp) }
                         )
                     }
@@ -346,7 +375,10 @@ private fun MainScaffold(
                         viewModel = viewModel,
                         onImageClick = { img ->
                             // Browse ONLY the favorited sequence in the viewer
-                            val favList = state.images.filter { it.uriString in favorites }
+                            val enabledIds = state.folders.filter { it.isSelected }.map { it.id }.toSet()
+                            val favList = state.images.filter {
+                                it.uriString in favorites && it.folderId in enabledIds
+                            }
                             val idx = favList.indexOfFirst { it.id == img.id }
                             if (idx >= 0) viewModel.openViewer(idx, favoritesOnly = true)
                         }
@@ -758,16 +790,34 @@ private fun MainScaffold(
         )
     }
 
+    // Close the type dialog once the add-scan finishes (success or failure):
+    // the dialog stays open showing "scanning…" while addingFolder is true.
+    // Track the PREVIOUS value so only the true→false transition fires —
+    // the initial composition (both false) must not close anything.
+    val wasAdding = remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(state.addingFolder) {
+        val transitioned = wasAdding.value && !state.addingFolder
+        wasAdding.value = state.addingFolder
+        if (transitioned) {
+            // Scan finished — drop the pending state so the dialog closes.
+            // (Success/failure feedback arrives via the indexNotice toast.)
+            if (pendingSmbConfig != null) pendingSmbConfig = null
+            if (pendingFolderUri != null && pendingFolderName != null) {
+                onPendingConsumed()
+            }
+        }
+    }
+
     // Folder-type selection for a pending SMB share (recommended = PACK)
     pendingSmbConfig?.let { config ->
         FolderTypeDialog(
             folderName = pendingSmbName ?: "${config.host}/${config.share}",
             recommended = com.flowgallery.app.data.model.FolderType.PACK,
+            addingFolder = state.addingFolder,
             onConfirm = { type ->
-                pendingSmbConfig = null
                 viewModel.addSmbFolder(config, pendingSmbName, type)
             },
-            onDismiss = { pendingSmbConfig = null }
+            onDismiss = { if (!state.addingFolder) pendingSmbConfig = null }
         )
     }
 
@@ -783,11 +833,13 @@ private fun MainScaffold(
         FolderTypeDialog(
             folderName = pendingFolderName,
             recommended = recommended,
+            addingFolder = state.addingFolder,
             onConfirm = { type ->
                 viewModel.addFolder(pendingFolderUri, pendingFolderName, type)
-                onPendingConsumed()
+                // Do NOT consume the pending state here — the dialog stays
+                // open ("scanning…") until the add-scan finishes below.
             },
-            onDismiss = { onPendingConsumed() }
+            onDismiss = { if (!state.addingFolder) onPendingConsumed() }
         )
     }
 
@@ -887,11 +939,62 @@ private fun android.content.Context.toast(msg: String) {
     }
 }
 
+/**
+ * Bottom-nav / rail click handler (FR-9, click-to-refresh): tapping the
+ * Home tab while ALREADY on Home re-scans the gallery (the tab icon spins
+ * while refreshing); tapping any other tab (or Home from elsewhere) just
+ * switches.
+ */
+private fun onTabClick(
+    tab: GalleryTab,
+    currentTab: GalleryTab,
+    viewModel: GalleryViewModel
+) {
+    if (tab == GalleryTab.Home && currentTab == GalleryTab.Home) {
+        viewModel.rescan(userTriggered = true)
+    } else {
+        viewModel.selectTab(tab)
+    }
+}
+
 private fun tabIcon(tab: GalleryTab): ImageVector = when (tab) {
     GalleryTab.Home -> Icons.Filled.Home
     GalleryTab.Favorites -> Icons.Filled.Favorite
     GalleryTab.Settings -> Icons.Filled.Settings
     GalleryTab.Index -> Icons.Filled.Bolt
+}
+
+/**
+ * Nav tab icon. While a USER-triggered home refresh runs, the Home tab
+ * swaps its glyph to a spinning refresh icon in accent purple (1 turn/sec,
+ * PRD §7.4); it reverts to Home when done. The ViewModel keeps the
+ * refreshing state raised for at least a full turn even when the scan is
+ * instant, so the spin is always visible. Automatic scans never swap.
+ */
+@Composable
+private fun TabIcon(tab: GalleryTab, refreshing: Boolean) {
+    if (tab == GalleryTab.Home && refreshing) {
+        val spin by rememberInfiniteTransition(label = "tabSpin")
+            .animateFloat(
+                initialValue = 0f,
+                targetValue = 360f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 1000, easing = LinearEasing)
+                ),
+                label = "tabSpinAngle"
+            )
+        Icon(
+            imageVector = Icons.Filled.Refresh,
+            contentDescription = tabLabel(tab),
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.graphicsLayer { rotationZ = spin }
+        )
+    } else {
+        Icon(
+            imageVector = tabIcon(tab),
+            contentDescription = tabLabel(tab)
+        )
+    }
 }
 
 @Composable
